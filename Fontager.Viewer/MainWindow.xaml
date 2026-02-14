@@ -133,10 +133,11 @@
                 </Grid.RowDefinitions>
 
                 <!-- Font Header -->
-                <Grid Grid.Row="0" Padding="24,16,24,0">
+                <Grid Grid.Row="0" Grid.Column="3" Padding="24,16,24,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
 
                     <StackPanel Grid.Column="0" Spacing="4">
@@ -175,9 +176,19 @@
                                            Foreground="{ThemeResource SystemFillColorSuccessBrush}" />
                             </Border>
                         </StackPanel>
+                        <TextBlock x:Name="FontFileSize" 
+                           Style="{StaticResource CaptionTextBlockStyle}"
+                           Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                           HorizontalAlignment="Left" />
+                    </StackPanel>
+                    
+                    <!-- Quick View: character set overview like Windows Font Viewer -->
+                    <StackPanel x:Name="QuickViewSection" Grid.Column="1" Spacing="4">
+                        <StackPanel x:Name="QuickViewPanel" Spacing="2" />
                     </StackPanel>
 
-                    <StackPanel Grid.Column="1" Orientation="Vertical" Spacing="8" VerticalAlignment="Center">
+
+                    <StackPanel Grid.Column="2" Orientation="Vertical" Spacing="8" VerticalAlignment="Top" HorizontalAlignment="Right">
                         <!-- Multi-font navigation -->
                         <StackPanel x:Name="FontNavPanel" Orientation="Horizontal" Spacing="4" Visibility="Collapsed">
                             <TextBlock x:Name="FontIndexLabel" 
@@ -202,15 +213,11 @@
                             </Button>
                         </StackPanel>
 
-                        <TextBlock x:Name="FontFileSize" 
-                                   Style="{StaticResource CaptionTextBlockStyle}"
-                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                                   HorizontalAlignment="Right" />
                     </StackPanel>
                 </Grid>
 
                 <!-- Tabs -->
-                <Pivot x:Name="ContentPivot" Grid.Row="1" Margin="12,4,0,0">
+                <Pivot x:Name="ContentPivot" Grid.Row="2" Margin="12,4,0,0">
 
                     <!-- Preview Tab -->
                     <PivotItem Header="Preview">

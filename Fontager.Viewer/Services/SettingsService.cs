@@ -19,6 +19,7 @@ public sealed class SettingsService
     private const string BackdropKey = "Backdrop";
     private const string ShowWaterfallKey = "ShowWaterfall";
     private const string WaterfallSizesKey = "WaterfallSizes";
+    private const string ShowQuickViewKey = "ShowQuickView";
 
     private const string DefaultPreviewTextValue = "The quick brown fox jumps over the lazy dog. 0123456789";
     private const double DefaultFontSizeValue = 48;
@@ -89,6 +90,19 @@ public sealed class SettingsService
             return value is not bool b || b; // default true
         }
         set => _localSettings.Values[ShowWaterfallKey] = value;
+    }
+
+    /// <summary>
+    /// Gets or sets whether Quick View (character set overview) is shown in the font header.
+    /// </summary>
+    public bool ShowQuickView
+    {
+        get
+        {
+            var value = _localSettings.Values[ShowQuickViewKey];
+            return value is not bool b || b; // default true
+        }
+        set => _localSettings.Values[ShowQuickViewKey] = value;
     }
 
     /// <summary>

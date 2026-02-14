@@ -351,10 +351,62 @@ public sealed partial class MainWindow : Window
                 PreviewTextBox.FontStyle = Windows.UI.Text.FontStyle.Normal;
         }
 
+        // Quick View
+        QuickViewSection.Visibility = _settings.ShowQuickView ? Visibility.Visible : Visibility.Collapsed;
+        BuildQuickView();
+
         WaterfallSection.Visibility = _settings.ShowWaterfall ? Visibility.Visible : Visibility.Collapsed;
         BuildWaterfallView();
         BuildGlyphGrid();
         BuildMetadataView();
+    }
+
+    // ── Quick View ─────────────────────────────────────────────
+
+    private void BuildQuickView()
+    {
+        QuickViewPanel.Children.Clear();
+
+        if (!_settings.ShowQuickView) return;
+
+        // Standard character set lines like Windows Font Viewer
+        string[] lines =
+        [
+            "abcdefghijklmnopqrstuvwxyz",
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+            "1234567890.:,;'\"(!?) +-*/="
+        ];
+
+        var meta = _viewModel.CurrentFont?.Metadata;
+
+        foreach (var line in lines)
+        {
+            var textBlock = new TextBlock
+            {
+                Text = line,
+                FontSize = 24,
+                TextWrapping = TextWrapping.WrapWholeWords,
+                IsTextSelectionEnabled = true,
+                Margin = new Thickness(0, 2, 0, 2)
+            };
+
+            if (_loadedFontFamily != null)
+                textBlock.FontFamily = _loadedFontFamily;
+
+            if (meta != null)
+            {
+                textBlock.FontWeight = new Windows.UI.Text.FontWeight((ushort)meta.Weight);
+
+                if (meta.IsItalic)
+                    textBlock.FontStyle = Windows.UI.Text.FontStyle.Italic;
+                else if (meta.IsOblique)
+                    textBlock.FontStyle = Windows.UI.Text.FontStyle.Oblique;
+                else
+                    textBlock.FontStyle = Windows.UI.Text.FontStyle.Normal;
+            }
+
+            QuickViewPanel.Children.Add(textBlock);
+        }
     }
 
     // ── Preview ────────────────────────────────────────────────
@@ -670,6 +722,12 @@ public sealed partial class MainWindow : Window
             fontSizeSlider.Header = $"Default font size ({(int)args.NewValue}px)";
         };
 
+        var quickViewToggle = new ToggleSwitch
+        {
+            Header = "Show quick view (character set overview)",
+            IsOn = _settings.ShowQuickView
+        };
+
         var waterfallToggle = new ToggleSwitch
         {
             Header = "Show waterfall in Preview tab",
@@ -691,6 +749,7 @@ public sealed partial class MainWindow : Window
         panel.Children.Add(backdropCombo);
         panel.Children.Add(previewTextBox);
         panel.Children.Add(fontSizeSlider);
+        panel.Children.Add(quickViewToggle);
         panel.Children.Add(waterfallToggle);
         panel.Children.Add(waterfallSizesBox);
 
@@ -722,6 +781,7 @@ public sealed partial class MainWindow : Window
 
             _settings.DefaultPreviewText = previewTextBox.Text;
             _settings.DefaultFontSize = fontSizeSlider.Value;
+            _settings.ShowQuickView = quickViewToggle.IsOn;
             _settings.ShowWaterfall = waterfallToggle.IsOn;
             _settings.WaterfallSizesRaw = waterfallSizesBox.Text;
 
@@ -733,6 +793,12 @@ public sealed partial class MainWindow : Window
 
             if (_viewModel.HasFont)
             {
+                // Refresh Quick View
+                QuickViewSection.Visibility = _settings.ShowQuickView ? Visibility.Visible : Visibility.Collapsed;
+                if (_settings.ShowQuickView)
+                    BuildQuickView();
+
+                // Refresh Waterfall
                 WaterfallSection.Visibility = _settings.ShowWaterfall ? Visibility.Visible : Visibility.Collapsed;
                 if (_settings.ShowWaterfall)
                     BuildWaterfallView();
