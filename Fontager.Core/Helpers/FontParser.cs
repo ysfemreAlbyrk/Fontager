@@ -21,6 +21,8 @@ public static class FontParser
     private const int NameId_Description = 10;
     private const int NameId_LicenseDescription = 13;
     private const int NameId_LicenseUrl = 14;
+    private const int NameId_TypographicFamily = 16;
+    private const int NameId_TypographicSubfamily = 17;
 
     /// <summary>
     /// Determines the font format from the file extension.
@@ -262,10 +264,18 @@ public static class FontParser
                     classification = FontClassification.Script;
             }
 
+            // Prefer typographic family (name ID 16) over basic family (name ID 1)
+            // for XAML FontFamily resolution. Many fonts (e.g. Material Icons, Noto)
+            // use name ID 16 as the canonical family name that DirectWrite expects.
+            var basicFamily = names.GetValueOrDefault(NameId_FontFamily, string.Empty);
+            var typoFamily = names.GetValueOrDefault(NameId_TypographicFamily, string.Empty);
+
             return new FontMetadata
             {
-                FamilyName = names.GetValueOrDefault(NameId_FontFamily, string.Empty),
-                SubfamilyName = names.GetValueOrDefault(NameId_FontSubfamily, string.Empty),
+                FamilyName = basicFamily,
+                TypographicFamilyName = !string.IsNullOrWhiteSpace(typoFamily) ? typoFamily : basicFamily,
+                SubfamilyName = names.GetValueOrDefault(NameId_TypographicSubfamily,
+                    names.GetValueOrDefault(NameId_FontSubfamily, string.Empty)),
                 FullName = names.GetValueOrDefault(NameId_FullFontName, string.Empty),
                 PostScriptName = names.GetValueOrDefault(NameId_PostScriptName, string.Empty),
                 Designer = names.GetValueOrDefault(NameId_Designer, string.Empty),

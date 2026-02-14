@@ -5,8 +5,12 @@ namespace Fontager.Core.Models;
 /// </summary>
 public sealed record FontMetadata
 {
-    /// <summary>Font family name (e.g. "Inter").</summary>
+    /// <summary>Font family name from name ID 1 (e.g. "Inter").</summary>
     public string FamilyName { get; init; } = string.Empty;
+
+    /// <summary>Typographic/preferred family name from name ID 16 (e.g. "Material Icons").
+    /// Falls back to FamilyName if not present.</summary>
+    public string TypographicFamilyName { get; init; } = string.Empty;
 
     /// <summary>Font subfamily / style (e.g. "Bold Italic").</summary>
     public string SubfamilyName { get; init; } = string.Empty;
