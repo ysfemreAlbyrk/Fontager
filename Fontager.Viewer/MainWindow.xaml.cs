@@ -1,5 +1,4 @@
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
@@ -15,6 +14,7 @@ using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Windows.Storage;
 using Windows.Storage.Pickers;
 using WinRT.Interop;
 
@@ -27,7 +27,6 @@ public sealed partial class MainWindow : Window
     private readonly IFontService _fontService;
     private FontFamily? _loadedFontFamily;
 
-    // Win32 interop for loading private fonts
     [DllImport("gdi32.dll", CharSet = CharSet.Unicode)]
     private static extern int AddFontResourceEx(string lpszFilename, uint fl, IntPtr pdv);
 
@@ -36,10 +35,14 @@ public sealed partial class MainWindow : Window
 
     private const uint FR_PRIVATE = 0x10;
 
+    // Subfolder inside LocalFolder where we cache fonts for XAML rendering
+    private const string FontCacheFolderName = "FontCache";
+
     private string? _activeFontPath;
     private string? _currentFilePath;
     private int _currentFontIndex;
     private int _currentFontCount = 1;
+    private string? _cachedFontFileName;
 
     public MainWindow()
     {
@@ -110,7 +113,6 @@ public sealed partial class MainWindow : Window
 
         try
         {
-            // Copy font to user fonts folder and let Windows handle installation
             var userFontsDir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "Microsoft", "Windows", "Fonts");
@@ -137,7 +139,6 @@ public sealed partial class MainWindow : Window
 
             File.Copy(_currentFilePath, destPath, true);
 
-            // Register the font in the user's registry
             var regKey = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
                 @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts", true);
 
@@ -199,17 +200,13 @@ public sealed partial class MainWindow : Window
     private async void PrevFontButton_Click(object sender, RoutedEventArgs e)
     {
         if (_currentFilePath != null && _currentFontIndex > 0)
-        {
             await LoadFontFromPathAsync(_currentFilePath, _currentFontIndex - 1);
-        }
     }
 
     private async void NextFontButton_Click(object sender, RoutedEventArgs e)
     {
         if (_currentFilePath != null && _currentFontIndex < _currentFontCount - 1)
-        {
             await LoadFontFromPathAsync(_currentFilePath, _currentFontIndex + 1);
-        }
     }
 
     // ── Font Loading ───────────────────────────────────────────
@@ -238,16 +235,24 @@ public sealed partial class MainWindow : Window
 
             DeactivateCurrentFont();
 
+            // Also register via GDI for any non-XAML rendering paths
             AddFontResourceEx(filePath, FR_PRIVATE, IntPtr.Zero);
             _activeFontPath = filePath;
             _currentFilePath = filePath;
             _currentFontIndex = _viewModel.CurrentFont.FontIndex;
             _currentFontCount = _viewModel.CurrentFont.FontCount;
 
+            // WinUI 3 XAML FontFamily does NOT support file:/// or absolute paths.
+            // It only supports ms-appx:/// and ms-appdata:///local/ URI schemes.
+            // Solution: copy the font to LocalFolder/FontCache/ and reference it
+            // via ms-appdata:///local/FontCache/filename.ttf#FamilyName.
+            // This is fast (milliseconds) and the cache is cleaned on each load.
             var familyName = _viewModel.CurrentFont.Metadata.FamilyName;
-            _loadedFontFamily = !string.IsNullOrWhiteSpace(familyName)
-                ? new FontFamily(familyName)
-                : new FontFamily(Path.GetFileNameWithoutExtension(filePath));
+            if (string.IsNullOrWhiteSpace(familyName))
+                familyName = Path.GetFileNameWithoutExtension(filePath);
+
+            var cachedUri = await CacheFontForXamlAsync(filePath);
+            _loadedFontFamily = new FontFamily($"{cachedUri}#{familyName}");
 
             UpdateFontDisplay();
             ShowState(content: true);
@@ -257,6 +262,41 @@ public sealed partial class MainWindow : Window
             ErrorText.Text = $"Error: {ex.Message}";
             ShowState(error: true);
         }
+    }
+
+    /// <summary>
+    /// Copies the font file into LocalFolder/FontCache/ so that XAML can load it
+    /// via the ms-appdata:///local/ URI scheme. Returns the ms-appdata URI (without #name).
+    /// </summary>
+    private async Task<string> CacheFontForXamlAsync(string sourceFilePath)
+    {
+        var localFolder = ApplicationData.Current.LocalFolder;
+        var cacheFolder = await localFolder.CreateFolderAsync(
+            FontCacheFolderName, CreationCollisionOption.OpenIfExists);
+
+        // Clean previous cached font to avoid stale files
+        if (_cachedFontFileName != null)
+        {
+            try
+            {
+                var oldFile = await cacheFolder.TryGetItemAsync(_cachedFontFileName);
+                if (oldFile is StorageFile sf)
+                    await sf.DeleteAsync(StorageDeleteOption.PermanentDelete);
+            }
+            catch { /* ignore cleanup errors */ }
+        }
+
+        // Use a unique name to avoid collisions: GUID + original extension
+        var ext = Path.GetExtension(sourceFilePath);
+        var uniqueName = $"{Guid.NewGuid():N}{ext}";
+
+        var sourceFile = await StorageFile.GetFileFromPathAsync(sourceFilePath);
+        await sourceFile.CopyAsync(cacheFolder, uniqueName, NameCollisionOption.ReplaceExisting);
+
+        _cachedFontFileName = uniqueName;
+
+        // ms-appdata:///local/ maps to ApplicationData.Current.LocalFolder
+        return $"ms-appdata:///local/{FontCacheFolderName}/{uniqueName}";
     }
 
     private void DeactivateCurrentFont()
@@ -275,19 +315,14 @@ public sealed partial class MainWindow : Window
 
         var meta = font.Metadata;
 
-        // Title bar
         TitleBarFontName.Text = font.DisplayName;
         AppWindow.Title = $"Fontager \u2014 {font.DisplayName}";
 
-        // Header
         FontFamilyName.Text = meta.FamilyName;
         FontStyleName.Text = meta.SubfamilyName;
         FormatBadgeText.Text = font.Format.ToString();
         VariableBadge.Visibility = meta.IsVariable ? Visibility.Visible : Visibility.Collapsed;
         FontFileSize.Text = font.FormattedFileSize;
-
-        // Install button
-        InstallButton.Visibility = Visibility.Visible;
 
         // Multi-font navigation
         if (font.FontCount > 1)
@@ -302,24 +337,22 @@ public sealed partial class MainWindow : Window
             FontNavPanel.Visibility = Visibility.Collapsed;
         }
 
-        // Apply font to preview
+        // Apply font to the unified preview TextBox
         if (_loadedFontFamily != null)
         {
-            PreviewTextBlock.FontFamily = _loadedFontFamily;
-            PreviewTextBlock.FontWeight = new Windows.UI.Text.FontWeight((ushort)meta.Weight);
+            PreviewTextBox.FontFamily = _loadedFontFamily;
+            PreviewTextBox.FontWeight = new Windows.UI.Text.FontWeight((ushort)meta.Weight);
 
             if (meta.IsItalic)
-                PreviewTextBlock.FontStyle = Windows.UI.Text.FontStyle.Italic;
+                PreviewTextBox.FontStyle = Windows.UI.Text.FontStyle.Italic;
             else if (meta.IsOblique)
-                PreviewTextBlock.FontStyle = Windows.UI.Text.FontStyle.Oblique;
+                PreviewTextBox.FontStyle = Windows.UI.Text.FontStyle.Oblique;
             else
-                PreviewTextBlock.FontStyle = Windows.UI.Text.FontStyle.Normal;
+                PreviewTextBox.FontStyle = Windows.UI.Text.FontStyle.Normal;
         }
 
-        // Waterfall visibility
         WaterfallSection.Visibility = _settings.ShowWaterfall ? Visibility.Visible : Visibility.Collapsed;
         BuildWaterfallView();
-
         BuildGlyphGrid();
         BuildMetadataView();
     }
@@ -328,7 +361,6 @@ public sealed partial class MainWindow : Window
 
     private void PreviewTextBox_TextChanged(object sender, TextChangedEventArgs e)
     {
-        PreviewTextBlock.Text = PreviewTextBox.Text;
         _viewModel.PreviewText = PreviewTextBox.Text;
 
         if (_viewModel.HasFont)
@@ -337,9 +369,9 @@ public sealed partial class MainWindow : Window
 
     private void FontSizeSlider_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
     {
-        if (PreviewTextBlock != null)
+        if (PreviewTextBox != null)
         {
-            PreviewTextBlock.FontSize = e.NewValue;
+            PreviewTextBox.FontSize = e.NewValue;
             if (FontSizeLabel != null)
                 FontSizeLabel.Text = $"{(int)e.NewValue}px";
         }
@@ -353,10 +385,12 @@ public sealed partial class MainWindow : Window
 
         if (!_settings.ShowWaterfall) return;
 
-        int[] sizes = [8, 10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 40, 48, 56, 64, 72];
+        var sizes = _settings.GetWaterfallSizes();
         var text = string.IsNullOrWhiteSpace(_viewModel.PreviewText)
             ? "The quick brown fox jumps over the lazy dog"
             : _viewModel.PreviewText;
+
+        var meta = _viewModel.CurrentFont?.Metadata;
 
         foreach (var size in sizes)
         {
@@ -384,8 +418,21 @@ public sealed partial class MainWindow : Window
                 VerticalAlignment = VerticalAlignment.Center
             };
 
+            // Apply font family, weight, and style to waterfall items
             if (_loadedFontFamily != null)
                 textBlock.FontFamily = _loadedFontFamily;
+
+            if (meta != null)
+            {
+                textBlock.FontWeight = new Windows.UI.Text.FontWeight((ushort)meta.Weight);
+
+                if (meta.IsItalic)
+                    textBlock.FontStyle = Windows.UI.Text.FontStyle.Italic;
+                else if (meta.IsOblique)
+                    textBlock.FontStyle = Windows.UI.Text.FontStyle.Oblique;
+                else
+                    textBlock.FontStyle = Windows.UI.Text.FontStyle.Normal;
+            }
 
             Grid.SetColumn(textBlock, 1);
 
@@ -575,7 +622,6 @@ public sealed partial class MainWindow : Window
 
     private async void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
-        // Theme
         var themeCombo = new ComboBox
         {
             Header = "Theme",
@@ -589,7 +635,6 @@ public sealed partial class MainWindow : Window
             SelectedIndex = (int)_settings.Theme
         };
 
-        // Backdrop
         var backdropCombo = new ComboBox
         {
             Header = "Backdrop",
@@ -602,7 +647,6 @@ public sealed partial class MainWindow : Window
             SelectedIndex = _settings.Backdrop
         };
 
-        // Preview text
         var previewTextBox = new TextBox
         {
             Header = "Default preview text",
@@ -613,7 +657,6 @@ public sealed partial class MainWindow : Window
             MaxLength = 500
         };
 
-        // Font size
         var fontSizeSlider = new Slider
         {
             Header = $"Default font size ({(int)_settings.DefaultFontSize}px)",
@@ -627,19 +670,29 @@ public sealed partial class MainWindow : Window
             fontSizeSlider.Header = $"Default font size ({(int)args.NewValue}px)";
         };
 
-        // Waterfall toggle
         var waterfallToggle = new ToggleSwitch
         {
             Header = "Show waterfall in Preview tab",
             IsOn = _settings.ShowWaterfall
         };
 
-        var panel = new StackPanel { Spacing = 16, MinWidth = 360 };
+        var waterfallSizesBox = new TextBox
+        {
+            Header = "Waterfall sizes (comma-separated)",
+            Text = _settings.WaterfallSizesRaw,
+            PlaceholderText = "8,12,16,24,32,48,72",
+            TextWrapping = TextWrapping.NoWrap,
+            AcceptsReturn = false,
+            MaxLength = 200
+        };
+
+        var panel = new StackPanel { Spacing = 16, MinWidth = 380 };
         panel.Children.Add(themeCombo);
         panel.Children.Add(backdropCombo);
         panel.Children.Add(previewTextBox);
         panel.Children.Add(fontSizeSlider);
         panel.Children.Add(waterfallToggle);
+        panel.Children.Add(waterfallSizesBox);
 
         var dialog = new ContentDialog
         {
@@ -655,26 +708,22 @@ public sealed partial class MainWindow : Window
 
         if (result == ContentDialogResult.Primary)
         {
-            // Theme
             if (themeCombo.SelectedItem is ComboBoxItem selectedTheme && selectedTheme.Tag is ElementTheme theme)
             {
                 _settings.Theme = theme;
                 ((FrameworkElement)Content).RequestedTheme = theme;
             }
 
-            // Backdrop
             if (backdropCombo.SelectedItem is ComboBoxItem selectedBackdrop && selectedBackdrop.Tag is int backdropVal)
             {
                 _settings.Backdrop = backdropVal;
                 ApplyBackdrop();
             }
 
-            // Preview text & size
             _settings.DefaultPreviewText = previewTextBox.Text;
             _settings.DefaultFontSize = fontSizeSlider.Value;
-
-            // Waterfall
             _settings.ShowWaterfall = waterfallToggle.IsOn;
+            _settings.WaterfallSizesRaw = waterfallSizesBox.Text;
 
             if (!_viewModel.HasFont)
             {
@@ -682,7 +731,6 @@ public sealed partial class MainWindow : Window
                 FontSizeSlider.Value = _settings.DefaultFontSize;
             }
 
-            // Refresh waterfall visibility if font is loaded
             if (_viewModel.HasFont)
             {
                 WaterfallSection.Visibility = _settings.ShowWaterfall ? Visibility.Visible : Visibility.Collapsed;

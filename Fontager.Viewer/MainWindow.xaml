@@ -53,18 +53,6 @@
                         <TextBlock Text="Open" Style="{StaticResource CaptionTextBlockStyle}" />
                     </StackPanel>
                 </Button>
-
-                <Button x:Name="InstallButton"
-                        Click="InstallButton_Click"
-                        VerticalAlignment="Center"
-                        Visibility="Collapsed"
-                        Style="{StaticResource SubtleButtonStyle}"
-                        ToolTipService.ToolTip="Install font to system">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <FontIcon Glyph="&#xE896;" FontSize="14" />
-                        <TextBlock Text="Install" Style="{StaticResource CaptionTextBlockStyle}" />
-                    </StackPanel>
-                </Button>
             </StackPanel>
 
             <Button x:Name="SettingsButton" Grid.Column="2"
@@ -152,8 +140,22 @@
                     </Grid.ColumnDefinitions>
 
                     <StackPanel Grid.Column="0" Spacing="4">
-                        <TextBlock x:Name="FontFamilyName" 
-                                   Style="{StaticResource TitleTextBlockStyle}" />
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <TextBlock x:Name="FontFamilyName" 
+                                       Style="{StaticResource TitleTextBlockStyle}" />
+                            <!-- Install button in header -->
+                            <Button x:Name="InstallButton"
+                                    Click="InstallButton_Click"
+                                    VerticalAlignment="Center"
+                                    Style="{StaticResource AccentButtonStyle}"
+                                    Padding="12,6"
+                                    ToolTipService.ToolTip="Install font for current user">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon Glyph="&#xE896;" FontSize="14" />
+                                    <TextBlock Text="Install" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <TextBlock x:Name="FontStyleName" 
                                        Style="{StaticResource BodyTextBlockStyle}"
@@ -175,8 +177,8 @@
                         </StackPanel>
                     </StackPanel>
 
-                    <StackPanel Grid.Column="1" Orientation="Vertical" Spacing="12" HorizontalAlignment="Center">
-                        <!-- Multi-font navigation (Prev / Next) -->
+                    <StackPanel Grid.Column="1" Orientation="Vertical" Spacing="8" VerticalAlignment="Center">
+                        <!-- Multi-font navigation -->
                         <StackPanel x:Name="FontNavPanel" Orientation="Horizontal" Spacing="4" Visibility="Collapsed">
                             <TextBlock x:Name="FontIndexLabel" 
                                        Style="{StaticResource CaptionTextBlockStyle}"
@@ -210,26 +212,21 @@
                 <!-- Tabs -->
                 <Pivot x:Name="ContentPivot" Grid.Row="1" Margin="12,4,0,0">
 
-                    <!-- Preview Tab (now includes waterfall) -->
+                    <!-- Preview Tab -->
                     <PivotItem Header="Preview">
                         <ScrollViewer Padding="-12,16,0,0" VerticalScrollBarVisibility="Auto">
                             <StackPanel Spacing="8">
-                                <!-- Preview Text Input -->
+                                <!-- Unified preview: editable text rendered in the font -->
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
 
-                                    <TextBox x:Name="PreviewTextBox" 
-                                             PlaceholderText="Type preview text here..."
-                                             Text="The quick brown fox jumps over the lazy dog. 0123456789"
-                                             TextChanged="PreviewTextBox_TextChanged"
-                                             AcceptsReturn="False" />
-
-                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" Margin="12,0,0,0">
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" Margin="12,0,0,0"
+                                                VerticalAlignment="Center">
                                         <Slider x:Name="FontSizeSlider" 
-                                                Minimum="8" Maximum="120" Value="48"
+                                                Minimum="8" Maximum="120" Value="32"
                                                 Width="160"
                                                 ValueChanged="FontSizeSlider_ValueChanged"
                                                 ToolTipService.ToolTip="Font size" />
@@ -240,17 +237,18 @@
                                     </StackPanel>
                                 </Grid>
 
-                                <!-- Preview Render Area -->
-                                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                                        CornerRadius="8"
-                                        Padding="8" MinHeight="28">
-                                    <TextBlock x:Name="PreviewTextBlock"
-                                               Text="The quick brown fox jumps over the lazy dog. 0123456789"
-                                               FontSize="32"
-                                               TextWrapping="WrapWholeWords"
-                                               IsTextSelectionEnabled="True" />
-                                </Border>
+                                <!-- Single editable preview area: TextBox styled as the font -->
+                                <TextBox x:Name="PreviewTextBox"
+                                         PlaceholderText="Type preview text here..."
+                                         Text="The quick brown fox jumps over the lazy dog. 0123456789"
+                                         TextChanged="PreviewTextBox_TextChanged"
+                                         AcceptsReturn="True"
+                                         TextWrapping="Wrap"
+                                         FontSize="32"
+                                         MinHeight="80"
+                                         Padding="16"
+                                         BorderThickness="1"
+                                         CornerRadius="8" />
 
                                 <!-- Waterfall (inside Preview, togglable) -->
                                 <StackPanel x:Name="WaterfallSection" Spacing="1">

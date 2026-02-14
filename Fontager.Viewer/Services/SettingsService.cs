@@ -1,3 +1,5 @@
+using System;
+using System.Linq;
 using Microsoft.UI.Xaml;
 using Windows.Storage;
 
@@ -10,26 +12,23 @@ public sealed class SettingsService
 {
     private readonly ApplicationDataContainer _localSettings;
 
-    // Setting keys
     private const string ThemeKey = "AppTheme";
     private const string DefaultPreviewTextKey = "DefaultPreviewText";
     private const string DefaultFontSizeKey = "DefaultFontSize";
     private const string LastOpenDirectoryKey = "LastOpenDirectory";
     private const string BackdropKey = "Backdrop";
     private const string ShowWaterfallKey = "ShowWaterfall";
+    private const string WaterfallSizesKey = "WaterfallSizes";
 
-    // Defaults
     private const string DefaultPreviewTextValue = "The quick brown fox jumps over the lazy dog. 0123456789";
     private const double DefaultFontSizeValue = 48;
+    private const string DefaultWaterfallSizesValue = "8,10,12,14,16,18,20,24,28,32,36,40,48,56,64,72";
 
     public SettingsService()
     {
         _localSettings = ApplicationData.Current.LocalSettings;
     }
 
-    /// <summary>
-    /// Gets or sets the app theme (0 = System, 1 = Light, 2 = Dark).
-    /// </summary>
     public ElementTheme Theme
     {
         get
@@ -42,9 +41,6 @@ public sealed class SettingsService
         set => _localSettings.Values[ThemeKey] = (int)value;
     }
 
-    /// <summary>
-    /// Gets or sets the default preview text.
-    /// </summary>
     public string DefaultPreviewText
     {
         get
@@ -55,9 +51,6 @@ public sealed class SettingsService
         set => _localSettings.Values[DefaultPreviewTextKey] = value;
     }
 
-    /// <summary>
-    /// Gets or sets the default font preview size.
-    /// </summary>
     public double DefaultFontSize
     {
         get
@@ -68,9 +61,6 @@ public sealed class SettingsService
         set => _localSettings.Values[DefaultFontSizeKey] = value;
     }
 
-    /// <summary>
-    /// Gets or sets the last opened directory path.
-    /// </summary>
     public string LastOpenDirectory
     {
         get
@@ -81,9 +71,6 @@ public sealed class SettingsService
         set => _localSettings.Values[LastOpenDirectoryKey] = value;
     }
 
-    /// <summary>
-    /// Gets or sets the backdrop type. 0 = Mica, 1 = Acrylic.
-    /// </summary>
     public int Backdrop
     {
         get
@@ -94,9 +81,6 @@ public sealed class SettingsService
         set => _localSettings.Values[BackdropKey] = value;
     }
 
-    /// <summary>
-    /// Gets or sets whether waterfall view is shown in the Preview tab.
-    /// </summary>
     public bool ShowWaterfall
     {
         get
@@ -105,5 +89,38 @@ public sealed class SettingsService
             return value is not bool b || b; // default true
         }
         set => _localSettings.Values[ShowWaterfallKey] = value;
+    }
+
+    /// <summary>
+    /// Comma-separated waterfall sizes (e.g. "8,12,16,24,32,48,72").
+    /// </summary>
+    public string WaterfallSizesRaw
+    {
+        get
+        {
+            var value = _localSettings.Values[WaterfallSizesKey];
+            return value is string str && !string.IsNullOrWhiteSpace(str) ? str : DefaultWaterfallSizesValue;
+        }
+        set => _localSettings.Values[WaterfallSizesKey] = value;
+    }
+
+    /// <summary>
+    /// Parsed waterfall sizes as int array.
+    /// </summary>
+    public int[] GetWaterfallSizes()
+    {
+        try
+        {
+            return WaterfallSizesRaw
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(s => int.TryParse(s, out var v) ? v : -1)
+                .Where(v => v > 0 && v <= 200)
+                .OrderBy(v => v)
+                .ToArray();
+        }
+        catch
+        {
+            return [8, 12, 16, 20, 24, 32, 48, 64, 72];
+        }
     }
 }
