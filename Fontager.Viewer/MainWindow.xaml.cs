@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
@@ -8,6 +9,7 @@ using Fontager.Viewer.Services;
 using Fontager.Viewer.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI;
+using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Text;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -18,13 +20,11 @@ using WinRT.Interop;
 
 namespace Fontager.Viewer;
 
-/// <summary>
-/// Main window for the Fontager Viewer application.
-/// </summary>
 public sealed partial class MainWindow : Window
 {
     private readonly FontViewerViewModel _viewModel;
     private readonly SettingsService _settings;
+    private readonly IFontService _fontService;
     private FontFamily? _loadedFontFamily;
 
     // Win32 interop for loading private fonts
@@ -37,6 +37,9 @@ public sealed partial class MainWindow : Window
     private const uint FR_PRIVATE = 0x10;
 
     private string? _activeFontPath;
+    private string? _currentFilePath;
+    private int _currentFontIndex;
+    private int _currentFontCount = 1;
 
     public MainWindow()
     {
@@ -44,37 +47,37 @@ public sealed partial class MainWindow : Window
 
         _viewModel = App.Services.GetRequiredService<FontViewerViewModel>();
         _settings = App.Services.GetRequiredService<SettingsService>();
+        _fontService = App.Services.GetRequiredService<IFontService>();
 
-        // Configure window
         ConfigureWindow();
-
-        // Apply saved settings
         ApplySettings();
+        ApplyBackdrop();
 
-        // Set up drag & drop
         RootGrid.AllowDrop = true;
         RootGrid.DragOver += RootGrid_DragOver;
         RootGrid.Drop += RootGrid_Drop;
 
-        // Load font from command-line args if provided
         if (!string.IsNullOrEmpty(App.FontFilePath))
         {
-            _ = LoadFontFromPathAsync(App.FontFilePath);
+            _ = LoadFontFromPathAsync(App.FontFilePath, 0);
         }
     }
 
     private void ConfigureWindow()
     {
-        // Set window size
         var appWindow = this.AppWindow;
         appWindow.Resize(new Windows.Graphics.SizeInt32(900, 700));
-
-        // Set title
         appWindow.Title = "Fontager";
-
-        // Extend content into title bar
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
+    }
+
+    private void ApplyBackdrop()
+    {
+        if (_settings.Backdrop == 1)
+            SystemBackdrop = new DesktopAcrylicBackdrop();
+        else
+            SystemBackdrop = new MicaBackdrop();
     }
 
     // ── File Open ──────────────────────────────────────────────
@@ -82,8 +85,6 @@ public sealed partial class MainWindow : Window
     private async void OpenFileButton_Click(object sender, RoutedEventArgs e)
     {
         var picker = new FileOpenPicker();
-
-        // Initialize with window handle
         var hwnd = WindowNative.GetWindowHandle(this);
         InitializeWithWindow.Initialize(picker, hwnd);
 
@@ -97,7 +98,75 @@ public sealed partial class MainWindow : Window
         var file = await picker.PickSingleFileAsync();
         if (file != null)
         {
-            await LoadFontFromPathAsync(file.Path);
+            await LoadFontFromPathAsync(file.Path, 0);
+        }
+    }
+
+    // ── Install ────────────────────────────────────────────────
+
+    private async void InstallButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentFilePath == null) return;
+
+        try
+        {
+            // Copy font to user fonts folder and let Windows handle installation
+            var userFontsDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Microsoft", "Windows", "Fonts");
+
+            Directory.CreateDirectory(userFontsDir);
+
+            var destPath = Path.Combine(userFontsDir, Path.GetFileName(_currentFilePath));
+
+            if (File.Exists(destPath))
+            {
+                var overwriteDialog = new ContentDialog
+                {
+                    Title = "Font Already Installed",
+                    Content = "This font is already installed. Do you want to overwrite it?",
+                    PrimaryButtonText = "Overwrite",
+                    CloseButtonText = "Cancel",
+                    DefaultButton = ContentDialogButton.Close,
+                    XamlRoot = Content.XamlRoot
+                };
+                var overwriteResult = await overwriteDialog.ShowAsync();
+                if (overwriteResult != ContentDialogResult.Primary)
+                    return;
+            }
+
+            File.Copy(_currentFilePath, destPath, true);
+
+            // Register the font in the user's registry
+            var regKey = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+                @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts", true);
+
+            if (regKey != null)
+            {
+                var fontName = _viewModel.CurrentFont?.DisplayName ?? Path.GetFileNameWithoutExtension(_currentFilePath);
+                regKey.SetValue(fontName, destPath);
+                regKey.Close();
+            }
+
+            var dialog = new ContentDialog
+            {
+                Title = "Font Installed",
+                Content = $"'{_viewModel.CurrentFont?.DisplayName ?? "Font"}' has been installed for the current user.",
+                CloseButtonText = "OK",
+                XamlRoot = Content.XamlRoot
+            };
+            await dialog.ShowAsync();
+        }
+        catch (Exception ex)
+        {
+            var dialog = new ContentDialog
+            {
+                Title = "Installation Failed",
+                Content = $"Could not install font: {ex.Message}",
+                CloseButtonText = "OK",
+                XamlRoot = Content.XamlRoot
+            };
+            await dialog.ShowAsync();
         }
     }
 
@@ -115,32 +184,43 @@ public sealed partial class MainWindow : Window
         if (e.DataView.Contains(Windows.ApplicationModel.DataTransfer.StandardDataFormats.StorageItems))
         {
             var items = await e.DataView.GetStorageItemsAsync();
-            if (items.Count > 0)
+            if (items.Count > 0 && items[0] is Windows.Storage.StorageFile file)
             {
-                var file = items[0] as Windows.Storage.StorageFile;
-                if (file != null)
+                if (_fontService.IsSupportedFont(file.Path))
                 {
-                    var fontService = App.Services.GetRequiredService<IFontService>();
-                    if (fontService.IsSupportedFont(file.Path))
-                    {
-                        await LoadFontFromPathAsync(file.Path);
-                    }
+                    await LoadFontFromPathAsync(file.Path, 0);
                 }
             }
         }
     }
 
+    // ── Multi-Font Navigation ──────────────────────────────────
+
+    private async void PrevFontButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentFilePath != null && _currentFontIndex > 0)
+        {
+            await LoadFontFromPathAsync(_currentFilePath, _currentFontIndex - 1);
+        }
+    }
+
+    private async void NextFontButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentFilePath != null && _currentFontIndex < _currentFontCount - 1)
+        {
+            await LoadFontFromPathAsync(_currentFilePath, _currentFontIndex + 1);
+        }
+    }
+
     // ── Font Loading ───────────────────────────────────────────
 
-    private async Task LoadFontFromPathAsync(string filePath)
+    private async Task LoadFontFromPathAsync(string filePath, int fontIndex)
     {
-        // Show loading state
         ShowState(loading: true);
 
         try
         {
-            // Load font via ViewModel
-            await _viewModel.LoadFontAsync(filePath);
+            await _viewModel.LoadFontAsync(filePath, fontIndex);
 
             if (_viewModel.HasError)
             {
@@ -156,25 +236,19 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
-            // Remove previously activated private font
             DeactivateCurrentFont();
 
-            // Activate the font privately using GDI
             AddFontResourceEx(filePath, FR_PRIVATE, IntPtr.Zero);
             _activeFontPath = filePath;
+            _currentFilePath = filePath;
+            _currentFontIndex = _viewModel.CurrentFont.FontIndex;
+            _currentFontCount = _viewModel.CurrentFont.FontCount;
 
-            // Create FontFamily from the font's family name
             var familyName = _viewModel.CurrentFont.Metadata.FamilyName;
-            if (!string.IsNullOrWhiteSpace(familyName))
-            {
-                _loadedFontFamily = new FontFamily(familyName);
-            }
-            else
-            {
-                _loadedFontFamily = new FontFamily(Path.GetFileNameWithoutExtension(filePath));
-            }
+            _loadedFontFamily = !string.IsNullOrWhiteSpace(familyName)
+                ? new FontFamily(familyName)
+                : new FontFamily(Path.GetFileNameWithoutExtension(filePath));
 
-            // Update UI
             UpdateFontDisplay();
             ShowState(content: true);
         }
@@ -212,13 +286,28 @@ public sealed partial class MainWindow : Window
         VariableBadge.Visibility = meta.IsVariable ? Visibility.Visible : Visibility.Collapsed;
         FontFileSize.Text = font.FormattedFileSize;
 
+        // Install button
+        InstallButton.Visibility = Visibility.Visible;
+
+        // Multi-font navigation
+        if (font.FontCount > 1)
+        {
+            FontNavPanel.Visibility = Visibility.Visible;
+            FontIndexLabel.Text = $"{font.FontIndex + 1} / {font.FontCount}";
+            PrevFontButton.IsEnabled = font.FontIndex > 0;
+            NextFontButton.IsEnabled = font.FontIndex < font.FontCount - 1;
+        }
+        else
+        {
+            FontNavPanel.Visibility = Visibility.Collapsed;
+        }
+
         // Apply font to preview
         if (_loadedFontFamily != null)
         {
             PreviewTextBlock.FontFamily = _loadedFontFamily;
-
-            // Apply weight
             PreviewTextBlock.FontWeight = new Windows.UI.Text.FontWeight((ushort)meta.Weight);
+
             if (meta.IsItalic)
                 PreviewTextBlock.FontStyle = Windows.UI.Text.FontStyle.Italic;
             else if (meta.IsOblique)
@@ -227,13 +316,11 @@ public sealed partial class MainWindow : Window
                 PreviewTextBlock.FontStyle = Windows.UI.Text.FontStyle.Normal;
         }
 
-        // Build waterfall
+        // Waterfall visibility
+        WaterfallSection.Visibility = _settings.ShowWaterfall ? Visibility.Visible : Visibility.Collapsed;
         BuildWaterfallView();
 
-        // Build glyph grid
         BuildGlyphGrid();
-
-        // Build metadata
         BuildMetadataView();
     }
 
@@ -244,11 +331,8 @@ public sealed partial class MainWindow : Window
         PreviewTextBlock.Text = PreviewTextBox.Text;
         _viewModel.PreviewText = PreviewTextBox.Text;
 
-        // Update waterfall too
         if (_viewModel.HasFont)
-        {
             BuildWaterfallView();
-        }
     }
 
     private void FontSizeSlider_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
@@ -257,9 +341,7 @@ public sealed partial class MainWindow : Window
         {
             PreviewTextBlock.FontSize = e.NewValue;
             if (FontSizeLabel != null)
-            {
                 FontSizeLabel.Text = $"{(int)e.NewValue}px";
-            }
         }
     }
 
@@ -269,7 +351,9 @@ public sealed partial class MainWindow : Window
     {
         WaterfallPanel.Children.Clear();
 
-        int[] sizes = [8, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 40, 48, 56, 64, 72];
+        if (!_settings.ShowWaterfall) return;
+
+        int[] sizes = [8, 10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 40, 48, 56, 64, 72];
         var text = string.IsNullOrWhiteSpace(_viewModel.PreviewText)
             ? "The quick brown fox jumps over the lazy dog"
             : _viewModel.PreviewText;
@@ -301,15 +385,12 @@ public sealed partial class MainWindow : Window
             };
 
             if (_loadedFontFamily != null)
-            {
                 textBlock.FontFamily = _loadedFontFamily;
-            }
 
             Grid.SetColumn(textBlock, 1);
 
             row.Children.Add(sizeLabel);
             row.Children.Add(textBlock);
-
             WaterfallPanel.Children.Add(row);
         }
     }
@@ -319,21 +400,17 @@ public sealed partial class MainWindow : Window
     private void BuildGlyphGrid()
     {
         _viewModel.GenerateGlyphItemsPublic();
-
         GlyphGrid.ItemsSource = _viewModel.GlyphItems;
         GlyphCountText.Text = _viewModel.CurrentFont?.Metadata.GlyphCount.ToString() ?? "0";
 
-        // Apply font to glyph items via ContainerContentChanging event
         GlyphGrid.ContainerContentChanging -= GlyphGrid_ContainerContentChanging;
         GlyphGrid.ContainerContentChanging += GlyphGrid_ContainerContentChanging;
     }
 
-    private void GlyphGrid_ContainerContentChanging(ListViewBase sender,
-        ContainerContentChangingEventArgs args)
+    private void GlyphGrid_ContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
     {
         if (args.Phase == 0 && _loadedFontFamily != null)
         {
-            // Find the character TextBlock in the template and apply font
             args.RegisterUpdateCallback((s, a) =>
             {
                 if (a.ItemContainer.ContentTemplateRoot is StackPanel panel &&
@@ -356,9 +433,7 @@ public sealed partial class MainWindow : Window
             SelectedGlyphName.Text = $"Decimal: {glyph.CodePoint} | Character: {glyph.Character}";
 
             if (_loadedFontFamily != null)
-            {
                 SelectedGlyphChar.FontFamily = _loadedFontFamily;
-            }
         }
         else
         {
@@ -371,10 +446,8 @@ public sealed partial class MainWindow : Window
     private void BuildMetadataView()
     {
         MetadataPanel.Children.Clear();
-
         var font = _viewModel.CurrentFont;
         if (font is null) return;
-
         var meta = font.Metadata;
 
         AddMetadataSection("General");
@@ -386,6 +459,8 @@ public sealed partial class MainWindow : Window
         AddMetadataRow("Format", font.Format.ToString());
         AddMetadataRow("File Size", font.FormattedFileSize);
         AddMetadataRow("File Path", font.FilePath);
+        if (font.FontCount > 1)
+            AddMetadataRow("Font in Collection", $"{font.FontIndex + 1} of {font.FontCount}");
 
         AddMetadataSection("Metrics");
         AddMetadataRow("Glyphs", meta.GlyphCount.ToString());
@@ -414,13 +489,12 @@ public sealed partial class MainWindow : Window
 
     private void AddMetadataSection(string title)
     {
-        var header = new TextBlock
+        MetadataPanel.Children.Add(new TextBlock
         {
             Text = title,
             Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"],
             Margin = new Thickness(0, 16, 0, 8)
-        };
-        MetadataPanel.Children.Add(header);
+        });
     }
 
     private void AddMetadataRow(string label, string value)
@@ -461,9 +535,7 @@ public sealed partial class MainWindow : Window
         };
         Grid.SetColumn(valueBlock, string.IsNullOrWhiteSpace(label) ? 0 : 1);
         if (string.IsNullOrWhiteSpace(label))
-        {
             Grid.SetColumnSpan(valueBlock, 2);
-        }
         grid.Children.Add(valueBlock);
 
         border.Child = grid;
@@ -484,7 +556,6 @@ public sealed partial class MainWindow : Window
 
     private void ApplySettings()
     {
-        // Apply theme
         if (RootGrid.XamlRoot != null)
         {
             ((FrameworkElement)Content).RequestedTheme = _settings.Theme;
@@ -497,7 +568,6 @@ public sealed partial class MainWindow : Window
             };
         }
 
-        // Apply default preview text and font size
         PreviewTextBox.Text = _settings.DefaultPreviewText;
         _viewModel.PreviewText = _settings.DefaultPreviewText;
         FontSizeSlider.Value = _settings.DefaultFontSize;
@@ -505,7 +575,7 @@ public sealed partial class MainWindow : Window
 
     private async void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
-        // Build settings dialog
+        // Theme
         var themeCombo = new ComboBox
         {
             Header = "Theme",
@@ -519,6 +589,20 @@ public sealed partial class MainWindow : Window
             SelectedIndex = (int)_settings.Theme
         };
 
+        // Backdrop
+        var backdropCombo = new ComboBox
+        {
+            Header = "Backdrop",
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Items =
+            {
+                new ComboBoxItem { Content = "Mica", Tag = 0 },
+                new ComboBoxItem { Content = "Acrylic", Tag = 1 }
+            },
+            SelectedIndex = _settings.Backdrop
+        };
+
+        // Preview text
         var previewTextBox = new TextBox
         {
             Header = "Default preview text",
@@ -529,6 +613,7 @@ public sealed partial class MainWindow : Window
             MaxLength = 500
         };
 
+        // Font size
         var fontSizeSlider = new Slider
         {
             Header = $"Default font size ({(int)_settings.DefaultFontSize}px)",
@@ -542,10 +627,19 @@ public sealed partial class MainWindow : Window
             fontSizeSlider.Header = $"Default font size ({(int)args.NewValue}px)";
         };
 
+        // Waterfall toggle
+        var waterfallToggle = new ToggleSwitch
+        {
+            Header = "Show waterfall in Preview tab",
+            IsOn = _settings.ShowWaterfall
+        };
+
         var panel = new StackPanel { Spacing = 16, MinWidth = 360 };
         panel.Children.Add(themeCombo);
+        panel.Children.Add(backdropCombo);
         panel.Children.Add(previewTextBox);
         panel.Children.Add(fontSizeSlider);
+        panel.Children.Add(waterfallToggle);
 
         var dialog = new ContentDialog
         {
@@ -561,21 +655,39 @@ public sealed partial class MainWindow : Window
 
         if (result == ContentDialogResult.Primary)
         {
-            // Save settings
+            // Theme
             if (themeCombo.SelectedItem is ComboBoxItem selectedTheme && selectedTheme.Tag is ElementTheme theme)
             {
                 _settings.Theme = theme;
                 ((FrameworkElement)Content).RequestedTheme = theme;
             }
 
+            // Backdrop
+            if (backdropCombo.SelectedItem is ComboBoxItem selectedBackdrop && selectedBackdrop.Tag is int backdropVal)
+            {
+                _settings.Backdrop = backdropVal;
+                ApplyBackdrop();
+            }
+
+            // Preview text & size
             _settings.DefaultPreviewText = previewTextBox.Text;
             _settings.DefaultFontSize = fontSizeSlider.Value;
 
-            // Apply to current view if no font is loaded yet
+            // Waterfall
+            _settings.ShowWaterfall = waterfallToggle.IsOn;
+
             if (!_viewModel.HasFont)
             {
                 PreviewTextBox.Text = _settings.DefaultPreviewText;
                 FontSizeSlider.Value = _settings.DefaultFontSize;
+            }
+
+            // Refresh waterfall visibility if font is loaded
+            if (_viewModel.HasFont)
+            {
+                WaterfallSection.Visibility = _settings.ShowWaterfall ? Visibility.Visible : Visibility.Collapsed;
+                if (_settings.ShowWaterfall)
+                    BuildWaterfallView();
             }
         }
     }

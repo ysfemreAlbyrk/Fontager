@@ -60,10 +60,9 @@ public partial class FontViewerViewModel : ObservableObject
     // ── Public Methods ─────────────────────────────────────────
 
     /// <summary>
-    /// Loads a font from the given file path.
-    /// Called directly from code-behind instead of via RelayCommand.
+    /// Loads a font from the given file path at the specified index.
     /// </summary>
-    public async Task LoadFontAsync(string filePath)
+    public async Task LoadFontAsync(string filePath, int fontIndex = 0)
     {
         if (string.IsNullOrWhiteSpace(filePath))
             return;
@@ -74,7 +73,7 @@ public partial class FontViewerViewModel : ObservableObject
 
         try
         {
-            var font = await _fontService.LoadFontAsync(filePath);
+            var font = await _fontService.LoadFontAsync(filePath, fontIndex);
 
             if (font is null)
             {

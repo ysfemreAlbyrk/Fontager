@@ -39,14 +39,47 @@ public static class FontParser
     }
 
     /// <summary>
-    /// Parses a font file and extracts its metadata.
+    /// Returns the number of fonts contained in a font file.
+    /// TTC files can contain multiple fonts; TTF/OTF always contain 1.
     /// </summary>
-    public static FontMetadata Parse(string filePath)
+    public static int GetFontCount(string filePath)
     {
         try
         {
             var data = File.ReadAllBytes(filePath);
-            return Parse(data);
+            return GetFontCount(data);
+        }
+        catch
+        {
+            return 1;
+        }
+    }
+
+    /// <summary>
+    /// Returns the number of fonts in the binary data.
+    /// </summary>
+    public static int GetFontCount(byte[] data)
+    {
+        if (data.Length < 12) return 1;
+
+        var sfVersion = ReadUInt32BE(data, 0);
+        if (sfVersion == 0x74746366) // 'ttcf'
+        {
+            if (data.Length < 12) return 1;
+            return (int)ReadUInt32BE(data, 8); // numFonts
+        }
+        return 1;
+    }
+
+    /// <summary>
+    /// Parses a font file and extracts metadata for the font at the given index.
+    /// </summary>
+    public static FontMetadata Parse(string filePath, int fontIndex = 0)
+    {
+        try
+        {
+            var data = File.ReadAllBytes(filePath);
+            return Parse(data, fontIndex);
         }
         catch
         {
@@ -55,9 +88,31 @@ public static class FontParser
     }
 
     /// <summary>
-    /// Parses font binary data and extracts metadata.
+    /// Parses all fonts in a file and returns a list of metadata.
     /// </summary>
-    public static FontMetadata Parse(byte[] data)
+    public static List<FontMetadata> ParseAll(string filePath)
+    {
+        try
+        {
+            var data = File.ReadAllBytes(filePath);
+            var count = GetFontCount(data);
+            var results = new List<FontMetadata>(count);
+            for (int i = 0; i < count; i++)
+            {
+                results.Add(Parse(data, i));
+            }
+            return results;
+        }
+        catch
+        {
+            return [new FontMetadata()];
+        }
+    }
+
+    /// <summary>
+    /// Parses font binary data and extracts metadata for the font at the given index.
+    /// </summary>
+    public static FontMetadata Parse(byte[] data, int fontIndex = 0)
     {
         if (data.Length < 12)
             return new FontMetadata();
@@ -66,14 +121,20 @@ public static class FontParser
         {
             var sfVersion = ReadUInt32BE(data, 0);
 
-            // TTC header - parse first font in collection
+            // TTC header - parse the font at fontIndex
             int tableOffset = 0;
             if (sfVersion == 0x74746366) // 'ttcf'
             {
-                if (data.Length < 16)
+                if (data.Length < 12)
                     return new FontMetadata();
-                // Read offset to first font
-                tableOffset = (int)ReadUInt32BE(data, 12);
+                var numFonts = (int)ReadUInt32BE(data, 8);
+                if (fontIndex < 0 || fontIndex >= numFonts)
+                    fontIndex = 0;
+                // Offset table starts at byte 12, each entry is 4 bytes
+                int offsetPos = 12 + (fontIndex * 4);
+                if (offsetPos + 4 > data.Length)
+                    return new FontMetadata();
+                tableOffset = (int)ReadUInt32BE(data, offsetPos);
             }
 
             var numTables = ReadUInt16BE(data, tableOffset + 4);

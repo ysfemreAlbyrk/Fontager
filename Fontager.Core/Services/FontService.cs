@@ -21,7 +21,9 @@ public sealed class FontService : IFontService
         return _supportedExtensions.Contains(ext);
     }
 
-    public async Task<FontModel?> LoadFontAsync(string filePath)
+    public Task<FontModel?> LoadFontAsync(string filePath) => LoadFontAsync(filePath, 0);
+
+    public async Task<FontModel?> LoadFontAsync(string filePath, int fontIndex)
     {
         if (!IsSupportedFont(filePath))
             return null;
@@ -35,20 +37,20 @@ public sealed class FontService : IFontService
             var format = FontParser.GetFormatFromExtension(filePath);
 
             FontMetadata metadata;
+            int fontCount = 1;
 
             if (format == FontFormat.WebOpenFont)
             {
-                // WOFF2 is compressed -- we can't parse the binary directly.
-                // GDI's AddFontResourceEx can still load it for rendering.
-                // Extract what we can from the file name.
                 metadata = CreateMetadataFromFileName(filePath);
             }
             else
             {
-                // TTF, OTF, TTC -- parse binary tables
-                metadata = await Task.Run(() => FontParser.Parse(filePath));
+                fontCount = await Task.Run(() => FontParser.GetFontCount(filePath));
+                if (fontIndex < 0 || fontIndex >= fontCount)
+                    fontIndex = 0;
 
-                // If parser returned empty family name, fall back to file name
+                metadata = await Task.Run(() => FontParser.Parse(filePath, fontIndex));
+
                 if (string.IsNullOrWhiteSpace(metadata.FamilyName))
                 {
                     metadata = metadata with
@@ -64,13 +66,27 @@ public sealed class FontService : IFontService
                 FilePath = filePath,
                 FileSize = fileInfo.Length,
                 Format = format,
-                Metadata = metadata
+                Metadata = metadata,
+                FontCount = fontCount,
+                FontIndex = fontIndex
             };
         }
         catch
         {
             return null;
         }
+    }
+
+    public int GetFontCount(string filePath)
+    {
+        if (!IsSupportedFont(filePath) || !File.Exists(filePath))
+            return 1;
+
+        var format = FontParser.GetFormatFromExtension(filePath);
+        if (format == FontFormat.TrueTypeCollection)
+            return FontParser.GetFontCount(filePath);
+
+        return 1;
     }
 
     public async Task<IReadOnlyList<FontModel>> LoadFontsFromDirectoryAsync(string directoryPath, bool recursive = true)
@@ -85,7 +101,7 @@ public sealed class FontService : IFontService
             .SelectMany(ext => Directory.EnumerateFiles(directoryPath, $"*{ext}", searchOption))
             .ToList();
 
-        var tasks = fontFiles.Select(LoadFontAsync);
+        var tasks = fontFiles.Select(f => LoadFontAsync(f));
         var results = await Task.WhenAll(tasks);
 
         foreach (var font in results)

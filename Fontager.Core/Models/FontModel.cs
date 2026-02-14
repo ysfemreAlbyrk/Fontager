@@ -20,6 +20,12 @@ public sealed class FontModel
     /// <summary>Parsed metadata from the font file.</summary>
     public FontMetadata Metadata { get; init; } = new();
 
+    /// <summary>Total number of fonts in this file (>1 for TTC collections).</summary>
+    public int FontCount { get; init; } = 1;
+
+    /// <summary>Current font index within the file (0-based).</summary>
+    public int FontIndex { get; init; }
+
     /// <summary>Display name (prefers FullName, falls back to FileName).</summary>
     public string DisplayName =>
         !string.IsNullOrWhiteSpace(Metadata.FullName) ? Metadata.FullName : Path.GetFileNameWithoutExtension(FilePath);

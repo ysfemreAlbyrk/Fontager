@@ -15,6 +15,8 @@ public sealed class SettingsService
     private const string DefaultPreviewTextKey = "DefaultPreviewText";
     private const string DefaultFontSizeKey = "DefaultFontSize";
     private const string LastOpenDirectoryKey = "LastOpenDirectory";
+    private const string BackdropKey = "Backdrop";
+    private const string ShowWaterfallKey = "ShowWaterfall";
 
     // Defaults
     private const string DefaultPreviewTextValue = "The quick brown fox jumps over the lazy dog. 0123456789";
@@ -77,5 +79,31 @@ public sealed class SettingsService
             return value is string str ? str : string.Empty;
         }
         set => _localSettings.Values[LastOpenDirectoryKey] = value;
+    }
+
+    /// <summary>
+    /// Gets or sets the backdrop type. 0 = Mica, 1 = Acrylic.
+    /// </summary>
+    public int Backdrop
+    {
+        get
+        {
+            var value = _localSettings.Values[BackdropKey];
+            return value is int intVal && intVal >= 0 && intVal <= 1 ? intVal : 0;
+        }
+        set => _localSettings.Values[BackdropKey] = value;
+    }
+
+    /// <summary>
+    /// Gets or sets whether waterfall view is shown in the Preview tab.
+    /// </summary>
+    public bool ShowWaterfall
+    {
+        get
+        {
+            var value = _localSettings.Values[ShowWaterfallKey];
+            return value is not bool b || b; // default true
+        }
+        set => _localSettings.Values[ShowWaterfallKey] = value;
     }
 }
