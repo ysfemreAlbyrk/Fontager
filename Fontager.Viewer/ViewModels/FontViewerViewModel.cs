@@ -42,7 +42,7 @@ public partial class FontViewerViewModel : ObservableObject
     private string _previewText = "The quick brown fox jumps over the lazy dog. 0123456789";
 
     [ObservableProperty]
-    private double _previewFontSize = 48;
+    private double _previewFontSize = 32;
 
     // ── Active Tab ─────────────────────────────────────────────
 

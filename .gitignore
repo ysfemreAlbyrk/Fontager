@@ -77,6 +77,10 @@ _ReSharper*/
 Thumbs.db
 .DS_Store
 
+# Internal/private notes
+/docs/internal/
+*.private.*
+
 # IDE Files
 .vscode/
 .idea/

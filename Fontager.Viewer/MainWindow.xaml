@@ -67,10 +67,10 @@
             <TextBlock x:Name="TitleBarFontName" Grid.Column="3" 
                        Style="{StaticResource CaptionTextBlockStyle}"
                        VerticalAlignment="Center" HorizontalAlignment="Center"
-                       Opacity="0.6" />
+                       Opacity="0" />
         </Grid>
 
-        <!-- Main Content -->
+        <!-- Main Content Area -->
         <Grid Grid.Row="1">
 
             <!-- Empty State -->
@@ -129,137 +129,163 @@
             <Grid x:Name="FontContent" Visibility="Collapsed">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <!-- Font Header -->
-                <Grid Grid.Row="0" Grid.Column="3" Padding="24,16,24,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
+                <!-- ═══ Font Header ═══ -->
+                <Grid Grid.Row="0" Padding="24,12,24,8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
 
-                    <StackPanel Grid.Column="0" Spacing="4">
-                        <StackPanel Orientation="Horizontal" Spacing="12">
-                            <TextBlock x:Name="FontFamilyName" 
-                                       Style="{StaticResource TitleTextBlockStyle}" />
-                            <!-- Install button in header -->
+                    <!-- Top row: Name + nav + install -->
+                    <Grid Grid.Row="0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock x:Name="FontFamilyName" Grid.Column="0"
+                                   Style="{StaticResource TitleTextBlockStyle}"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis" />
+
+                        <!-- Right: nav + install -->
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="16" VerticalAlignment="Bottom">
+                            <StackPanel x:Name="FontNavPanel" Orientation="Horizontal" Spacing="4" Visibility="Collapsed">
+                                <Button x:Name="PrevFontButton" Click="PrevFontButton_Click"
+                                        ToolTipService.ToolTip="Previous font"
+                                        IsEnabled="False" Padding="8,8"
+                                        Style="{StaticResource SubtleButtonStyle}">
+                                    <FontIcon Glyph="&#xE76B;" FontSize="11" />
+                                </Button>
+                                <TextBlock x:Name="FontIndexLabel" 
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           VerticalAlignment="Center" Margin="2,0,2,2"/>
+                                <Button x:Name="NextFontButton" Click="NextFontButton_Click"
+                                        ToolTipService.ToolTip="Next font"
+                                        Padding="8,8"
+                                        Style="{StaticResource SubtleButtonStyle}">
+                                    <FontIcon Glyph="&#xE76C;" FontSize="11" />
+                                </Button>
+                            </StackPanel>
+
                             <Button x:Name="InstallButton"
                                     Click="InstallButton_Click"
-                                    VerticalAlignment="Center"
                                     Style="{StaticResource AccentButtonStyle}"
-                                    Padding="12,6"
-                                    ToolTipService.ToolTip="Install font for current user">
+                                    Padding="12,5"
+                                    ToolTipService.ToolTip="Install font">
                                 <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <FontIcon Glyph="&#xE896;" FontSize="14" />
-                                    <TextBlock Text="Install" />
+                                    <FontIcon Glyph="&#xE896;" FontSize="13" />
+                                    <TextBlock Text="Install" Style="{StaticResource CaptionTextBlockStyle}" />
                                 </StackPanel>
                             </Button>
                         </StackPanel>
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBlock x:Name="FontStyleName" 
-                                       Style="{StaticResource BodyTextBlockStyle}"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                            <Border x:Name="FormatBadge" 
-                                    Background="{ThemeResource AccentFillColorDefaultBrush}"
-                                    CornerRadius="4" Padding="8,2">
-                                <TextBlock x:Name="FormatBadgeText" 
-                                           Style="{StaticResource CaptionTextBlockStyle}"
-                                           Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
-                            </Border>
-                            <Border x:Name="VariableBadge" Visibility="Collapsed"
-                                    Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}"
-                                    CornerRadius="4" Padding="8,2">
-                                <TextBlock Text="Variable" 
-                                           Style="{StaticResource CaptionTextBlockStyle}"
-                                           Foreground="{ThemeResource SystemFillColorSuccessBrush}" />
-                            </Border>
-                        </StackPanel>
+                    </Grid>
+
+                    <!-- Bottom row: metadata chips -->
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="6" Margin="0,8,0,0">
+                        <TextBlock x:Name="FontStyleName" 
+                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   VerticalAlignment="Center" />
+                        <Border x:Name="FormatBadge" 
+                                Background="{ThemeResource AccentFillColorDefaultBrush}"
+                                CornerRadius="4" Padding="6,1" VerticalAlignment="Center">
+                            <TextBlock x:Name="FormatBadgeText" FontSize="11"
+                                       Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
+                        </Border>
+                        <Border x:Name="VariableBadge" Visibility="Collapsed"
+                                Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}"
+                                CornerRadius="4" Padding="6,1" VerticalAlignment="Center">
+                            <TextBlock Text="Variable" FontSize="11"
+                                       Foreground="{ThemeResource SystemFillColorSuccessBrush}" />
+                        </Border>
                         <TextBlock x:Name="FontFileSize" 
-                           Style="{StaticResource CaptionTextBlockStyle}"
-                           Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                           HorizontalAlignment="Left" />
-                    </StackPanel>
-                    
-                    <!-- Quick View: character set overview like Windows Font Viewer -->
-                    <StackPanel x:Name="QuickViewSection" Grid.Column="1" Spacing="4">
-                        <StackPanel x:Name="QuickViewPanel" Spacing="2" />
-                    </StackPanel>
-
-
-                    <StackPanel Grid.Column="2" Orientation="Vertical" Spacing="8" VerticalAlignment="Top" HorizontalAlignment="Right">
-                        <!-- Multi-font navigation -->
-                        <StackPanel x:Name="FontNavPanel" Orientation="Horizontal" Spacing="4" Visibility="Collapsed">
-                            <TextBlock x:Name="FontIndexLabel" 
-                                       Style="{StaticResource CaptionTextBlockStyle}"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                       VerticalAlignment="Center"/>
-                            <Button x:Name="PrevFontButton" Click="PrevFontButton_Click"
-                                    ToolTipService.ToolTip="Previous font in collection"
-                                    IsEnabled="False" Padding="6,4">
-                                <StackPanel Orientation="Horizontal" Spacing="4">
-                                    <FontIcon Glyph="&#xE76B;" FontSize="12" />
-                                    <TextBlock VerticalAlignment="Center">Prev</TextBlock>
-                                </StackPanel>
-                            </Button>
-                            <Button x:Name="NextFontButton" Click="NextFontButton_Click"
-                                    ToolTipService.ToolTip="Next font in collection"
-                                    Padding="6,4">
-                                <StackPanel Orientation="Horizontal" Spacing="4">
-                                    <TextBlock VerticalAlignment="Center">Next</TextBlock>
-                                    <FontIcon Glyph="&#xE76C;" FontSize="12" />
-                                </StackPanel>
-                            </Button>
-                        </StackPanel>
-
+                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                   VerticalAlignment="Center" />
                     </StackPanel>
                 </Grid>
 
-                <!-- Tabs -->
-                <Pivot x:Name="ContentPivot" Grid.Row="2" Margin="12,4,0,0">
+                <!-- ═══ Quick View ═══ -->
+                <Border x:Name="QuickViewSection" Grid.Row="1" 
+                        Margin="20,10,20,4" Padding="16,10"
+                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1" CornerRadius="8">
+                    <StackPanel x:Name="QuickViewPanel" Spacing="2" />
+                </Border>
+
+                <!-- ═══ Tabs ═══ -->
+                <Pivot x:Name="ContentPivot" Grid.Row="2" Margin="12,0,0,0">
+                    <Pivot.Resources>
+                        <Style TargetType="PivotHeaderItem">
+                            <Setter Property="FontSize" Value="13" />
+                            <Setter Property="Height" Value="32" />
+                        </Style>
+                    </Pivot.Resources>
 
                     <!-- Preview Tab -->
                     <PivotItem Header="Preview">
-                        <ScrollViewer Padding="-12,16,0,0" VerticalScrollBarVisibility="Auto">
-                            <StackPanel Spacing="8">
-                                <!-- Unified preview: editable text rendered in the font -->
-                                <Grid>
+                        <ScrollViewer Padding="-12,8,12,0" VerticalScrollBarVisibility="Auto">
+                            <StackPanel Spacing="12">
+
+                                <!-- Editable preview + size control -->
+                                <Grid x:Name="PreviewSection" ColumnSpacing="12">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
 
-                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" Margin="12,0,0,0"
+                                    <TextBox x:Name="PreviewTextBox" Grid.Column="0"
+                                             PlaceholderText="Type preview text here..."
+                                             Text="The quick brown fox jumps over the lazy dog. 0123456789"
+                                             TextChanged="PreviewTextBox_TextChanged"
+                                             AcceptsReturn="True"
+                                             TextWrapping="Wrap"
+                                             FontSize="32"
+                                             MinHeight="56"
+                                             Padding="12"
+                                             BorderThickness="0"
+                                             CornerRadius="8" />
+
+                                    <!-- Size control on the right -->
+                                    <StackPanel Grid.Column="1" Spacing="2"
                                                 VerticalAlignment="Center">
-                                        <Slider x:Name="FontSizeSlider" 
-                                                Minimum="8" Maximum="120" Value="32"
-                                                Width="160"
-                                                ValueChanged="FontSizeSlider_ValueChanged"
-                                                ToolTipService.ToolTip="Font size" />
-                                        <TextBlock x:Name="FontSizeLabel" Text="32px" 
-                                                   VerticalAlignment="Center" Width="40"
+                                        <Button x:Name="FontSizeUpButton"
+                                                Click="FontSizeUpButton_Click"
+                                                Style="{StaticResource SubtleButtonStyle}"
+                                                Padding="6,4" MinWidth="0" MinHeight="0"
+                                                ToolTipService.ToolTip="Increase font size">
+                                            <FontIcon Glyph="&#xE710;" FontSize="10" />
+                                        </Button>
+                                        <TextBlock x:Name="FontSizeLabel"
+                                                   Text="32" 
+                                                   HorizontalAlignment="Center"
                                                    Style="{StaticResource CaptionTextBlockStyle}"
                                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                        <Button x:Name="FontSizeDownButton"
+                                                Click="FontSizeDownButton_Click"
+                                                Style="{StaticResource SubtleButtonStyle}"
+                                                Padding="6,4" MinWidth="0" MinHeight="0"
+                                                ToolTipService.ToolTip="Decrease font size">
+                                            <FontIcon Glyph="&#xE738;" FontSize="10" />
+                                        </Button>
                                     </StackPanel>
                                 </Grid>
 
-                                <!-- Single editable preview area: TextBox styled as the font -->
-                                <TextBox x:Name="PreviewTextBox"
-                                         PlaceholderText="Type preview text here..."
-                                         Text="The quick brown fox jumps over the lazy dog. 0123456789"
-                                         TextChanged="PreviewTextBox_TextChanged"
-                                         AcceptsReturn="True"
-                                         TextWrapping="Wrap"
-                                         FontSize="32"
-                                         MinHeight="80"
-                                         Padding="16"
-                                         BorderThickness="1"
-                                         CornerRadius="8" />
-
-                                <!-- Waterfall (inside Preview, togglable) -->
-                                <StackPanel x:Name="WaterfallSection" Spacing="1">
-                                    <StackPanel x:Name="WaterfallPanel" Spacing="1" />
+                                <!-- Waterfall -->
+                                <StackPanel x:Name="WaterfallSection" Spacing="0" Margin="0" Padding="0,0,0,0">
+                                    <!--<TextBlock Text="Waterfall" 
+                                               Style="{StaticResource BodyStrongTextBlockStyle}"
+                                               Margin="0,0,0,6"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />-->
+                                    <StackPanel x:Name="WaterfallPanel" Spacing="0" Margin="0"
+                                                Padding="0"/>
                                 </StackPanel>
                             </StackPanel>
                         </ScrollViewer>
@@ -267,7 +293,7 @@
 
                     <!-- Glyphs Tab -->
                     <PivotItem Header="Glyphs">
-                        <ScrollViewer Padding="12,16" VerticalScrollBarVisibility="Auto">
+                        <ScrollViewer Padding="12,8" VerticalScrollBarVisibility="Auto">
                             <StackPanel Spacing="12">
                                 <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}">
                                     <Run x:Name="GlyphCountText" Text="0" />
@@ -329,7 +355,7 @@
 
                     <!-- Metadata Tab -->
                     <PivotItem Header="Info">
-                        <ScrollViewer Padding="12,16" VerticalScrollBarVisibility="Auto">
+                        <ScrollViewer Padding="12,8" VerticalScrollBarVisibility="Auto">
                             <StackPanel Spacing="4" x:Name="MetadataPanel" />
                         </ScrollViewer>
                     </PivotItem>

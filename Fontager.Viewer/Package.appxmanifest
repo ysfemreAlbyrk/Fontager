@@ -43,6 +43,20 @@
         <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
         <uap:SplashScreen Image="Assets\SplashScreen.png" />
       </uap:VisualElements>
+      <Extensions>
+        <uap:Extension Category="windows.fileTypeAssociation">
+          <uap:FileTypeAssociation Name="fontager">
+            <uap:SupportedFileTypes>
+              <uap:FileType>.ttf</uap:FileType>
+              <uap:FileType>.otf</uap:FileType>
+              <uap:FileType>.ttc</uap:FileType>
+              <uap:FileType>.woff2</uap:FileType>
+            </uap:SupportedFileTypes>
+            <uap:DisplayName>Font File</uap:DisplayName>
+            <uap:InfoTip>Open with Fontager Viewer</uap:InfoTip>
+          </uap:FileTypeAssociation>
+        </uap:Extension>
+      </Extensions>
     </Application>
   </Applications>
 

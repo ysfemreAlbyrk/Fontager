@@ -20,14 +20,24 @@ public sealed class SettingsService
     private const string ShowWaterfallKey = "ShowWaterfall";
     private const string WaterfallSizesKey = "WaterfallSizes";
     private const string ShowQuickViewKey = "ShowQuickView";
+    private const string ShowPreviewControlsKey = "ShowPreviewControls";
+    private const string InstallModeKey = "InstallMode"; // 0 = current user, 1 = all users (system)
 
     private const string DefaultPreviewTextValue = "The quick brown fox jumps over the lazy dog. 0123456789";
-    private const double DefaultFontSizeValue = 48;
+    private const double DefaultFontSizeValue = 32;
     private const string DefaultWaterfallSizesValue = "8,10,12,14,16,18,20,24,28,32,36,40,48,56,64,72";
 
     public SettingsService()
     {
         _localSettings = ApplicationData.Current.LocalSettings;
+    }
+
+    /// <summary>
+    /// Resets all settings to their default values.
+    /// </summary>
+    public void ResetToDefaults()
+    {
+        _localSettings.Values.Clear();
     }
 
     public ElementTheme Theme
@@ -103,6 +113,32 @@ public sealed class SettingsService
             return value is not bool b || b; // default true
         }
         set => _localSettings.Values[ShowQuickViewKey] = value;
+    }
+
+    /// <summary>
+    /// Gets or sets whether the preview size controls (slider) are visible.
+    /// </summary>
+    public bool ShowPreviewControls
+    {
+        get
+        {
+            var value = _localSettings.Values[ShowPreviewControlsKey];
+            return value is not bool b || b; // default true
+        }
+        set => _localSettings.Values[ShowPreviewControlsKey] = value;
+    }
+
+    /// <summary>
+    /// Gets or sets the font install mode: 0 = current user, 1 = all users (system).
+    /// </summary>
+    public int InstallMode
+    {
+        get
+        {
+            var value = _localSettings.Values[InstallModeKey];
+            return value is int intVal && intVal >= 0 && intVal <= 1 ? intVal : 0;
+        }
+        set => _localSettings.Values[InstallModeKey] = value;
     }
 
     /// <summary>
