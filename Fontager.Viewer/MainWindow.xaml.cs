@@ -66,7 +66,7 @@ public sealed partial class MainWindow : Window
     private void ConfigureWindow()
     {
         var appWindow = this.AppWindow;
-        appWindow.Resize(new Windows.Graphics.SizeInt32(900, 700));
+        appWindow.Resize(new Windows.Graphics.SizeInt32(1300, 750));
         appWindow.Title = "Fontager";
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);

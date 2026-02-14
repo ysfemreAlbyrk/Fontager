@@ -38,7 +38,7 @@
 
             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
                 <FontIcon Glyph="&#xE8D2;" FontSize="16" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
-                <TextBlock Text="Fontager" Style="{StaticResource CaptionTextBlockStyle}" 
+                <TextBlock Text="Fontager Viewer" Style="{StaticResource CaptionTextBlockStyle}" 
                            FontWeight="SemiBold" VerticalAlignment="Center" />
             </StackPanel>
 
@@ -208,12 +208,12 @@
                 </Grid>
 
                 <!-- Tabs -->
-                <Pivot x:Name="ContentPivot" Grid.Row="1" Margin="12,8,12,0">
+                <Pivot x:Name="ContentPivot" Grid.Row="1" Margin="12,4,0,0">
 
                     <!-- Preview Tab (now includes waterfall) -->
                     <PivotItem Header="Preview">
-                        <ScrollViewer Padding="12,16" VerticalScrollBarVisibility="Auto">
-                            <StackPanel Spacing="20">
+                        <ScrollViewer Padding="-12,16,0,0" VerticalScrollBarVisibility="Auto">
+                            <StackPanel Spacing="8">
                                 <!-- Preview Text Input -->
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -233,7 +233,7 @@
                                                 Width="160"
                                                 ValueChanged="FontSizeSlider_ValueChanged"
                                                 ToolTipService.ToolTip="Font size" />
-                                        <TextBlock x:Name="FontSizeLabel" Text="48px" 
+                                        <TextBlock x:Name="FontSizeLabel" Text="32px" 
                                                    VerticalAlignment="Center" Width="40"
                                                    Style="{StaticResource CaptionTextBlockStyle}"
                                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
@@ -243,20 +243,18 @@
                                 <!-- Preview Render Area -->
                                 <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                                        BorderThickness="1" CornerRadius="8"
-                                        Padding="24" MinHeight="120">
+                                        CornerRadius="8"
+                                        Padding="8" MinHeight="28">
                                     <TextBlock x:Name="PreviewTextBlock"
                                                Text="The quick brown fox jumps over the lazy dog. 0123456789"
-                                               FontSize="48"
+                                               FontSize="32"
                                                TextWrapping="WrapWholeWords"
                                                IsTextSelectionEnabled="True" />
                                 </Border>
 
                                 <!-- Waterfall (inside Preview, togglable) -->
-                                <StackPanel x:Name="WaterfallSection" Spacing="8">
-                                    <TextBlock Text="Waterfall" 
-                                               Style="{StaticResource BodyStrongTextBlockStyle}" />
-                                    <StackPanel x:Name="WaterfallPanel" Spacing="4" />
+                                <StackPanel x:Name="WaterfallSection" Spacing="1">
+                                    <StackPanel x:Name="WaterfallPanel" Spacing="1" />
                                 </StackPanel>
                             </StackPanel>
                         </ScrollViewer>
