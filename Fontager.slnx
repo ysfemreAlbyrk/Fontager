@@ -1,0 +1,11 @@
+<Solution>
+  <Project Path="Fontager.Core/Fontager.Core.csproj" Id="79bf8fae-432b-4808-8f73-a68981b9f431" />
+  <Project Path="Fontager.Manager/Fontager.Manager.csproj" Id="c88bd044-866b-48e5-8bcf-1ff3bfdaee26">
+    <Platform Project="x64" />
+    <Deploy />
+  </Project>
+  <Project Path="Fontager.Viewer/Fontager.Viewer.csproj" Id="209233e5-d56f-4cdc-942b-cd5b658beb8a">
+    <Platform Project="x64" />
+    <Deploy />
+  </Project>
+</Solution>

@@ -1,0 +1,85 @@
+# Visual Studio Temporary Files and User-Specific Settings
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.rsuser
+
+# Build Results and Artifacts
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+ARM/
+ARM64/
+Win32/
+bld/
+[Ll]og/
+[Ll]ogs/
+artifacts/
+project.lock.json
+project.fragment.lock.json
+*.binlog
+Generated Files/
+
+# Test Results
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+*.coverage
+*.coveragexml
+OpenCover/
+BenchmarkDotNet.Artifacts/
+
+# NuGet Packages
+packages/
+.paket/paket.exe
+paket-files/
+
+# Other Common Files to Ignore
+*.tmp
+*.log
+*.bak
+*.pdb
+*.ilk
+*.meta
+*.iobj
+*.pch
+*.ipdb
+*.pgc
+*.pgd
+*.rsp
+*.sbr
+*.tlb
+*.tli
+*.tlh
+*_wpftmp.csproj
+publish/
+*.Publish.xml
+*.pubxml
+*.azurePubxml
+*.publishsettings
+.localhistory/
+.vshistory/
+MigrationBackup/
+
+# IDE-Specific Files (Beyond Visual Studio)
+.vscode/
+*.code-workspace
+.history/
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+
+# OS Files
+Thumbs.db
+.DS_Store
+
+# IDE Files
+.vscode/
+.idea/
+.cursor/
+.windsurf/
+.antigravity/

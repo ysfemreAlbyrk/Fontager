@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "Fontager.Manager (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "Fontager.Manager (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}
