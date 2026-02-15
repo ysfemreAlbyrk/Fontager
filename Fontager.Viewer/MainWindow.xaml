@@ -36,10 +36,13 @@
                 <ColumnDefinition Width="188" />
             </Grid.ColumnDefinitions>
 
-            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                 <FontIcon Glyph="&#xE8D2;" FontSize="16" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
                 <TextBlock Text="Fontager Viewer" Style="{StaticResource CaptionTextBlockStyle}" 
                            FontWeight="SemiBold" VerticalAlignment="Center" />
+                <TextBlock x:Name="TitleBarVersion" Style="{StaticResource CaptionTextBlockStyle}"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           VerticalAlignment="Center" Opacity="0.6" />
             </StackPanel>
 
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" Margin="16,0,0,0">
@@ -76,11 +79,11 @@
             <!-- Empty State -->
             <Grid x:Name="EmptyState" Visibility="Visible"
                   HorizontalAlignment="Center" VerticalAlignment="Center">
-                <StackPanel Spacing="16" HorizontalAlignment="Center" MaxWidth="400">
+                <StackPanel Spacing="20" HorizontalAlignment="Center" MaxWidth="420">
                     <FontIcon Glyph="&#xE8D2;" FontSize="64" 
                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                               HorizontalAlignment="Center" />
-                    <TextBlock Text="Fontager Viewer" 
+                    <TextBlock x:Name="EmptyStateTitle" Text="Fontager Viewer" 
                                Style="{StaticResource TitleTextBlockStyle}"
                                HorizontalAlignment="Center" />
                     <TextBlock Text="Open a font file to preview it, or drag and drop a .ttf, .otf, .ttc, or .woff2 file here."
@@ -92,6 +95,19 @@
                             HorizontalAlignment="Center"
                             Style="{StaticResource AccentButtonStyle}"
                             Padding="24,10" />
+                    <StackPanel Spacing="6" Margin="0,12,0,0" HorizontalAlignment="Center">
+                        <TextBlock x:Name="EmptyStateVersion" 
+                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                   HorizontalAlignment="Center" />
+                        <TextBlock Text="Made by Yusuf Emre Albayrak"
+                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                   HorizontalAlignment="Center" />
+                        <HyperlinkButton x:Name="EmptyStateGitHub" Content="GitHub"
+                                         Click="EmptyStateGitHub_Click"
+                                         HorizontalAlignment="Center" />
+                    </StackPanel>
                 </StackPanel>
             </Grid>
 

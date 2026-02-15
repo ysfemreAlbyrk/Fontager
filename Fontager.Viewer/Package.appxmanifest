@@ -9,15 +9,15 @@
   IgnorableNamespaces="uap rescap systemai">
 
   <Identity
-    Name="6ee7d5ee-77c8-48bb-9fb6-4ebc3538f7b0"
-    Publisher="CN=albayrak"
-    Version="0.0.3.0" />
+    Name="ysfemrealbyrk.Fontager"
+    Publisher="CN=Yusuf Emre ALBAYRAK"
+    Version="0.0.4.0" />
 
   <mp:PhoneIdentity PhoneProductId="6ee7d5ee-77c8-48bb-9fb6-4ebc3538f7b0" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
   <Properties>
-    <DisplayName>Fontager.Viewer</DisplayName>
-    <PublisherDisplayName>albayrak</PublisherDisplayName>
+    <DisplayName>Fontager Viewer</DisplayName>
+    <PublisherDisplayName>Yusuf Emre Albayrak</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
 
@@ -35,8 +35,8 @@
       Executable="$targetnametoken$.exe"
       EntryPoint="$targetentrypoint$">
       <uap:VisualElements
-        DisplayName="Fontager.Viewer"
-        Description="Fontager.Viewer"
+        DisplayName="Fontager Viewer"
+        Description="Fontager Viewer is powerful font viewer with new fluent design. Made by Yusuf Emre ALBAYRAK"
         BackgroundColor="transparent"
         Square150x150Logo="Assets\Square150x150Logo.png"
         Square44x44Logo="Assets\Square44x44Logo.png">

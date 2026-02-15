@@ -90,6 +90,8 @@ public sealed partial class MainWindow : Window
         RootGrid.DragOver += RootGrid_DragOver;
         RootGrid.Drop += RootGrid_Drop;
 
+        SetAppVersion();
+
         // Auto-show/hide Quick View based on window size
         this.SizeChanged += OnWindowSizeChanged;
 
@@ -131,6 +133,20 @@ public sealed partial class MainWindow : Window
 
         // Set minimum window size via Win32 WM_GETMINMAXINFO
         SetMinimumWindowSize(600, 266);
+    }
+
+    private void SetAppVersion()
+    {
+        var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+        var versionStr = version != null ? $"v{version.Major}.{version.Minor}.{version.Build}" : "v0.0.3";
+        TitleBarVersion.Text = versionStr;
+        if (EmptyStateVersion != null)
+            EmptyStateVersion.Text = versionStr;
+    }
+
+    private async void EmptyStateGitHub_Click(object sender, RoutedEventArgs e)
+    {
+        await Windows.System.Launcher.LaunchUriAsync(new Uri("https://github.com/ysfemreAlbyrk/Fontager"));
     }
 
     private void SetMinimumWindowSize(int minWidthDip, int minHeightDip)
@@ -884,7 +900,7 @@ public sealed partial class MainWindow : Window
         // LAYOUT
         // ══════════════════════════════════════════════════════════
 
-        var panel = new StackPanel { Spacing = 12, MinWidth = 380 };
+        var panel = new StackPanel { Spacing = 12 };
 
         // Appearance
         panel.Children.Add(SectionHeader("Appearance"));
@@ -925,15 +941,18 @@ public sealed partial class MainWindow : Window
         // DIALOG
         // ══════════════════════════════════════════════════════════
 
+        var contentContainer = new Grid { MinWidth = 580, HorizontalAlignment = HorizontalAlignment.Stretch };
+        contentContainer.Children.Add(new ScrollViewer
+        {
+            Content = panel,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            MaxHeight = 560
+        });
+
         var dialog = new ContentDialog
         {
             Title = "Settings",
-            Content = new ScrollViewer
-            {
-                Content = panel,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                MaxHeight = 500
-            },
+            Content = contentContainer,
             PrimaryButtonText = "Save",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,
