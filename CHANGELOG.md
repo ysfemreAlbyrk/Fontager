@@ -1,6 +1,21 @@
 # Changelog
 
-## [0.0.0.3-alpha]
+## [0.0.5-alpha]
+
+### ➕ Added
+- Enhanced version retrieval in MainWindow.xaml.cs to prioritize package version
+
+### 🔄 Changed
+- Modified app.manifest to remove assembly identity
+- Changed GenerateAppInstallerFile to False in Fontager.Viewer.csproj
+- Enhanced file associations and UI consistency
+- Improved project documentation structure
+- Enhanced build instructions for MSIX packaging
+- Updated App.xaml for better file activation handling
+
+---
+
+## [0.0.3-alpha]
 
 ### ➕ Added
 - File activation support — double-clicking .ttc/.otf/.woff2 opens the file when Fontager is set as default
@@ -60,7 +75,15 @@
 ## [Future Plans]
 
 ### 🚀 Planned Features
-- **Fontager.Manager** - Professional font management suite
+
+#### **Fontager.Viewer**
+- Font compare
+- Copying glyphs
+- Dark and Light background preview
+- Recent Files (for blank screen)
+
+#### **Fontager.Manager**
+- Professional font management suite
 - Google Fonts integration
 - Font collections and tagging
 - Temporary font activation
