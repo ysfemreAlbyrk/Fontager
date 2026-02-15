@@ -35,6 +35,7 @@ BenchmarkDotNet.Artifacts/
 
 # NuGet Packages
 packages/
+AppPackages/
 .paket/paket.exe
 paket-files/
 
@@ -87,3 +88,5 @@ Thumbs.db
 .cursor/
 .windsurf/
 .antigravity/
+
+*.pfx

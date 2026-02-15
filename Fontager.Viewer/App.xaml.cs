@@ -5,6 +5,8 @@ using Fontager.Viewer.Services;
 using Fontager.Viewer.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
+using Microsoft.Windows.AppLifecycle;
+using Windows.ApplicationModel.Activation;
 
 namespace Fontager.Viewer;
 
@@ -21,7 +23,7 @@ public partial class App : Application
     public static IServiceProvider Services { get; private set; } = null!;
 
     /// <summary>
-    /// The font file path passed via command-line arguments (if any).
+    /// The font file path passed via command-line or file activation (if any).
     /// </summary>
     public static string? FontFilePath { get; private set; }
 
@@ -34,18 +36,45 @@ public partial class App : Application
         ConfigureServices(serviceCollection);
         Services = serviceCollection.BuildServiceProvider();
 
-        // Parse command-line arguments for font file path
+        ResolveFontFilePath();
+    }
+
+    /// <summary>
+    /// Resolves the font file path from command-line args or file activation.
+    /// File activation is used when user double-clicks a .ttf/.otf/.ttc file with Fontager set as default.
+    /// </summary>
+    private static void ResolveFontFilePath()
+    {
+        // 1. Try rich activation (file association double-click)
+        try
+        {
+            var activatedArgs = AppInstance.GetCurrent().GetActivatedEventArgs();
+            if (activatedArgs.Kind == ExtendedActivationKind.File)
+            {
+                var fileArgs = (FileActivatedEventArgs)activatedArgs.Data;
+                if (fileArgs.Files.Count > 0 && fileArgs.Files[0] is Windows.Storage.StorageFile storageFile)
+                {
+                    var path = storageFile.Path;
+                    if (!string.IsNullOrEmpty(path) && File.Exists(path))
+                    {
+                        FontFilePath = path;
+                        return;
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // Fall through to command-line
+        }
+
+        // 2. Fall back to command-line arguments
         var args = Environment.GetCommandLineArgs();
         if (args.Length > 1)
         {
-            var candidatePath = args[1];
-            // Handle quoted paths
-            candidatePath = candidatePath.Trim('"');
-
+            var candidatePath = args[1].Trim('"');
             if (File.Exists(candidatePath))
-            {
                 FontFilePath = candidatePath;
-            }
         }
     }
 
@@ -61,7 +90,7 @@ public partial class App : Application
         services.AddTransient<FontViewerViewModel>();
     }
 
-    protected override void OnLaunched(LaunchActivatedEventArgs args)
+    protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
     {
         _window = new MainWindow();
         _window.Activate();

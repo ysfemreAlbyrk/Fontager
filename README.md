@@ -49,6 +49,15 @@ Shared library containing models, services, and helpers used by both application
 3. Set `Fontager.Viewer` as the startup project
 4. Build and run (F5)
 
+### Portable (no installation) build
+
+To get a standalone folder you can copy to a USB drive or run from any location:
+
+1. **Visual Studio:** Right-click `Fontager.Viewer` → **Publish** → choose **portable** profile → **Publish**
+2. **Command line:** `dotnet publish Fontager.Viewer\Fontager.Viewer.csproj -p:PublishProfile=portable`
+
+Output is in `Fontager.Viewer\bin\portable\`. Copy the entire folder; run `Fontager.Viewer.exe`. No installation required.
+
 ## Tech Stack
 
 - **UI Framework:** WinUI 3 (Windows App SDK)
