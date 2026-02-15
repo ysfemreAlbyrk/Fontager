@@ -14,6 +14,7 @@ using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Windows.ApplicationModel;
 using Windows.Storage;
 using Windows.Storage.Pickers;
 using WinRT.Interop;
@@ -137,8 +138,17 @@ public sealed partial class MainWindow : Window
 
     private void SetAppVersion()
     {
-        var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
-        var versionStr = version != null ? $"v{version.Major}.{version.Minor}.{version.Build}" : "v0.0.3";
+        string versionStr;
+        try
+        {
+            var version = Package.Current.Id.Version;
+            versionStr = $"v{version.Major}.{version.Minor}.{version.Build}";
+        }
+        catch
+        {
+            var asm = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+            versionStr = asm != null ? $"v{asm.Major}.{asm.Minor}.{asm.Build}" : "v0.0.0";
+        }
         TitleBarVersion.Text = versionStr;
         if (EmptyStateVersion != null)
             EmptyStateVersion.Text = versionStr;
