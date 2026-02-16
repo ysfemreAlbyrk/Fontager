@@ -37,7 +37,7 @@
             </Grid.ColumnDefinitions>
 
             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                <FontIcon Glyph="&#xE8D2;" FontSize="16" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                <Image Source="Assets/Logo.png" Width="16" Height="16" />
                 <TextBlock Text="Fontager Viewer" Style="{StaticResource CaptionTextBlockStyle}" 
                            FontWeight="SemiBold" VerticalAlignment="Center" />
                 <TextBlock x:Name="TitleBarVersion" Style="{StaticResource CaptionTextBlockStyle}"
@@ -80,9 +80,8 @@
             <Grid x:Name="EmptyState" Visibility="Visible"
                   HorizontalAlignment="Center" VerticalAlignment="Center">
                 <StackPanel Spacing="20" HorizontalAlignment="Center" MaxWidth="420">
-                    <FontIcon Glyph="&#xE8D2;" FontSize="64" 
-                              Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                              HorizontalAlignment="Center" />
+                    <Image Source="Assets/Logo.png" Width="64" Height="64" 
+                           HorizontalAlignment="Center" />
                     <TextBlock x:Name="EmptyStateTitle" Text="Fontager Viewer" 
                                Style="{StaticResource TitleTextBlockStyle}"
                                HorizontalAlignment="Center" />

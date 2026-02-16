@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.0.0]
+
+🎉 First Release
+
+### ➕ Added
+- About section in settings — version, product info, author, GitHub link at the bottom
+
+### 🔄 Changed
+- Version now read from `Package.appxmanifest` instead of assembly
+- New app icon — custom Logo.png (F + magnifying glass) in title bar and empty state
+- Widened settings dialog (ContentDialogMaxWidth 640)
+
+---
+
 ## [0.0.5-alpha]
 
 ### ➕ Added

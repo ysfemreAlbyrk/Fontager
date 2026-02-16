@@ -1,6 +1,6 @@
 <div align="center">
 <p align="center">
-  <img width="65%" src="">
+  <img width="65%" src="https://raw.githubusercontent.com/ysfemreAlbyrk/Fontager/refs/heads/main/Fontager.Viewer/Assets/Logo.png">
 </p>
 
 # Fontager

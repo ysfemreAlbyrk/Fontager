@@ -947,6 +947,47 @@ public sealed partial class MainWindow : Window
         // Reset
         panel.Children.Add(resetButton);
 
+        panel.Children.Add(Divider());
+
+        // About
+        panel.Children.Add(SectionHeader("About"));
+
+        string aboutVersion;
+        try
+        {
+            var ver = Package.Current.Id.Version;
+            aboutVersion = $"{ver.Major}.{ver.Minor}.{ver.Build}.{ver.Revision}";
+        }
+        catch
+        {
+            var asm = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+            aboutVersion = asm?.ToString() ?? "0.0.0.0";
+        }
+
+        panel.Children.Add(new TextBlock
+        {
+            Text = $"Fontager Viewer  v{aboutVersion}",
+            FontWeight = FontWeights.SemiBold,
+            Style = (Style)Application.Current.Resources["BodyTextBlockStyle"]
+        });
+        panel.Children.Add(Description("A modern font viewer for Windows, built with WinUI 3."));
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Made by Yusuf Emre Albayrak",
+            Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+            Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
+            Margin = new Thickness(0, -4, 0, 0)
+        });
+
+        var githubLink = new HyperlinkButton
+        {
+            Content = "GitHub — ysfemreAlbyrk/Fontager",
+            NavigateUri = new Uri("https://github.com/ysfemreAlbyrk/Fontager"),
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, 2, 0, 0)
+        };
+        panel.Children.Add(githubLink);
+
         // ══════════════════════════════════════════════════════════
         // DIALOG
         // ══════════════════════════════════════════════════════════
