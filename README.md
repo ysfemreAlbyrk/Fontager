@@ -1,6 +1,6 @@
 <div align="center">
 <p align="center">
-  <img width="65%" src="https://raw.githubusercontent.com/ysfemreAlbyrk/Fontager/refs/heads/main/Fontager.Viewer/Assets/Logo.png">
+  <img width="15%" src="https://raw.githubusercontent.com/ysfemreAlbyrk/Fontager/refs/heads/main/Fontager.Viewer/Assets/Logo.png">
 </p>
 
 # Fontager
@@ -76,17 +76,18 @@ Shared library containing models, services, and helpers used by both application
 
 ### 📦 Installation
 
-**Note:** Currently no pre-built releases are available as this is in alpha stage. You need to build it yourself.
-
 **Visual Studio (MSIX):**
 1. Set configuration to **Release** and platform to **x64**
 2. Right-click `Fontager.Viewer` → **Package and Publish** → **Create App Packages**
 3. Select **Sideloading** → **Next**
 4. Create or select a certificate → **Create**
 
-
 📁 **Output:** `Fontager.Viewer\AppPackages\Fontager.Viewer_X.X.X.X_x64.msix`  
 Double-click the `.msix` file to install, or distribute it to other users.
+
+**Download From GitHub Release:**
+1. Go to [latest release page](https://github.com/ysfemreAlbyrk/Fontager/releases/latest) and download.
+2. Run the bat file.
 
 ## 🛠️ Tech Stack
 
