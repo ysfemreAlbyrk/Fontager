@@ -23,6 +23,12 @@ namespace Fontager.Viewer;
 
 public sealed partial class MainWindow : Window
 {
+    private enum InstallTarget
+    {
+        CurrentUser = 0,
+        AllUsers = 1
+    }
+
     private readonly FontViewerViewModel _viewModel;
     private readonly SettingsService _settings;
     private readonly IFontService _fontService;
@@ -208,11 +214,48 @@ public sealed partial class MainWindow : Window
 
     // ── Install ────────────────────────────────────────────────
 
-    private async void InstallButton_Click(object sender, RoutedEventArgs e)
+    private async void InstallSplitButton_Click(SplitButton sender, SplitButtonClickEventArgs args)
+    {
+        await InstallFontAsync(GetSavedInstallTarget());
+    }
+
+    private async void InstallCurrentUserMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        SetSavedInstallTarget(InstallTarget.CurrentUser);
+        await InstallFontAsync(InstallTarget.CurrentUser);
+    }
+
+    private async void InstallAllUsersMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        SetSavedInstallTarget(InstallTarget.AllUsers);
+        await InstallFontAsync(InstallTarget.AllUsers);
+    }
+
+    private InstallTarget GetSavedInstallTarget() =>
+        _settings.InstallMode == (int)InstallTarget.AllUsers
+            ? InstallTarget.AllUsers
+            : InstallTarget.CurrentUser;
+
+    private void SetSavedInstallTarget(InstallTarget target)
+    {
+        _settings.InstallMode = (int)target;
+        UpdateInstallButtonPresentation(target);
+    }
+
+    private void UpdateInstallButtonPresentation(InstallTarget target)
+    {
+        bool isAllUsers = target == InstallTarget.AllUsers;
+        InstallButtonText.Text = isAllUsers ? "Install (All users)" : "Install (Current user)";
+        ToolTipService.SetToolTip(
+            InstallSplitButton,
+            isAllUsers ? "Install font for all users (requires admin)" : "Install font for current user");
+    }
+
+    private async Task InstallFontAsync(InstallTarget target)
     {
         if (_currentFilePath == null) return;
 
-        bool installSystem = _settings.InstallMode == 1;
+        bool installSystem = target == InstallTarget.AllUsers;
 
         try
         {
@@ -240,8 +283,7 @@ public sealed partial class MainWindow : Window
                     @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts", true);
                 regKey?.SetValue(fontDisplayName, fileName);
 
-                await ShowInfoDialogAsync("Font Installed",
-                    $"'{fontDisplayName}' has been installed for all users.");
+                await ShowInfoDialogAsync("Font Installed", $"'{fontDisplayName}' has been installed for all users.");
             }
             else
             {
@@ -266,8 +308,7 @@ public sealed partial class MainWindow : Window
                     @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts", true);
                 regKey?.SetValue(fontDisplayName, destPath);
 
-                await ShowInfoDialogAsync("Font Installed",
-                    $"'{fontDisplayName}' has been installed for the current user.");
+                await ShowInfoDialogAsync("Font Installed", $"'{fontDisplayName}' has been installed for the current user.");
             }
         }
         catch (UnauthorizedAccessException)
@@ -746,6 +787,7 @@ public sealed partial class MainWindow : Window
         LoadingState.Visibility = loading ? Visibility.Visible : Visibility.Collapsed;
         ErrorState.Visibility = error ? Visibility.Visible : Visibility.Collapsed;
         FontContent.Visibility = content ? Visibility.Visible : Visibility.Collapsed;
+        InstallSplitButton.IsEnabled = content && !string.IsNullOrWhiteSpace(_currentFilePath);
     }
 
     // ── Settings ────────────────────────────────────────────────
@@ -760,6 +802,7 @@ public sealed partial class MainWindow : Window
         PreviewTextBox.Text = _settings.DefaultPreviewText;
         _viewModel.PreviewText = _settings.DefaultPreviewText;
         SetPreviewFontSize(_settings.DefaultFontSize);
+        UpdateInstallButtonPresentation(GetSavedInstallTarget());
     }
 
     private async void SettingsButton_Click(object sender, RoutedEventArgs e)
@@ -940,7 +983,7 @@ public sealed partial class MainWindow : Window
         // Install
         panel.Children.Add(SectionHeader("Install"));
         panel.Children.Add(installModeCombo);
-        panel.Children.Add(Description("System-wide install copies to Windows\\Fonts and requires administrator privileges."));
+        panel.Children.Add(Description("Select the default target used by the main Install button. All-users install copies to Windows\\Fonts and requires administrator privileges."));
 
         panel.Children.Add(Divider());
 
@@ -1051,6 +1094,7 @@ public sealed partial class MainWindow : Window
             // Install
             if (installModeCombo.SelectedItem is ComboBoxItem si && si.Tag is int iv)
                 _settings.InstallMode = iv;
+            UpdateInstallButtonPresentation(GetSavedInstallTarget());
 
             // Apply to UI
             if (!_viewModel.HasFont)

@@ -1,15 +1,15 @@
 ---
-name: Question
+name: ❓ Question
 about: Ask a question about Fontager
-title: "[QUESTION] "
-labels: question
+title: "❓ [QUESTION] "
+labels: "❓ question"
 assignees: ''
 ---
 
-**Question**
+**❓ Question**
 Please ask your question about Fontager here. Be as specific as possible.
 
-**What have you tried?**
+**🧪 What have you tried?**
 Describe what you've already tried to solve your question or issue.
 
 **Environment:**
