@@ -140,6 +140,94 @@ public sealed partial class MainWindow : Window
 
         // Set minimum window size via Win32 WM_GETMINMAXINFO
         SetMinimumWindowSize(600, 266);
+
+        ApplyWindowIcon();
+        AllowDragDropFromLowerIntegrity();
+    }
+
+    /// <summary>
+    /// When Fontager runs elevated, Windows UIPI blocks lower-integrity Explorer
+    /// from delivering drag-drop and clipboard messages. Whitelist the three
+    /// relevant window messages so drag-drop and paste keep working under
+    /// "Run as administrator".
+    /// </summary>
+    private void AllowDragDropFromLowerIntegrity()
+    {
+        if (!IsRunningElevated()) return;
+
+        var hwnd = WindowNative.GetWindowHandle(this);
+        ChangeWindowMessageFilterEx(hwnd, WM_DROPFILES, MSGFLT_ALLOW, IntPtr.Zero);
+        ChangeWindowMessageFilterEx(hwnd, WM_COPYDATA, MSGFLT_ALLOW, IntPtr.Zero);
+        ChangeWindowMessageFilterEx(hwnd, WM_COPYGLOBALDATA, MSGFLT_ALLOW, IntPtr.Zero);
+    }
+
+    private static bool IsRunningElevated()
+    {
+        try
+        {
+            using var identity = WindowsIdentity.GetCurrent();
+            var principal = new WindowsPrincipal(identity);
+            return principal.IsInRole(WindowsBuiltInRole.Administrator);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Sets the window icon used by Alt+Tab, the taskbar, and the title bar.
+    /// AppWindow.SetIcon works for packaged and unpackaged builds; we also push
+    /// the icon via WM_SETICON so the Alt+Tab thumbnail picks it up reliably
+    /// when the package install directory differs from the working directory.
+    /// </summary>
+    private void ApplyWindowIcon()
+    {
+        var hwnd = WindowNative.GetWindowHandle(this);
+
+        // Resolve the icon path: prefer the package install location when
+        // running packaged, fall back to the executable directory.
+        string iconPath = ResolveAssetPath("Assets\\Logo.ico");
+
+        try
+        {
+            if (File.Exists(iconPath))
+            {
+                AppWindow.SetIcon(iconPath);
+            }
+        }
+        catch
+        {
+            // SetIcon can throw on some platform/SDK combinations; fall through
+            // to the Win32 path which is what populates the Alt+Tab thumbnail.
+        }
+
+        if (!File.Exists(iconPath)) return;
+
+        var smallIcon = LoadImage(IntPtr.Zero, iconPath, IMAGE_ICON, 16, 16, LR_LOADFROMFILE);
+        var bigIcon = LoadImage(IntPtr.Zero, iconPath, IMAGE_ICON, 32, 32, LR_LOADFROMFILE);
+
+        if (smallIcon != IntPtr.Zero)
+            SendMessage(hwnd, WM_SETICON, (IntPtr)ICON_SMALL, smallIcon);
+        if (bigIcon != IntPtr.Zero)
+            SendMessage(hwnd, WM_SETICON, (IntPtr)ICON_BIG, bigIcon);
+    }
+
+    private static string ResolveAssetPath(string relativePath)
+    {
+        try
+        {
+            var packagePath = Package.Current.InstalledLocation.Path;
+            var packaged = Path.Combine(packagePath, relativePath);
+            if (File.Exists(packaged)) return packaged;
+        }
+        catch
+        {
+            // Not running packaged.
+        }
+
+        var baseDir = AppContext.BaseDirectory;
+        return Path.Combine(baseDir, relativePath);
     }
 
     private void SetAppVersion()
