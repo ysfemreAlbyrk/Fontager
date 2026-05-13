@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### 📚 Docs
+- Added `docs/research/font-parsing.md` — comparison of `SixLabors.Fonts`, `HarfBuzzSharp`/`SkiaSharp`, `Typography`, `Win2D` + DirectWrite, and `SharpFont` for fixing WOFF2 metadata and cmap-aware glyph enumeration; includes a TTF file-association appendix.
+
+---
+
 ## [1.0.0]
 
 🎉 First Release
