@@ -74,6 +74,34 @@ Shared library containing models, services, and helpers used by both application
 3. Set `Fontager.Viewer` as the startup project
 4. Build and run (F5)
 
+### 💻 Command Line Build *(Not Recommended for Development)*
+
+If you prefer not to use Visual Studio, you can build the project using the **dotnet CLI**.
+
+<span style="color: #ee6600; background-color: #ffdd99; padding: 2px 4px; border-radius: 3px;">
+While you can build the project using the **dotnet CLI**, **Visual Studio 2022 is the recommended way** for development due to its seamless integration with WinUI 3 and Windows App SDK.
+</span>
+
+#### Steps
+1. Navigate to the project directory:
+  ```sh
+    cd Fontager
+  ```
+2. Restore dependencies:
+  ```sh
+    dotnet restore
+  ```
+3. Build the project:
+  ```sh
+  dotnet build Fontager.Viewer -c Debug -f net8.0-windows10.0.19041.0 -r win-x64
+  ```
+  - `-c Debug` : Uses the Release configuration. (`Debug`,  `Release`)
+  - `-f net8.0-windows10.0.19041.0` : Specifies the target framework
+  - `-r win-x64` : RuntimeIdentifier (RID), target platform (`win-x64`, `win-x86`, `win-arm64`)
+  
+4. Output files will be in:
+  `Fontager.Viewer\bin\Release\net8.0-windows10.0.19041.0\`
+
 ### 📦 Installation
 
 **Visual Studio (MSIX):**
@@ -102,7 +130,16 @@ Double-click the `.msix` file to install, or distribute it to other users.
 
 ## 🔗 File Association
 
-Fontager.Viewer registers for `.otf`, `.ttc`, and `.woff2` files. After installation, double-click a font file or set Fontager as default in **Settings → Apps → Default apps → Choose default apps by file type**. For `.ttf` files (reserved by Windows), you can manually select Fontager from the "Open with" menu.
+Fontager.Viewer registers for `.otf`, `.ttc`, and `.woff2` files. After installation, double-click a font file or set Fontager as default in **Settings → Apps → Default apps → Choose default apps by file type**.
+
+### About `.ttf`
+
+Windows reserves the `.ttf` extension for the built-in Font Viewer and the MSIX schema rejects it inside `Package.appxmanifest`, so Fontager cannot claim it the way it claims the other formats. Two workarounds:
+
+1. **Manual "Open with..."** — right-click any `.ttf` file → *Open with* → *Choose another app* → pick Fontager Viewer and tick *Always use this app*. Works for any build (MSIX or portable).
+2. **Settings → Install → "Register .ttf for current user"** — *(portable build only)*. Adds Fontager to the per-user `OpenWithProgids` list so it shows up in the *Open with...* menu without hunting for the executable. No admin needed, never claims the default handler.
+
+A deeper write-up of the limitation lives in [`docs/research/font-parsing.md`](docs/research/font-parsing.md#6-ttf-file-association-limitation-on-windows-appendix).
 
 ## 📄 License
 

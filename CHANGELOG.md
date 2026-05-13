@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### ➕ Added
+- Glyphs tab is now categorized. The grid is filtered along three orthogonal axes: a Unicode-block sidebar (only blocks the font actually covers, with per-block glyph counts), a functional category chip row (All, Uppercase, Lowercase, Numbers, Punctuation, Symbols, Accented, Other), and a search box that accepts a literal character, hex (`U+00A0`/`0x00A0`/`00A0`), or decimal code point. The glyph detail card now also shows the matching block and category.
+- `FontParser` now reads the `cmap` table (subtable formats 0, 4, 6, 12) and exposes the actual supported Unicode code points via `FontMetadata.SupportedCodePoints`. Icon fonts, CJK fonts, and symbol fonts now show their real glyph coverage instead of an empty Latin grid.
+- Settings → Install → "Register .ttf for current user" toggle. Adds Fontager to the Windows "Open with..." menu for `.ttf` files (HKCU only, no admin, no default-handler claim). Disabled and labelled accordingly when running under MSIX identity, where the writes would be virtualized.
+
+### 🐛 Fixed
+- "Install for current user" now actually shows up in Settings → Fonts without a logoff. After copying the font to `%LocalAppData%\Microsoft\Windows\Fonts` and writing `HKCU`, the app calls `AddFontResource` to register it in the current session and broadcasts `WM_FONTCHANGE` so the shell and the Font Cache service refresh immediately. The registry write is verified post-write and the user is told explicitly when the write is virtualized away by packaged identity.
+- Registry value names now use the `" (TrueType)"` / `" (OpenType)"` suffix Windows expects, so the Font Cache service stops silently rejecting the entry.
+- Drag-and-drop and the "Open" file picker now work when Fontager is launched with "Run as administrator". `WM_DROPFILES`, `WM_COPYDATA`, and `WM_COPYGLOBALDATA` are whitelisted via `ChangeWindowMessageFilterEx` so lower-integrity Explorer can talk to the elevated window, and the WinRT `FileOpenPicker` (which fails under elevation) is replaced by a Win32 `IFileOpenDialog` in that case.
+- Window now shows the Fontager logo in Alt+Tab, the taskbar thumbnail, and the title bar instead of the default WinUI 3 icon. Multi-resolution `Logo.ico` is bundled and applied via `AppWindow.SetIcon` plus `WM_SETICON` for the Alt+Tab thumbnail.
+
 ### 📚 Docs
 - Added `docs/research/font-parsing.md` — comparison of `SixLabors.Fonts`, `HarfBuzzSharp`/`SkiaSharp`, `Typography`, `Win2D` + DirectWrite, and `SharpFont` for fixing WOFF2 metadata and cmap-aware glyph enumeration; includes a TTF file-association appendix.
 

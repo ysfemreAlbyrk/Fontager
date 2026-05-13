@@ -48,6 +48,18 @@ public sealed partial class MainWindow : Window
     [DllImport("gdi32.dll", CharSet = CharSet.Unicode)]
     private static extern bool RemoveFontResourceEx(string lpszFilename, uint fl, IntPtr pdv);
 
+    [DllImport("gdi32.dll", CharSet = CharSet.Unicode)]
+    private static extern int AddFontResource(string lpFileName);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr SendMessageTimeout(
+        IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam,
+        uint fuFlags, uint uTimeout, out IntPtr lpdwResult);
+
+    private const uint WM_FONTCHANGE = 0x001D;
+    private const uint SMTO_ABORTIFHUNG = 0x0002;
+    private static readonly IntPtr HWND_BROADCAST = new(0xFFFF);
+
     [DllImport("user32.dll")]
     private static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
 
@@ -56,6 +68,29 @@ public sealed partial class MainWindow : Window
 
     [DllImport("user32.dll")]
     private static extern int GetDpiForWindow(IntPtr hwnd);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr SendMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr LoadImage(IntPtr hInst, string name, uint type, int cx, int cy, uint fuLoad);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ChangeWindowMessageFilterEx(IntPtr hWnd, uint message, uint action, IntPtr pChangeFilterStruct);
+
+    private const uint MSGFLT_ALLOW = 1;
+    private const uint WM_DROPFILES = 0x0233;
+    private const uint WM_COPYDATA = 0x004A;
+    private const uint WM_COPYGLOBALDATA = 0x0049;
+
+    private const uint IMAGE_ICON = 1;
+    private const uint LR_LOADFROMFILE = 0x00000010;
+    private const uint LR_DEFAULTSIZE = 0x00000040;
+    private const uint LR_SHARED = 0x00008000;
+    private const uint WM_SETICON = 0x0080;
+    private const int ICON_SMALL = 0;
+    private const int ICON_BIG = 1;
 
     private delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
     private WndProcDelegate? _wndProcDelegate;
@@ -86,6 +121,15 @@ public sealed partial class MainWindow : Window
     private int _currentFontCount = 1;
     private string? _cachedFontFileName;
     private bool _quickViewAutoShown; // true when Quick View was auto-shown due to small window
+
+    // ── Glyph filtering state ──────────────────────────────────
+    // The grid is the intersection of three filters: a Unicode block
+    // (sidebar), a functional category (chips), and a free-text search.
+    private readonly ObservableCollection<GlyphBlockEntry> _glyphBlockEntries = new();
+    private GlyphCategory _glyphCategoryFilter = GlyphCategory.All;
+    private UnicodeBlocks.UnicodeBlock? _glyphBlockFilter;
+    private string _glyphSearchText = string.Empty;
+    private bool _suppressGlyphFilterEvents;
 
     public MainWindow()
     {
@@ -290,19 +334,45 @@ public sealed partial class MainWindow : Window
 
     private async void OpenFileButton_Click(object sender, RoutedEventArgs e)
     {
-        var picker = new FileOpenPicker();
-        InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(this));
+        string? path = await PickFontFilePathAsync();
+        if (!string.IsNullOrEmpty(path))
+            await LoadFontFromPathAsync(path, 0);
+    }
 
-        picker.ViewMode = PickerViewMode.List;
-        picker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
-        picker.FileTypeFilter.Add(".ttf");
-        picker.FileTypeFilter.Add(".otf");
-        picker.FileTypeFilter.Add(".ttc");
-        picker.FileTypeFilter.Add(".woff2");
+    /// <summary>
+    /// Opens an Open File dialog and returns the chosen path. Uses the WinRT
+    /// FileOpenPicker by default, but falls back to a Win32 IFileOpenDialog
+    /// when running elevated because the WinRT picker fails under UAC.
+    /// </summary>
+    private async Task<string?> PickFontFilePathAsync()
+    {
+        var hwnd = WindowNative.GetWindowHandle(this);
+        string[] extensions = [".ttf", ".otf", ".ttc", ".woff2"];
 
-        var file = await picker.PickSingleFileAsync();
-        if (file != null)
-            await LoadFontFromPathAsync(file.Path, 0);
+        if (!IsRunningElevated())
+        {
+            try
+            {
+                var picker = new FileOpenPicker
+                {
+                    ViewMode = PickerViewMode.List,
+                    SuggestedStartLocation = PickerLocationId.DocumentsLibrary
+                };
+                InitializeWithWindow.Initialize(picker, hwnd);
+                foreach (var ext in extensions)
+                    picker.FileTypeFilter.Add(ext);
+
+                var file = await picker.PickSingleFileAsync();
+                return file?.Path;
+            }
+            catch
+            {
+                // Fall through to the Win32 path.
+            }
+        }
+
+        return await Task.Run(() =>
+            Win32FileDialog.PickSingleFile(hwnd, "Open font file", "Font files", extensions));
     }
 
     // ── Install ────────────────────────────────────────────────
@@ -349,16 +419,17 @@ public sealed partial class MainWindow : Window
         if (_currentFilePath == null) return;
 
         bool installSystem = target == InstallTarget.AllUsers;
+        const string FontsRegPath = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts";
 
         try
         {
             var fontDisplayName = _viewModel.CurrentFont?.DisplayName
                 ?? Path.GetFileNameWithoutExtension(_currentFilePath);
             var fileName = Path.GetFileName(_currentFilePath);
+            var registryValueName = BuildFontRegistryValueName(fontDisplayName, _currentFilePath);
 
             if (installSystem)
             {
-                // System-wide install: copy to C:\Windows\Fonts, register in HKLM
                 var systemFontsDir = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Fonts");
                 var destPath = Path.Combine(systemFontsDir, fileName);
@@ -372,15 +443,17 @@ public sealed partial class MainWindow : Window
 
                 File.Copy(_currentFilePath, destPath, true);
 
-                using var regKey = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
-                    @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts", true);
-                regKey?.SetValue(fontDisplayName, fileName);
+                using (var regKey = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(FontsRegPath, true))
+                {
+                    regKey?.SetValue(registryValueName, fileName);
+                }
+
+                NotifyFontInstalled(destPath);
 
                 await ShowInfoDialogAsync("Font Installed", $"'{fontDisplayName}' has been installed for all users.");
             }
             else
             {
-                // Per-user install: copy to LocalAppData\Microsoft\Windows\Fonts, register in HKCU
                 var userFontsDir = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                     "Microsoft", "Windows", "Fonts");
@@ -397,11 +470,32 @@ public sealed partial class MainWindow : Window
 
                 File.Copy(_currentFilePath, destPath, true);
 
-                using var regKey = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
-                    @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts", true);
-                regKey?.SetValue(fontDisplayName, destPath);
+                // HKCU per-user install: full absolute path (HKLM stores filename only).
+                using (var regKey = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(FontsRegPath, writable: true))
+                {
+                    regKey?.SetValue(registryValueName, destPath);
+                }
 
-                await ShowInfoDialogAsync("Font Installed", $"'{fontDisplayName}' has been installed for the current user.");
+                // Verify the write reached the real hive (MSIX identity can virtualize
+                // HKCU writes into the package container, in which case Settings → Fonts
+                // never picks them up).
+                bool persisted;
+                using (var verifyKey = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(FontsRegPath, false))
+                {
+                    persisted = verifyKey?.GetValue(registryValueName) is string s
+                        && string.Equals(s, destPath, StringComparison.OrdinalIgnoreCase);
+                }
+
+                if (!persisted)
+                {
+                    await ShowInfoDialogAsync("Installation Incomplete",
+                        $"The font file was copied to:\n{destPath}\n\nbut the registry entry under HKCU could not be verified. This usually means the app is running with a virtualized registry (packaged identity). Run Fontager unpackaged or use 'Install for all users' instead.");
+                    return;
+                }
+
+                NotifyFontInstalled(destPath);
+
+                await ShowInfoDialogAsync("Font Installed", $"'{fontDisplayName}' has been installed for the current user and is now visible in Settings → Fonts.");
             }
         }
         catch (UnauthorizedAccessException)
@@ -413,6 +507,48 @@ public sealed partial class MainWindow : Window
         {
             await ShowInfoDialogAsync("Installation Failed", $"Could not install font: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Makes a freshly-installed font visible to every running application:
+    /// loads it into the process group via <c>AddFontResource</c> so the font
+    /// is usable in this session, and broadcasts <c>WM_FONTCHANGE</c> so the
+    /// shell, Settings → Fonts, and the font cache service refresh without a
+    /// logoff.
+    /// </summary>
+    private static void NotifyFontInstalled(string destPath)
+    {
+        try
+        {
+            AddFontResource(destPath);
+        }
+        catch
+        {
+            // Best-effort; the registry entry alone is enough for next-session use.
+        }
+
+        SendMessageTimeout(
+            HWND_BROADCAST, WM_FONTCHANGE,
+            IntPtr.Zero, IntPtr.Zero,
+            SMTO_ABORTIFHUNG, 1000, out _);
+    }
+
+    /// <summary>
+    /// Builds the registry value name Windows expects. The convention is
+    /// "{Family Name} (TrueType)" or "{Family Name} (OpenType)" depending on
+    /// the file format. Without the suffix, Settings → Fonts may show the
+    /// entry but the Font Cache service can refuse to register it.
+    /// </summary>
+    private static string BuildFontRegistryValueName(string displayName, string sourcePath)
+    {
+        var ext = Path.GetExtension(sourcePath).ToLowerInvariant();
+        string suffix = ext switch
+        {
+            ".ttf" or ".ttc" => " (TrueType)",
+            ".otf" => " (OpenType)",
+            _ => string.Empty
+        };
+        return string.IsNullOrEmpty(suffix) ? displayName : displayName + suffix;
     }
 
     // ── Drag & Drop ────────────────────────────────────────────
@@ -1238,6 +1374,19 @@ public sealed partial class MainWindow : Window
             SelectedIndex = _settings.InstallMode
         };
 
+        // ── TTF file-association opt-in ──
+        // Windows reserves .ttf in MSIX manifests, so we offer an HKCU
+        // "Open with..." entry for the unpackaged build. Disabled (and labelled)
+        // when running packaged because the writes get virtualized.
+        bool ttfPackaged = FileAssociationService.IsRunningPackaged;
+        var ttfRegisterToggle = new ToggleSwitch
+        {
+            Header = "Register .ttf for current user",
+            IsOn = !ttfPackaged && FileAssociationService.IsTtfRegistered(),
+            IsEnabled = !ttfPackaged
+        };
+        bool ttfInitial = ttfRegisterToggle.IsOn;
+
         // ══════════════════════════════════════════════════════════
         // RESET
         // ══════════════════════════════════════════════════════════
@@ -1285,6 +1434,10 @@ public sealed partial class MainWindow : Window
         panel.Children.Add(SectionHeader("Install"));
         panel.Children.Add(installModeCombo);
         panel.Children.Add(Description("Select the default target used by the main Install button. All-users install copies to Windows\\Fonts and requires administrator privileges."));
+        panel.Children.Add(ttfRegisterToggle);
+        panel.Children.Add(Description(ttfPackaged
+            ? "Adds Fontager to the Windows 'Open with...' menu for .ttf files. Disabled while running packaged (MSIX) because Windows reserves the .ttf association."
+            : "Adds Fontager to the Windows 'Open with...' menu for .ttf files for the current user only. Does not change the default handler."));
 
         panel.Children.Add(Divider());
 
@@ -1396,6 +1549,15 @@ public sealed partial class MainWindow : Window
             if (installModeCombo.SelectedItem is ComboBoxItem si && si.Tag is int iv)
                 _settings.InstallMode = iv;
             UpdateInstallButtonPresentation(GetSavedInstallTarget());
+
+            // Apply TTF "Open with..." toggle changes only when the value moved.
+            if (!ttfPackaged && ttfRegisterToggle.IsOn != ttfInitial)
+            {
+                if (ttfRegisterToggle.IsOn)
+                    FileAssociationService.RegisterTtfForCurrentUser();
+                else
+                    FileAssociationService.UnregisterTtfForCurrentUser();
+            }
 
             // Apply to UI
             if (!_viewModel.HasFont)
