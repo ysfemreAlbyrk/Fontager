@@ -1,5 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Fontager.Core.Models;
@@ -120,29 +121,48 @@ public partial class FontViewerViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Generates glyph items for the character map. Public for code-behind access.
+    /// Generates glyph items for the character map from the font's actual cmap.
+    /// Falls back to Basic Latin / Latin-1 / Latin Extended-A when the cmap
+    /// could not be parsed (e.g. WOFF2 with the current binary parser).
     /// </summary>
     public void GenerateGlyphItemsPublic()
     {
         GlyphItems.Clear();
 
-        // Basic Latin (U+0020 - U+007E)
-        for (int cp = 0x0020; cp <= 0x007E; cp++)
+        var supported = CurrentFont?.Metadata.SupportedCodePoints;
+        if (supported is { Count: > 0 })
         {
-            GlyphItems.Add(new GlyphItem(cp));
+            foreach (var cp in supported.OrderBy(c => c))
+            {
+                if (!IsRenderableCodePoint(cp)) continue;
+                GlyphItems.Add(new GlyphItem(cp));
+            }
+            return;
         }
 
-        // Latin-1 Supplement (U+00A0 - U+00FF)
-        for (int cp = 0x00A0; cp <= 0x00FF; cp++)
-        {
-            GlyphItems.Add(new GlyphItem(cp));
-        }
+        // Fallback for fonts whose cmap we could not decode.
+        AddRange(0x0020, 0x007E);
+        AddRange(0x00A0, 0x00FF);
+        AddRange(0x0100, 0x017F);
 
-        // Latin Extended-A (U+0100 - U+017F)
-        for (int cp = 0x0100; cp <= 0x017F; cp++)
+        void AddRange(int start, int end)
         {
-            GlyphItems.Add(new GlyphItem(cp));
+            for (int cp = start; cp <= end; cp++) GlyphItems.Add(new GlyphItem(cp));
         }
+    }
+
+    /// <summary>
+    /// Skips code points that have no visible glyph (controls, surrogates,
+    /// private use, formatting). The cmap can technically claim these.
+    /// </summary>
+    private static bool IsRenderableCodePoint(int cp)
+    {
+        if (cp < 0x20) return false;                  // C0 controls
+        if (cp == 0x7F) return false;                 // DEL
+        if (cp >= 0x80 && cp <= 0x9F) return false;   // C1 controls
+        if (cp >= 0xD800 && cp <= 0xDFFF) return false; // surrogate halves
+        if (cp > 0x10FFFF) return false;              // out of range
+        return true;
     }
 }
 

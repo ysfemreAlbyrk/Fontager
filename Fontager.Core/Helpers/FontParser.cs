@@ -123,7 +123,6 @@ public static class FontParser
         {
             var sfVersion = ReadUInt32BE(data, 0);
 
-            // TTC header - parse the font at fontIndex
             int tableOffset = 0;
             if (sfVersion == 0x74746366) // 'ttcf'
             {
@@ -132,7 +131,6 @@ public static class FontParser
                 var numFonts = (int)ReadUInt32BE(data, 8);
                 if (fontIndex < 0 || fontIndex >= numFonts)
                     fontIndex = 0;
-                // Offset table starts at byte 12, each entry is 4 bytes
                 int offsetPos = 12 + (fontIndex * 4);
                 if (offsetPos + 4 > data.Length)
                     return new FontMetadata();
@@ -148,8 +146,9 @@ public static class FontParser
             int headTableOffset = -1;
             int maxpTableOffset = -1;
             int fvarTableOffset = -1;
+            int cmapTableOffset = -1;
+            int cmapTableLength = 0;
 
-            // Read table directory
             for (int i = 0; i < numTables; i++)
             {
                 int entryOffset = tableOffset + 12 + (i * 16);
@@ -177,6 +176,10 @@ public static class FontParser
                         break;
                     case "fvar":
                         fvarTableOffset = offset;
+                        break;
+                    case "cmap":
+                        cmapTableOffset = offset;
+                        cmapTableLength = length;
                         break;
                 }
             }
@@ -270,6 +273,10 @@ public static class FontParser
             var basicFamily = names.GetValueOrDefault(NameId_FontFamily, string.Empty);
             var typoFamily = names.GetValueOrDefault(NameId_TypographicFamily, string.Empty);
 
+            IReadOnlySet<int> supportedCodePoints = cmapTableOffset >= 0
+                ? ParseCmapTable(data, cmapTableOffset, cmapTableLength)
+                : new HashSet<int>();
+
             return new FontMetadata
             {
                 FamilyName = basicFamily,
@@ -292,12 +299,166 @@ public static class FontParser
                 Weight = weight,
                 IsItalic = isItalic,
                 IsOblique = isOblique,
-                Classification = classification
+                Classification = classification,
+                SupportedCodePoints = supportedCodePoints
             };
         }
         catch
         {
             return new FontMetadata();
+        }
+    }
+
+    /// <summary>
+    /// Walks the cmap table, picks the best Unicode subtable available, and
+    /// returns the set of supported Unicode code points.
+    ///
+    /// Preference order: (3, 10) Win UCS-4 → (0, 4|6) Unicode full → (3, 1)
+    /// Win UCS-2 → (0, anything) Unicode BMP. Falls back to subtable format 0
+    /// for fonts that only ship Mac Roman.
+    /// </summary>
+    private static IReadOnlySet<int> ParseCmapTable(byte[] data, int tableOffset, int tableLength)
+    {
+        var result = new HashSet<int>();
+        if (tableOffset + 4 > data.Length) return result;
+
+        int numTables = ReadUInt16BE(data, tableOffset + 2);
+        if (numTables <= 0) return result;
+
+        // Score each encoding record; higher score wins.
+        int bestOffset = -1;
+        int bestScore = -1;
+
+        for (int i = 0; i < numTables; i++)
+        {
+            int recordOffset = tableOffset + 4 + (i * 8);
+            if (recordOffset + 8 > data.Length) break;
+
+            int platformId = ReadUInt16BE(data, recordOffset);
+            int encodingId = ReadUInt16BE(data, recordOffset + 2);
+            int subtableOffset = tableOffset + (int)ReadUInt32BE(data, recordOffset + 4);
+            if (subtableOffset + 2 > data.Length) continue;
+
+            int score = ScoreCmapEncoding(platformId, encodingId);
+            if (score > bestScore)
+            {
+                bestScore = score;
+                bestOffset = subtableOffset;
+            }
+        }
+
+        if (bestOffset < 0 || bestOffset + 2 > data.Length) return result;
+
+        int format = ReadUInt16BE(data, bestOffset);
+        switch (format)
+        {
+            case 0: ParseCmapFormat0(data, bestOffset, result); break;
+            case 4: ParseCmapFormat4(data, bestOffset, result); break;
+            case 6: ParseCmapFormat6(data, bestOffset, result); break;
+            case 12: ParseCmapFormat12(data, bestOffset, result); break;
+        }
+
+        return result;
+    }
+
+    private static int ScoreCmapEncoding(int platformId, int encodingId)
+    {
+        // Higher is better.
+        return (platformId, encodingId) switch
+        {
+            (3, 10) => 100, // Windows, Unicode full repertoire (preferred for non-BMP)
+            (0, 6) => 95,  // Unicode full, format 13 only
+            (0, 4) => 90,  // Unicode 2.0+ full
+            (3, 1) => 80,  // Windows, Unicode BMP
+            (0, 3) => 70,  // Unicode 2.0+ BMP
+            (0, 2) => 65,  // ISO 10646 1993 (deprecated)
+            (0, 1) => 60,  // Unicode 1.1
+            (0, 0) => 55,  // Unicode 1.0
+            (1, 0) => 10,  // Mac Roman (last resort)
+            _ => 0
+        };
+    }
+
+    private static void ParseCmapFormat0(byte[] data, int offset, HashSet<int> result)
+    {
+        if (offset + 6 + 256 > data.Length) return;
+        for (int i = 0; i < 256; i++)
+        {
+            if (data[offset + 6 + i] != 0)
+                result.Add(i);
+        }
+    }
+
+    private static void ParseCmapFormat4(byte[] data, int offset, HashSet<int> result)
+    {
+        if (offset + 14 > data.Length) return;
+        int segCountX2 = ReadUInt16BE(data, offset + 6);
+        int segCount = segCountX2 / 2;
+        if (segCount <= 0) return;
+
+        int endCodeOffset = offset + 14;
+        int startCodeOffset = endCodeOffset + segCountX2 + 2; // skip reservedPad
+        if (startCodeOffset + segCountX2 > data.Length) return;
+
+        for (int i = 0; i < segCount; i++)
+        {
+            int endCode = ReadUInt16BE(data, endCodeOffset + i * 2);
+            int startCode = ReadUInt16BE(data, startCodeOffset + i * 2);
+
+            // The required final segment is startCode=endCode=0xFFFF; skip it.
+            if (startCode == 0xFFFF && endCode == 0xFFFF) continue;
+            if (endCode < startCode) continue;
+
+            // Cap each segment so a single broken record can't allocate forever.
+            int span = endCode - startCode + 1;
+            if (span > 0x10000) span = 0x10000;
+            for (int cp = startCode; cp < startCode + span; cp++)
+            {
+                result.Add(cp);
+            }
+        }
+    }
+
+    private static void ParseCmapFormat6(byte[] data, int offset, HashSet<int> result)
+    {
+        if (offset + 10 > data.Length) return;
+        int firstCode = ReadUInt16BE(data, offset + 6);
+        int entryCount = ReadUInt16BE(data, offset + 8);
+
+        int glyphArrayOffset = offset + 10;
+        if (glyphArrayOffset + entryCount * 2 > data.Length) return;
+
+        for (int i = 0; i < entryCount; i++)
+        {
+            int glyph = ReadUInt16BE(data, glyphArrayOffset + i * 2);
+            if (glyph != 0) result.Add(firstCode + i);
+        }
+    }
+
+    private static void ParseCmapFormat12(byte[] data, int offset, HashSet<int> result)
+    {
+        if (offset + 16 > data.Length) return;
+        int numGroups = (int)ReadUInt32BE(data, offset + 12);
+
+        int groupOffset = offset + 16;
+        if (groupOffset + numGroups * 12 > data.Length) return;
+
+        for (int g = 0; g < numGroups; g++)
+        {
+            uint startCp = ReadUInt32BE(data, groupOffset + g * 12);
+            uint endCp = ReadUInt32BE(data, groupOffset + g * 12 + 4);
+            if (endCp < startCp) continue;
+
+            // Clamp to valid Unicode and keep the worst-case bounded.
+            if (startCp > 0x10FFFF) continue;
+            if (endCp > 0x10FFFF) endCp = 0x10FFFF;
+
+            uint span = endCp - startCp + 1;
+            if (span > 0x10FFFF) span = 0x10FFFF;
+            for (uint cp = startCp; cp <= endCp; cp++)
+            {
+                result.Add((int)cp);
+            }
         }
     }
 

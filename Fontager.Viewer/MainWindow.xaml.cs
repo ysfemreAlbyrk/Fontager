@@ -1,7 +1,12 @@
 using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
+using System.Security.Principal;
 using System.Threading.Tasks;
+using Fontager.Core.Helpers;
 using Fontager.Core.Models;
 using Fontager.Core.Services;
 using Fontager.Viewer.Services;
@@ -13,6 +18,7 @@ using Microsoft.UI.Text;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
 using Windows.ApplicationModel;
 using Windows.Storage;
@@ -138,7 +144,6 @@ public sealed partial class MainWindow : Window
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
 
-        // Set minimum window size via Win32 WM_GETMINMAXINFO
         SetMinimumWindowSize(600, 266);
 
         ApplyWindowIcon();
@@ -720,14 +725,176 @@ public sealed partial class MainWindow : Window
 
     // ── Glyph Grid ─────────────────────────────────────────────
 
+    /// <summary>
+    /// Rebuilds everything related to the Glyphs tab when a new font loads:
+    /// the master glyph list, the Unicode-block sidebar, the functional
+    /// category chips, and resets the active filters.
+    /// </summary>
     private void BuildGlyphGrid()
     {
         _viewModel.GenerateGlyphItemsPublic();
-        GlyphGrid.ItemsSource = _viewModel.GlyphItems;
-        GlyphCountText.Text = _viewModel.CurrentFont?.Metadata.GlyphCount.ToString() ?? "0";
+
+        BuildBlockSidebar();
+        BuildCategoryChips();
+        ResetGlyphFilters();
+        ApplyGlyphFilters();
 
         GlyphGrid.ContainerContentChanging -= GlyphGrid_ContainerContentChanging;
         GlyphGrid.ContainerContentChanging += GlyphGrid_ContainerContentChanging;
+    }
+
+    private void BuildBlockSidebar()
+    {
+        _glyphBlockEntries.Clear();
+
+        var perBlockCounts = new Dictionary<string, (UnicodeBlocks.UnicodeBlock? Block, int Count)>();
+        foreach (var item in _viewModel.GlyphItems)
+        {
+            var block = UnicodeBlocks.GetBlock(item.CodePoint);
+            var key = block.Name;
+            if (perBlockCounts.TryGetValue(key, out var existing))
+            {
+                perBlockCounts[key] = (existing.Block, existing.Count + 1);
+            }
+            else
+            {
+                perBlockCounts[key] = (block.Start >= 0 ? block : null, 1);
+            }
+        }
+
+        _glyphBlockEntries.Add(new GlyphBlockEntry("All blocks", _viewModel.GlyphItems.Count, null));
+
+        // Preserve the curated order from UnicodeBlocks.All; "Other" goes last.
+        foreach (var b in UnicodeBlocks.All)
+        {
+            if (perBlockCounts.TryGetValue(b.Name, out var entry))
+                _glyphBlockEntries.Add(new GlyphBlockEntry(b.Name, entry.Count, b));
+        }
+        if (perBlockCounts.TryGetValue("Other", out var other))
+            _glyphBlockEntries.Add(new GlyphBlockEntry("Other", other.Count, null));
+
+        GlyphBlockList.ItemsSource = _glyphBlockEntries;
+    }
+
+    private void BuildCategoryChips()
+    {
+        GlyphCategoryChips.Children.Clear();
+
+        foreach (GlyphCategory cat in Enum.GetValues<GlyphCategory>())
+        {
+            var btn = new ToggleButton
+            {
+                Content = cat.ToString(),
+                Tag = cat,
+                MinWidth = 0,
+                Padding = new Thickness(10, 4, 10, 4),
+                IsChecked = cat == GlyphCategory.All
+            };
+            btn.Click += GlyphCategoryChip_Click;
+            GlyphCategoryChips.Children.Add(btn);
+        }
+    }
+
+    private void ResetGlyphFilters()
+    {
+        _suppressGlyphFilterEvents = true;
+        try
+        {
+            _glyphCategoryFilter = GlyphCategory.All;
+            _glyphBlockFilter = null;
+            _glyphSearchText = string.Empty;
+
+            foreach (var child in GlyphCategoryChips.Children)
+            {
+                if (child is ToggleButton tb && tb.Tag is GlyphCategory cat)
+                    tb.IsChecked = cat == GlyphCategory.All;
+            }
+
+            if (_glyphBlockEntries.Count > 0)
+                GlyphBlockList.SelectedIndex = 0;
+
+            GlyphSearchBox.Text = string.Empty;
+        }
+        finally
+        {
+            _suppressGlyphFilterEvents = false;
+        }
+    }
+
+    private void ApplyGlyphFilters()
+    {
+        IEnumerable<GlyphItem> view = _viewModel.GlyphItems;
+
+        var blockFilter = _glyphBlockFilter;
+        if (blockFilter is not null)
+        {
+            view = view.Where(g => blockFilter.Contains(g.CodePoint));
+        }
+        else if (GlyphBlockList.SelectedItem is GlyphBlockEntry entry && entry.Name == "Other")
+        {
+            view = view.Where(g => UnicodeBlocks.GetBlock(g.CodePoint).Start < 0);
+        }
+
+        if (_glyphCategoryFilter != GlyphCategory.All)
+        {
+            view = view.Where(g => GlyphCategoryClassifier.Classify(g.CodePoint) == _glyphCategoryFilter);
+        }
+
+        if (!string.IsNullOrWhiteSpace(_glyphSearchText))
+        {
+            var needle = _glyphSearchText.Trim();
+            var matcher = BuildSearchMatcher(needle);
+            view = view.Where(g => matcher(g));
+        }
+
+        var filtered = view.ToList();
+        GlyphGrid.ItemsSource = filtered;
+        GlyphCountText.Text = filtered.Count.ToString();
+        GlyphDetailPanel.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// Builds a predicate that matches a glyph by raw character ("A"), hex code
+    /// point ("U+00A0" / "00A0" / "0x00A0"), or decimal code point ("9731").
+    /// </summary>
+    private static Func<GlyphItem, bool> BuildSearchMatcher(string needle)
+    {
+        // Hex form: "U+xxxx" or "0xXXXX"
+        if (needle.StartsWith("U+", StringComparison.OrdinalIgnoreCase)
+            || needle.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+        {
+            var hex = needle[2..];
+            if (int.TryParse(hex, System.Globalization.NumberStyles.HexNumber, null, out var cpHex))
+                return g => g.CodePoint == cpHex;
+        }
+
+        // Bare hex (4+ digits, all hex)
+        if (needle.Length >= 4 && needle.All(c => Uri.IsHexDigit(c)))
+        {
+            if (int.TryParse(needle, System.Globalization.NumberStyles.HexNumber, null, out var cpHex))
+                return g => g.CodePoint == cpHex;
+        }
+
+        // Decimal
+        if (int.TryParse(needle, out var cpDec))
+            return g => g.CodePoint == cpDec;
+
+        // Single character literal
+        if (needle.Length <= 2)
+        {
+            try
+            {
+                var cp = char.ConvertToUtf32(needle, 0);
+                return g => g.CodePoint == cp;
+            }
+            catch
+            {
+                // fall through
+            }
+        }
+
+        // Substring on hex label (covers things like "F60" hitting U+1F600..U+1F60F)
+        return g => g.UnicodeLabel.Contains(needle, StringComparison.OrdinalIgnoreCase);
     }
 
     private void GlyphGrid_ContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
@@ -753,7 +920,10 @@ public sealed partial class MainWindow : Window
             GlyphDetailPanel.Visibility = Visibility.Visible;
             SelectedGlyphChar.Text = glyph.Character;
             SelectedGlyphUnicode.Text = glyph.UnicodeLabel;
-            SelectedGlyphName.Text = $"Decimal: {glyph.CodePoint} | Character: {glyph.Character}";
+            var block = UnicodeBlocks.GetBlock(glyph.CodePoint);
+            var category = GlyphCategoryClassifier.Classify(glyph.CodePoint);
+            SelectedGlyphName.Text =
+                $"Decimal: {glyph.CodePoint} · Block: {block.Name} · Category: {category}";
 
             if (_loadedFontFamily != null)
                 SelectedGlyphChar.FontFamily = _loadedFontFamily;
@@ -763,6 +933,49 @@ public sealed partial class MainWindow : Window
             GlyphDetailPanel.Visibility = Visibility.Collapsed;
         }
     }
+
+    private void GlyphBlockList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressGlyphFilterEvents) return;
+        if (GlyphBlockList.SelectedItem is GlyphBlockEntry entry)
+        {
+            _glyphBlockFilter = entry.Block;
+            ApplyGlyphFilters();
+        }
+    }
+
+    private void GlyphCategoryChip_Click(object sender, RoutedEventArgs e)
+    {
+        if (_suppressGlyphFilterEvents) return;
+        if (sender is not ToggleButton btn || btn.Tag is not GlyphCategory selected) return;
+
+        _suppressGlyphFilterEvents = true;
+        try
+        {
+            // Single-select: clear any previous chip, force the clicked one on.
+            foreach (var child in GlyphCategoryChips.Children)
+            {
+                if (child is ToggleButton other && other.Tag is GlyphCategory cat)
+                    other.IsChecked = cat == selected;
+            }
+            _glyphCategoryFilter = selected;
+        }
+        finally
+        {
+            _suppressGlyphFilterEvents = false;
+        }
+        ApplyGlyphFilters();
+    }
+
+    private void GlyphSearchBox_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
+    {
+        if (_suppressGlyphFilterEvents) return;
+        _glyphSearchText = sender.Text ?? string.Empty;
+        ApplyGlyphFilters();
+    }
+
+    /// <summary>Sidebar row model.</summary>
+    private sealed record GlyphBlockEntry(string Name, int Count, UnicodeBlocks.UnicodeBlock? Block);
 
     // ── Metadata ───────────────────────────────────────────────
 

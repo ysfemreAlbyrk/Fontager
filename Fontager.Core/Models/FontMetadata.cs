@@ -65,4 +65,12 @@ public sealed record FontMetadata
 
     /// <summary>Font classification derived from OS/2 table.</summary>
     public FontClassification Classification { get; init; } = FontClassification.None;
+
+    /// <summary>
+    /// Set of Unicode code points the font's cmap actually maps to a glyph.
+    /// Empty if the cmap could not be parsed (e.g. WOFF2 files that are not
+    /// decompressed). Use this instead of hard-coded Unicode ranges to drive
+    /// the glyph grid.
+    /// </summary>
+    public IReadOnlySet<int> SupportedCodePoints { get; init; } = new HashSet<int>();
 }
