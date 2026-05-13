@@ -13,6 +13,11 @@
 *A modern, powerful font manager and viewer application for Windows, built with WinUI 3*
 
 Fontager replaces the outdated Windows `fontview.exe` with a fast, beautiful font previewer and aims to provide a full-featured font management suite for designers and developers.
+
+<p align="center" style="max-width: 44rem; margin: 1rem auto 1.25rem; padding: 0.9rem 1.15rem; background: linear-gradient(145deg, #fffbeb 0%, #fef3c7 55%, #fde68a 100%); border-radius: 14px; border: 1px solid rgba(245, 158, 11, 0.45); color: #78350f; font-size: 0.95rem; line-height: 1.55; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);">
+  <strong>Note:</strong> FONT parsing, processing, and font file loading are currently being fixed. If you run into problems, please report them via <a href="https://github.com/ysfemreAlbyrk/Fontager/issues">GitHub Issues</a>.
+</p>
+
 <img width="1920" height="1080" alt="img-1" src="https://github.com/user-attachments/assets/62713c1d-c14f-4a51-a8f1-a7b231b8f95c" />
 
 [🚀 Download](#building) • [📖 Features](#features) • [🛠️ Tech Stack](#tech-stack) • [🤝 Contributing](#contributing)
