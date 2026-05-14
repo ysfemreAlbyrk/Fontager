@@ -92,6 +92,20 @@ public sealed class FontService : IFontService
         if (format == FontFormat.TrueTypeCollection)
             return FontParser.GetFontCount(filePath);
 
+        if (format == FontFormat.WebOpenFont)
+        {
+            try
+            {
+                var raw = File.ReadAllBytes(filePath);
+                var sfnt = Woff2Decoder.DecodeIfWoff2(raw);
+                return FontParser.GetFontCount(sfnt);
+            }
+            catch
+            {
+                return 1;
+            }
+        }
+
         return 1;
     }
 
