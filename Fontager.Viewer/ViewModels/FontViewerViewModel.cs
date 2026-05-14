@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
+using Fontager.Core.Helpers;
 using Fontager.Core.Models;
 using Fontager.Core.Services;
 
@@ -56,7 +58,14 @@ public partial class FontViewerViewModel : ObservableObject
 
     // ── Glyph Grid ─────────────────────────────────────────────
 
-    public ObservableCollection<GlyphItem> GlyphItems { get; } = [];
+    /// <summary>
+    /// Master glyph list. Plain <see cref="List{T}"/> on purpose — this is
+    /// never bound to a control (the GridView is bound to a filtered view in
+    /// <c>MainWindow.xaml.cs</c>), so the change-notification machinery of
+    /// <see cref="ObservableCollection{T}"/> would just be paid-for overhead
+    /// every time we rebuild it for a new font (can be 10k+ items).
+    /// </summary>
+    public List<GlyphItem> GlyphItems { get; } = [];
 
     // ── Public Methods ─────────────────────────────────────────
 
@@ -132,7 +141,18 @@ public partial class FontViewerViewModel : ObservableObject
         var supported = CurrentFont?.Metadata.SupportedCodePoints;
         if (supported is { Count: > 0 })
         {
-            foreach (var cp in supported.OrderBy(c => c))
+            // Reserve capacity up-front to avoid repeated List resizes for
+            // large CJK / emoji fonts (can hit 20k+ glyphs).
+            GlyphItems.Capacity = Math.Max(GlyphItems.Capacity, supported.Count);
+
+            // Pre-sort once; downstream filtering relies on List order being
+            // stable in code-point order.
+            var sorted = new int[supported.Count];
+            int i = 0;
+            foreach (var cp in supported) sorted[i++] = cp;
+            Array.Sort(sorted);
+
+            foreach (var cp in sorted)
             {
                 if (!IsRenderableCodePoint(cp)) continue;
                 GlyphItems.Add(new GlyphItem(cp));
@@ -176,9 +196,26 @@ public record WaterfallItem(int Size, string Text)
 
 /// <summary>
 /// Represents a single glyph in the character map grid.
+///
+/// Designed to be allocated once and read many times — for a CJK font we can
+/// have 20k+ of these. Everything (Character / UnicodeLabel / Block /
+/// Category) is precomputed in the constructor so per-frame filtering and
+/// data-binding stays O(items) with a tiny constant, not O(items × classify).
 /// </summary>
-public record GlyphItem(int CodePoint)
+public sealed class GlyphItem
 {
-    public string Character => char.ConvertFromUtf32(CodePoint);
-    public string UnicodeLabel => $"U+{CodePoint:X4}";
+    public int CodePoint { get; }
+    public string Character { get; }
+    public string UnicodeLabel { get; }
+    public UnicodeBlocks.UnicodeBlock Block { get; }
+    public GlyphCategory Category { get; }
+
+    public GlyphItem(int codePoint)
+    {
+        CodePoint = codePoint;
+        Character = char.ConvertFromUtf32(codePoint);
+        UnicodeLabel = $"U+{codePoint:X4}";
+        Block = UnicodeBlocks.GetBlock(codePoint);
+        Category = GlyphCategoryClassifier.Classify(codePoint);
+    }
 }

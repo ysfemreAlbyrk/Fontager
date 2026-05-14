@@ -377,67 +377,89 @@
                                     </ListView.ItemTemplate>
                                 </ListView>
 
-                                <!-- Glyph grid + details -->
-                                <ScrollViewer Grid.Column="1" Padding="12,0,12,8" VerticalScrollBarVisibility="Auto">
-                                    <StackPanel Spacing="12">
-                                        <TextBlock Style="{StaticResource CaptionTextBlockStyle}"
-                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}">
-                                            <Run x:Name="GlyphCountText" Text="0" />
-                                            <Run Text=" glyphs shown" />
-                                        </TextBlock>
+                                <!-- Glyph grid + details
+                                     IMPORTANT: do NOT wrap the GridView in a ScrollViewer
+                                     here. The GridView ships with its own ItemsWrapGrid
+                                     virtualizing panel and only virtualizes when it gets
+                                     a bounded height. Nesting it inside ScrollViewer >
+                                     StackPanel hands it infinite height and forces every
+                                     item to materialize up-front — that was the root
+                                     cause of the Glyphs-tab freeze on CJK / emoji fonts
+                                     with 10k+ glyphs. -->
+                                <Grid Grid.Column="1" Padding="12,0,12,8">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
 
-                                        <GridView x:Name="GlyphGrid"
-                                                  SelectionMode="Single"
-                                                  SelectionChanged="GlyphGrid_SelectionChanged"
-                                                  IsItemClickEnabled="True">
-                                            <GridView.ItemsPanel>
-                                                <ItemsPanelTemplate>
-                                                    <ItemsWrapGrid Orientation="Horizontal"
-                                                                   ItemWidth="72" ItemHeight="88"
-                                                                   MaximumRowsOrColumns="20" />
-                                                </ItemsPanelTemplate>
-                                            </GridView.ItemsPanel>
-                                            <GridView.ItemTemplate>
-                                                <DataTemplate>
-                                                    <StackPanel HorizontalAlignment="Center" Spacing="2" Padding="4">
-                                                        <TextBlock Text="{Binding Character}"
-                                                                   FontSize="28"
-                                                                   HorizontalAlignment="Center"
-                                                                   TextAlignment="Center" />
-                                                        <TextBlock Text="{Binding UnicodeLabel}"
-                                                                   Style="{StaticResource CaptionTextBlockStyle}"
-                                                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                                                                   HorizontalAlignment="Center"
-                                                                   FontSize="10" />
-                                                    </StackPanel>
-                                                </DataTemplate>
-                                            </GridView.ItemTemplate>
-                                        </GridView>
+                                    <TextBlock Grid.Row="0" Margin="0,0,0,8"
+                                               Style="{StaticResource CaptionTextBlockStyle}"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}">
+                                        <Run x:Name="GlyphCountText" Text="0" />
+                                        <Run Text=" glyphs shown" />
+                                    </TextBlock>
 
-                                        <Border x:Name="GlyphDetailPanel" Visibility="Collapsed"
-                                                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                                                BorderThickness="1" CornerRadius="8"
-                                                Padding="24" Margin="0,8,0,0">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="Auto" />
-                                                    <ColumnDefinition Width="*" />
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock x:Name="SelectedGlyphChar"
-                                                           FontSize="72" VerticalAlignment="Center"
-                                                           Margin="0,0,24,0" />
-                                                <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
-                                                    <TextBlock x:Name="SelectedGlyphUnicode"
-                                                               Style="{StaticResource BodyStrongTextBlockStyle}" />
-                                                    <TextBlock x:Name="SelectedGlyphName"
+                                    <GridView Grid.Row="1" x:Name="GlyphGrid"
+                                              SelectionMode="Single"
+                                              SelectionChanged="GlyphGrid_SelectionChanged"
+                                              IsItemClickEnabled="True"
+                                              ScrollViewer.HorizontalScrollMode="Disabled"
+                                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                              ScrollViewer.VerticalScrollMode="Enabled"
+                                              ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                              ScrollViewer.IsVerticalScrollChainingEnabled="False">
+                                        <GridView.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <!-- Orientation="Horizontal" with vertical scrolling makes
+                                                     the wrap grid lay out rows top-to-bottom, exactly what
+                                                     virtualization expects so off-screen rows stay
+                                                     unrealized. -->
+                                                <ItemsWrapGrid Orientation="Horizontal"
+                                                               ItemWidth="72" ItemHeight="88"
+                                                               CacheLength="2" />
+                                            </ItemsPanelTemplate>
+                                        </GridView.ItemsPanel>
+                                        <GridView.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel HorizontalAlignment="Center" Spacing="2" Padding="4">
+                                                    <TextBlock Text="{Binding Character}"
+                                                               FontSize="28"
+                                                               HorizontalAlignment="Center"
+                                                               TextAlignment="Center" />
+                                                    <TextBlock Text="{Binding UnicodeLabel}"
                                                                Style="{StaticResource CaptionTextBlockStyle}"
-                                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                                               Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                                               HorizontalAlignment="Center"
+                                                               FontSize="10" />
                                                 </StackPanel>
-                                            </Grid>
-                                        </Border>
-                                    </StackPanel>
-                                </ScrollViewer>
+                                            </DataTemplate>
+                                        </GridView.ItemTemplate>
+                                    </GridView>
+
+                                    <Border Grid.Row="2" x:Name="GlyphDetailPanel" Visibility="Collapsed"
+                                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                            BorderThickness="1" CornerRadius="8"
+                                            Padding="24" Margin="0,8,0,0">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock x:Name="SelectedGlyphChar"
+                                                       FontSize="72" VerticalAlignment="Center"
+                                                       Margin="0,0,24,0" />
+                                            <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+                                                <TextBlock x:Name="SelectedGlyphUnicode"
+                                                           Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                                <TextBlock x:Name="SelectedGlyphName"
+                                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </Grid>
                             </Grid>
                         </Grid>
                     </PivotItem>

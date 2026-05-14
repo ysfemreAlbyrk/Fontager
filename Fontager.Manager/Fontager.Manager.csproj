@@ -10,8 +10,14 @@
     <PublishProfile>win-$(Platform).pubxml</PublishProfile>
     <UseWinUI>true</UseWinUI>
     <WinUISDKReferences>false</WinUISDKReferences>
-    <EnableMsixTooling>true</EnableMsixTooling>
     <Nullable>enable</Nullable>
+
+    <!-- See Fontager.Viewer.csproj for the full packaging rationale and the
+         steps to re-enable MSIX / Store distribution.
+         docs/research/packaging-decision.md has the writeup. -->
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <EnableMsixTooling>false</EnableMsixTooling>
   </PropertyGroup>
 
   <ItemGroup>
@@ -19,21 +25,17 @@
     <Content Include="Assets\Square150x150Logo.scale-200.png" />
     <Content Include="Assets\StoreLogo.png" />
     <Content Include="Assets\Wide310x150Logo.scale-200.png" />
-	<Content Include="Assets\Logo.png"/>
+    <Content Include="Assets\Logo.png"/>
   </ItemGroup>
 
   <ItemGroup>
     <Manifest Include="$(ApplicationManifest)" />
   </ItemGroup>
 
-  <!--
-    Defining the "Msix" ProjectCapability here allows the Single-project MSIX Packaging
-    Tools extension to be activated for this project even if the Windows App SDK Nuget
-    package has not yet been restored.
-  -->
-  <ItemGroup Condition="'$(DisableMsixProjectCapabilityAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
+  <ItemGroup Condition="'$(EnableMsixTooling)' == 'true'">
     <ProjectCapability Include="Msix" />
   </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.7705" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260209005" />
@@ -42,16 +44,10 @@
     <ProjectReference Include="..\Fontager.Core\Fontager.Core.csproj" />
   </ItemGroup>
 
-  <!--
-    Defining the "HasPackageAndPublishMenuAddedByProject" property here allows the Solution
-    Explorer "Package and Publish" context menu entry to be enabled for this project even if
-    the Windows App SDK Nuget package has not yet been restored.
-  -->
-  <PropertyGroup Condition="'$(DisableHasPackageAndPublishMenuAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
+  <PropertyGroup Condition="'$(EnableMsixTooling)' == 'true'">
     <HasPackageAndPublishMenu>true</HasPackageAndPublishMenu>
   </PropertyGroup>
 
-  <!-- Publish Properties -->
   <PropertyGroup>
     <PublishReadyToRun Condition="'$(Configuration)' == 'Debug'">False</PublishReadyToRun>
     <PublishReadyToRun Condition="'$(Configuration)' != 'Debug'">True</PublishReadyToRun>

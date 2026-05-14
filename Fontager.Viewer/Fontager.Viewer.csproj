@@ -6,17 +6,45 @@
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <RootNamespace>Fontager.Viewer</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-	  
-	<!-- <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
-	<WindowsPackageType>None</WindowsPackageType>  -->
-	  
     <ApplicationIcon>Assets\Logo.ico</ApplicationIcon>
     <Platforms>x86;x64;ARM64</Platforms>
     <RuntimeIdentifiers>win-x86;win-x64;win-arm64</RuntimeIdentifiers>
     <UseWinUI>true</UseWinUI>
     <WinUISDKReferences>false</WinUISDKReferences>
-    <EnableMsixTooling>true</EnableMsixTooling>
     <Nullable>enable</Nullable>
+
+    <!--
+      Distribution: UNPACKAGED (no MSIX / Store identity).
+
+      Rationale and tradeoffs:
+        docs/research/packaging-decision.md
+
+      What "unpackaged" buys us:
+        * Real HKCU writes (Settings → Fonts shows "Uninstall", not just "Hide").
+        * .ttf file association becomes possible for the current user.
+        * Standard Win32 access (no AppContainer restrictions on registry/FS).
+        * Smaller, simpler distribution (a single folder you can zip).
+
+      WindowsAppSDKSelfContained=true bundles the Windows App SDK runtime into
+      the output directory so end users do NOT need to install a runtime first.
+      Cost is ~40-60 MB of extra binaries shipped alongside the EXE.
+
+      Re-enabling MSIX / Store distribution later:
+        1. Set WindowsPackageType back to MSIX (or remove the line).
+        2. Set EnableMsixTooling to true (gates the MSIX-only properties below).
+        3. Update Package.appxmanifest (kept in the repo for exactly this).
+        See docs/research/packaging-decision.md for the full checklist.
+    -->
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <EnableMsixTooling>false</EnableMsixTooling>
+
+    <!-- Assembly version is what Package.Current.Id.Version used to provide.
+         Bump in lockstep with Package.appxmanifest's Version attribute so the
+         in-app "About" version stays accurate regardless of distribution mode. -->
+    <Version>1.1.0</Version>
+    <AssemblyVersion>1.1.0.0</AssemblyVersion>
+    <FileVersion>1.1.0.0</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -29,20 +57,15 @@
     <Content Include="Assets\Logo.ico">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <Content Include="Assets\Logo.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>
     <Manifest Include="$(ApplicationManifest)" />
   </ItemGroup>
 
-  <!--
-    Defining the "Msix" ProjectCapability here allows the Single-project MSIX Packaging
-    Tools extension to be activated for this project even if the Windows App SDK Nuget
-    package has not yet been restored.
-  -->
-  <ItemGroup Condition="'$(DisableMsixProjectCapabilityAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
-    <ProjectCapability Include="Msix" />
-  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.2" />
@@ -53,17 +76,18 @@
     <ProjectReference Include="..\Fontager.Core\Fontager.Core.csproj" />
   </ItemGroup>
 
-  <!--
-    Defining the "HasPackageAndPublishMenuAddedByProject" property here allows the Solution
-    Explorer "Package and Publish" context menu entry to be enabled for this project even if
-    the Windows App SDK Nuget package has not yet been restored.
-  -->
-  <PropertyGroup Condition="'$(DisableHasPackageAndPublishMenuAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
-    <HasPackageAndPublishMenu>true</HasPackageAndPublishMenu>
-  </PropertyGroup>
+  <!-- ===================================================================
+       MSIX / Store distribution — gated, currently disabled
+       Switch EnableMsixTooling=true above to reactivate everything below.
+       Package.appxmanifest is intentionally kept in the repo so re-enable
+       is a one-property change.
+       =================================================================== -->
+  <ItemGroup Condition="'$(EnableMsixTooling)' == 'true'">
+    <ProjectCapability Include="Msix" />
+  </ItemGroup>
 
-  <!-- Publish Properties -->
-  <PropertyGroup>
+  <PropertyGroup Condition="'$(EnableMsixTooling)' == 'true'">
+    <HasPackageAndPublishMenu>true</HasPackageAndPublishMenu>
     <PublishReadyToRun>False</PublishReadyToRun>
     <PublishTrimmed Condition="'$(Configuration)' == 'Debug'">False</PublishTrimmed>
     <PublishTrimmed Condition="'$(Configuration)' != 'Debug' and '$(SelfContained)' == 'true'">True</PublishTrimmed>

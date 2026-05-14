@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
@@ -7,28 +8,55 @@ using Windows.ApplicationModel;
 namespace Fontager.Viewer.Services;
 
 /// <summary>
-/// Per-user file-association helpers for the .ttf extension.
+/// Per-user file-association helpers for Fontager's supported font formats
+/// (<c>.ttf</c>, <c>.otf</c>, <c>.ttc</c>, <c>.woff2</c>).
 ///
-/// Why this exists: the MSIX schema's <c>windows.fileTypeAssociation</c> extension
-/// rejects <c>.ttf</c> as a reserved file type owned by the built-in Windows Font
-/// Viewer. We can't claim it from inside <c>Package.appxmanifest</c>. For the
-/// unpackaged / portable build of Fontager, however, we can write the per-user
-/// "Open with" entry under HKCU so the user finds Fontager in the Explorer
-/// "Open with..." menu without having to hunt for the executable.
+/// <para>
+/// We never claim the default handler and never write under HKLM. All entries
+/// go under <c>HKCU\Software\Classes</c> so the user (a) doesn't need
+/// administrator rights and (b) can fully reverse the change from inside the
+/// Fontager Settings dialog.
+/// </para>
 ///
-/// All writes go under <c>HKCU\Software\Classes</c> only. We never touch HKLM,
-/// never claim the default handler, and never modify other applications'
-/// entries.
+/// <para>
+/// <b>Why <c>.ttf</c> is special:</b> the MSIX
+/// <c>windows.fileTypeAssociation</c> manifest schema rejects <c>.ttf</c>
+/// (it's on Windows' reserved list, owned by the built-in Font Viewer).
+/// For the unpackaged build (see <c>docs/research/packaging-decision.md</c>)
+/// we can still add a per-user "Open with..." entry — which is what this
+/// service does for all four extensions in one shot.
+/// </para>
+///
+/// <para>
+/// <b>Note on Microsoft Store distribution:</b> we are deliberately NOT
+/// pursuing the Store at this stage. If we revisit it later, the path is
+/// either (a) re-enable MSIX (and lose the <c>.ttf</c> entry here, because
+/// the manifest still won't allow it), or (b) ship the unpackaged build via
+/// the Store as a Win32 app — see the packaging-decision doc for the
+/// trade-offs.
+/// </para>
 /// </summary>
 internal static class FileAssociationService
 {
-    private const string ProgId = "Fontager.Viewer.ttf";
+    /// <summary>Unified ProgID covering all four font extensions.</summary>
+    private const string ProgId = "Fontager.Viewer.font";
+
+    /// <summary>Legacy ProgID from the .ttf-only era; cleaned up on register/unregister.</summary>
+    private const string LegacyTtfProgId = "Fontager.Viewer.ttf";
+
     private const string AppExeName = "Fontager.Viewer.exe";
+
+    /// <summary>
+    /// All file extensions Fontager wants to be a candidate for in the
+    /// Explorer "Open with..." menu. Lower-cased, includes the leading dot.
+    /// </summary>
+    public static IReadOnlyList<string> SupportedExtensions { get; } = [".ttf", ".otf", ".ttc", ".woff2"];
 
     /// <summary>
     /// True when Fontager is running with a packaged (MSIX) identity. Under
     /// MSIX, HKCU writes are virtualized into the package container and have
-    /// no effect on Explorer, so we surface the feature as disabled.
+    /// no effect on Explorer, so we surface the feature as disabled. With
+    /// the unpackaged build this is normally <c>false</c>.
     /// </summary>
     public static bool IsRunningPackaged
     {
@@ -47,14 +75,17 @@ internal static class FileAssociationService
     }
 
     /// <summary>
-    /// True when an HKCU "Open with" entry for .ttf is already pointing at this
-    /// Fontager executable.
+    /// True when the Fontager ProgID is currently advertised under at least
+    /// one of the supported extensions' <c>OpenWithProgids</c> key. We use
+    /// the .ttf entry as a sentinel because Register/Unregister are atomic
+    /// over the full set.
     /// </summary>
-    public static bool IsTtfRegistered()
+    public static bool IsRegistered()
     {
         try
         {
-            using var openWith = Registry.CurrentUser.OpenSubKey(@"Software\Classes\.ttf\OpenWithProgids", false);
+            using var openWith = Registry.CurrentUser.OpenSubKey(
+                @"Software\Classes\.ttf\OpenWithProgids", false);
             return openWith?.GetValue(ProgId) is not null;
         }
         catch
@@ -64,11 +95,13 @@ internal static class FileAssociationService
     }
 
     /// <summary>
-    /// Adds Fontager to the "Open with..." list for .ttf files for the current
-    /// user. Returns true on success. No-op (returns false) when running
-    /// packaged because the writes would be virtualized.
+    /// Adds Fontager to the "Open with..." list for every extension in
+    /// <see cref="SupportedExtensions"/> for the current user, and registers
+    /// the application under <c>HKCU\Software\Classes\Applications</c>.
+    /// Returns true on success. No-op (returns false) when running packaged
+    /// because the writes would be virtualized.
     /// </summary>
-    public static bool RegisterTtfForCurrentUser()
+    public static bool RegisterForCurrentUser()
     {
         if (IsRunningPackaged) return false;
 
@@ -78,7 +111,12 @@ internal static class FileAssociationService
         var openCommand = $"\"{exePath}\" \"%1\"";
         var iconRef = $"\"{exePath}\",0";
 
-        // ProgID: HKCU\Software\Classes\Fontager.Viewer.ttf
+        // Migrate away from the legacy single-extension ProgID if it's still
+        // sitting in the registry from a previous Fontager install — we
+        // don't want two ProgIDs both claiming the same EXE.
+        RemoveLegacyTtfProgId();
+
+        // 1. ProgID definition: HKCU\Software\Classes\Fontager.Viewer.font
         using (var progIdKey = Registry.CurrentUser.CreateSubKey($@"Software\Classes\{ProgId}", true))
         {
             progIdKey?.SetValue(string.Empty, "Font file (Fontager)");
@@ -88,7 +126,10 @@ internal static class FileAssociationService
             cmdKey?.SetValue(string.Empty, openCommand);
         }
 
-        // Application registration: HKCU\Software\Classes\Applications\Fontager.Viewer.exe
+        // 2. Application registration: HKCU\Software\Classes\Applications\Fontager.Viewer.exe
+        //    Tells Windows which file types Fontager understands, so it shows
+        //    up in "Open with → Choose another app" lists even before the
+        //    user has explicitly associated anything.
         using (var appKey = Registry.CurrentUser.CreateSubKey(
             $@"Software\Classes\Applications\{AppExeName}", true))
         {
@@ -96,13 +137,16 @@ internal static class FileAssociationService
             using var cmdKey = appKey?.CreateSubKey(@"shell\open\command", true);
             cmdKey?.SetValue(string.Empty, openCommand);
             using var supportedKey = appKey?.CreateSubKey("SupportedTypes", true);
-            supportedKey?.SetValue(".ttf", string.Empty);
+            foreach (var ext in SupportedExtensions)
+                supportedKey?.SetValue(ext, string.Empty);
         }
 
-        // Surface the ProgID in the .ttf "Open with..." list.
-        using (var openWith = Registry.CurrentUser.CreateSubKey(
-            @"Software\Classes\.ttf\OpenWithProgids", true))
+        // 3. Per-extension OpenWithProgids entry. Windows uses this to
+        //    populate the "Open with..." submenu.
+        foreach (var ext in SupportedExtensions)
         {
+            using var openWith = Registry.CurrentUser.CreateSubKey(
+                $@"Software\Classes\{ext}\OpenWithProgids", true);
             openWith?.SetValue(ProgId, Array.Empty<byte>(), RegistryValueKind.None);
         }
 
@@ -111,24 +155,30 @@ internal static class FileAssociationService
     }
 
     /// <summary>
-    /// Reverses <see cref="RegisterTtfForCurrentUser"/>. Only deletes entries we
-    /// own; never touches other applications.
+    /// Reverses <see cref="RegisterForCurrentUser"/>. Only deletes entries we
+    /// own; never touches other applications or HKLM. Also removes any
+    /// stale legacy <c>Fontager.Viewer.ttf</c> ProgID from older versions.
     /// </summary>
-    public static bool UnregisterTtfForCurrentUser()
+    public static bool UnregisterForCurrentUser()
     {
         if (IsRunningPackaged) return false;
 
         try
         {
-            using (var openWith = Registry.CurrentUser.OpenSubKey(@"Software\Classes\.ttf\OpenWithProgids", true))
+            foreach (var ext in SupportedExtensions)
             {
+                using var openWith = Registry.CurrentUser.OpenSubKey(
+                    $@"Software\Classes\{ext}\OpenWithProgids", true);
                 if (openWith?.GetValue(ProgId) is not null)
                     openWith.DeleteValue(ProgId, throwOnMissingValue: false);
             }
 
-            Registry.CurrentUser.DeleteSubKeyTree($@"Software\Classes\{ProgId}", throwOnMissingSubKey: false);
+            Registry.CurrentUser.DeleteSubKeyTree(
+                $@"Software\Classes\{ProgId}", throwOnMissingSubKey: false);
             Registry.CurrentUser.DeleteSubKeyTree(
                 $@"Software\Classes\Applications\{AppExeName}", throwOnMissingSubKey: false);
+
+            RemoveLegacyTtfProgId();
 
             NotifyShellAssociationChanged();
             return true;
@@ -136,6 +186,29 @@ internal static class FileAssociationService
         catch
         {
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Removes the older <c>Fontager.Viewer.ttf</c> ProgID and its OpenWith
+    /// pointer from <c>.ttf</c>. Safe to call when the entries don't exist.
+    /// </summary>
+    private static void RemoveLegacyTtfProgId()
+    {
+        try
+        {
+            using (var openWith = Registry.CurrentUser.OpenSubKey(
+                @"Software\Classes\.ttf\OpenWithProgids", true))
+            {
+                if (openWith?.GetValue(LegacyTtfProgId) is not null)
+                    openWith.DeleteValue(LegacyTtfProgId, throwOnMissingValue: false);
+            }
+            Registry.CurrentUser.DeleteSubKeyTree(
+                $@"Software\Classes\{LegacyTtfProgId}", throwOnMissingSubKey: false);
+        }
+        catch
+        {
+            // Best-effort cleanup — never block the main flow on this.
         }
     }
 

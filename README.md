@@ -104,18 +104,34 @@ While you can build the project using the **dotnet CLI**, **Visual Studio 2022 i
 
 ### 📦 Installation
 
-**Visual Studio (MSIX):**
+Fontager ships as an **unpackaged WinUI 3 app**: a regular folder containing
+`Fontager.Viewer.exe` and the self-contained Windows App SDK / .NET runtime.
+No MSIX, no Store, no separate runtime install on the target machine.
+
+The rationale (and the path to switch back to MSIX/Store later) is documented
+in [`docs/research/packaging-decision.md`](docs/research/packaging-decision.md).
+
+**Visual Studio:**
 1. Set configuration to **Release** and platform to **x64**
-2. Right-click `Fontager.Viewer` → **Package and Publish** → **Create App Packages**
-3. Select **Sideloading** → **Next**
-4. Create or select a certificate → **Create**
+2. Right-click `Fontager.Viewer` → **Publish** → **Folder**
+3. Pick a target folder, accept the defaults (self-contained, win-x64)
+4. The publish folder is what you ship — zip it or run an installer over it.
 
-📁 **Output:** `Fontager.Viewer\AppPackages\Fontager.Viewer_X.X.X.X_x64.msix`  
-Double-click the `.msix` file to install, or distribute it to other users.
+**Command line:**
+```sh
+dotnet publish Fontager.Viewer -c Release -r win-x64 --self-contained
+```
+Output lands in `Fontager.Viewer\bin\Release\net8.0-windows10.0.19041.0\win-x64\publish\`.
+Run `Fontager.Viewer.exe` from there directly, or copy the folder anywhere.
 
-**Download From GitHub Release:**
-1. Go to [latest release page](https://github.com/ysfemreAlbyrk/Fontager/releases/latest) and download.
-2. Run the bat file.
+**Download from GitHub Releases:**
+1. Go to the [latest release page](https://github.com/ysfemreAlbyrk/Fontager/releases/latest) and download.
+2. Extract the zip and run `Fontager.Viewer.exe`.
+
+> **Microsoft Store / MSIX:** not pursued at this stage. The MSIX manifest
+> (`Package.appxmanifest`) is kept in the repository so Store distribution
+> remains a single-property change away — see the packaging-decision doc
+> for the checklist.
 
 ## 🛠️ Tech Stack
 
@@ -125,21 +141,25 @@ Double-click the `.msix` file to install, or distribute it to other users.
 | 💻 **Language** | C# / .NET 8 | Modern .NET platform |
 | 🏗️ **Architecture** | MVVM with `CommunityToolkit.Mvvm` | Model-View-ViewModel pattern |
 | 🔌 **DI** | `Microsoft.Extensions.DependencyInjection` | Dependency injection |
-| 🔍 **Font Parsing** | Custom binary parser | No external dependencies |
+| 🔍 **Font Parsing** | Custom binary parser (`name`, `OS/2`, `head`, `maxp`, `fvar`, `cmap`) | No external dependencies |
 | 📦 **Font Loading** | Win32 GDI (`AddFontResourceEx`) + XAML `ms-appdata` URI caching | Native font handling |
+| 📐 **Packaging** | Unpackaged WinUI 3, self-contained WinAppSDK | See [packaging-decision](docs/research/packaging-decision.md) |
 
 ## 🔗 File Association
 
-Fontager.Viewer registers for `.otf`, `.ttc`, and `.woff2` files. After installation, double-click a font file or set Fontager as default in **Settings → Apps → Default apps → Choose default apps by file type**.
+Because the build is unpackaged, file associations are opt-in: open
+**Settings → Install → "Register Fontager for font files (current user)"**.
+That single toggle adds Fontager to the Explorer *Open with...* submenu for
+**`.ttf`, `.otf`, `.ttc`, and `.woff2`** by writing per-user entries under
+`HKCU\Software\Classes`. No admin needed, and the same toggle reverses it.
 
-### About `.ttf`
+You can also right-click any font file → *Open with* → *Choose another app*
+→ pick Fontager Viewer and tick *Always use this app*. That works even
+without flipping the Settings toggle.
 
-Windows reserves the `.ttf` extension for the built-in Font Viewer and the MSIX schema rejects it inside `Package.appxmanifest`, so Fontager cannot claim it the way it claims the other formats. Two workarounds:
-
-1. **Manual "Open with..."** — right-click any `.ttf` file → *Open with* → *Choose another app* → pick Fontager Viewer and tick *Always use this app*. Works for any build (MSIX or portable).
-2. **Settings → Install → "Register .ttf for current user"** — *(portable build only)*. Adds Fontager to the per-user `OpenWithProgids` list so it shows up in the *Open with...* menu without hunting for the executable. No admin needed, never claims the default handler.
-
-A deeper write-up of the limitation lives in [`docs/research/font-parsing.md`](docs/research/font-parsing.md#6-ttf-file-association-limitation-on-windows-appendix).
+A deeper write-up of why `.ttf` is the awkward one (Windows reserves it and
+the MSIX manifest schema bans it) lives in
+[`docs/research/font-parsing.md`](docs/research/font-parsing.md#6-ttf-file-association-limitation-on-windows-appendix).
 
 ## 📄 License
 

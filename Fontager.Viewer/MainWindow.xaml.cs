@@ -131,6 +131,13 @@ public sealed partial class MainWindow : Window
     private string _glyphSearchText = string.Empty;
     private bool _suppressGlyphFilterEvents;
 
+    // Search input is debounced: a fast typist hitting the search box would
+    // otherwise re-filter 11k+ glyphs and rebuild the GridView ItemsSource on
+    // every keystroke. 150 ms is short enough to feel instant and long enough
+    // to coalesce a typed word.
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _glyphSearchDebounceTimer;
+    private const int GlyphSearchDebounceMs = 150;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -626,8 +633,21 @@ public sealed partial class MainWindow : Window
                     ? meta.FamilyName
                     : Path.GetFileNameWithoutExtension(filePath);
 
-            var cachedUri = await CacheFontForXamlAsync(filePath);
-            _loadedFontFamily = new FontFamily($"{cachedUri}#{familyName}");
+            // XAML needs a stable URI to the font bytes. We used to copy into
+            // ApplicationData.LocalFolder and reference ms-appdata:// — that
+            // path is reliable for MSIX, but in an unpackaged WinUI 3 build the
+            // identity bridge for ms-appdata is flaky: CacheFontForXamlAsync
+            // can throw, or DirectWrite resolves the URI to nothing so every
+            // TextBlock falls back to the system UI font. Copying to a real
+            // path under %LocalAppData%\Fontager\FontCache and using file:///
+            // works the same packaged or unpackaged.
+            var fileUri = await CacheFontForXamlAsync(filePath);
+            _loadedFontFamily = new FontFamily($"{fileUri}#{familyName}");
+
+            // Glyph grid: see BuildGlyphGrid — GridView item templates do not
+            // inherit FontFamily from the parent; ContainerContentChanging sets
+            // the character TextBlock per realized cell.
+            GlyphGrid.FontFamily = _loadedFontFamily;
 
             UpdateFontDisplay();
             ShowState(content: true);
@@ -639,32 +659,41 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// Copies the font into <c>%LocalAppData%\Fontager\FontCache</c> and returns
+    /// a <c>file:///</c> absolute URI string (no fragment) suitable for
+    /// <see cref="FontFamily"/> as <c>{uri}#{familyName}</c>.
+    /// </summary>
     private async Task<string> CacheFontForXamlAsync(string sourceFilePath)
     {
-        var localFolder = ApplicationData.Current.LocalFolder;
-        var cacheFolder = await localFolder.CreateFolderAsync(
-            FontCacheFolderName, CreationCollisionOption.OpenIfExists);
+        var cacheDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Fontager",
+            FontCacheFolderName);
+        Directory.CreateDirectory(cacheDir);
 
-        // Clean previous cached font
-        if (_cachedFontFileName != null)
+        if (_cachedFontFileName is not null)
         {
             try
             {
-                var oldFile = await cacheFolder.TryGetItemAsync(_cachedFontFileName);
-                if (oldFile is StorageFile sf)
-                    await sf.DeleteAsync(StorageDeleteOption.PermanentDelete);
+                var oldPath = Path.Combine(cacheDir, _cachedFontFileName);
+                if (File.Exists(oldPath))
+                    File.Delete(oldPath);
             }
             catch { /* ignore */ }
         }
 
         var ext = Path.GetExtension(sourceFilePath);
         var uniqueName = $"{Guid.NewGuid():N}{ext}";
+        var destPath = Path.Combine(cacheDir, uniqueName);
 
-        var sourceFile = await StorageFile.GetFileFromPathAsync(sourceFilePath);
-        await sourceFile.CopyAsync(cacheFolder, uniqueName, NameCollisionOption.ReplaceExisting);
+        await Task.Run(() => File.Copy(sourceFilePath, destPath, overwrite: true));
 
         _cachedFontFileName = uniqueName;
-        return $"ms-appdata:///local/{FontCacheFolderName}/{uniqueName}";
+
+        var full = Path.GetFullPath(destPath).Replace('\\', '/');
+        // Local disk path -> file:///C:/Users/.../font.otf
+        return $"file:///{full}";
     }
 
     private void DeactivateCurrentFont()
@@ -875,8 +904,37 @@ public sealed partial class MainWindow : Window
         ResetGlyphFilters();
         ApplyGlyphFilters();
 
+        // GridView item roots live under GridViewItem, not as logical children of
+        // the GridView itself — FontFamily set on the GridView does NOT reliably
+        // inherit into DataTemplate TextBlocks (they keep the system UI font).
+        // Apply the loaded face per realized container only; virtualization means
+        // we only touch on-screen rows.
         GlyphGrid.ContainerContentChanging -= GlyphGrid_ContainerContentChanging;
         GlyphGrid.ContainerContentChanging += GlyphGrid_ContainerContentChanging;
+
+        if (_loadedFontFamily is not null)
+            GlyphGrid.FontFamily = _loadedFontFamily;
+    }
+
+    private void GlyphGrid_ContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
+    {
+        if (args.Phase != 0 || _loadedFontFamily is null)
+            return;
+
+        args.RegisterUpdateCallback(GlyphGrid_ApplyFontToItemContainer);
+    }
+
+    private void GlyphGrid_ApplyFontToItemContainer(ListViewBase sender, ContainerContentChangingEventArgs args)
+    {
+        if (_loadedFontFamily is null)
+            return;
+
+        if (args.ItemContainer?.ContentTemplateRoot is StackPanel panel
+            && panel.Children.Count > 0
+            && panel.Children[0] is TextBlock charBlock)
+        {
+            charBlock.FontFamily = _loadedFontFamily;
+        }
     }
 
     private void BuildBlockSidebar()
@@ -886,7 +944,9 @@ public sealed partial class MainWindow : Window
         var perBlockCounts = new Dictionary<string, (UnicodeBlocks.UnicodeBlock? Block, int Count)>();
         foreach (var item in _viewModel.GlyphItems)
         {
-            var block = UnicodeBlocks.GetBlock(item.CodePoint);
+            // item.Block is precomputed in the GlyphItem constructor — no
+            // per-pass classifier work here.
+            var block = item.Block;
             var key = block.Name;
             if (perBlockCounts.TryGetValue(key, out var existing))
             {
@@ -959,31 +1019,29 @@ public sealed partial class MainWindow : Window
 
     private void ApplyGlyphFilters()
     {
-        IEnumerable<GlyphItem> view = _viewModel.GlyphItems;
-
+        // Build a single composite predicate and run it once over the master
+        // list. Two wins over chained LINQ Wheres:
+        //   1. one allocation for the result list instead of N enumerators,
+        //   2. JIT can keep the precomputed-property reads tight.
         var blockFilter = _glyphBlockFilter;
-        if (blockFilter is not null)
+        var otherOnly = blockFilter is null
+            && GlyphBlockList.SelectedItem is GlyphBlockEntry entry
+            && entry.Name == "Other";
+        var category = _glyphCategoryFilter;
+        var needle = _glyphSearchText.Trim();
+        var matcher = string.IsNullOrEmpty(needle) ? null : BuildSearchMatcher(needle);
+
+        var master = _viewModel.GlyphItems;
+        var filtered = new List<GlyphItem>(capacity: master.Count);
+        foreach (var g in master)
         {
-            view = view.Where(g => blockFilter.Contains(g.CodePoint));
-        }
-        else if (GlyphBlockList.SelectedItem is GlyphBlockEntry entry && entry.Name == "Other")
-        {
-            view = view.Where(g => UnicodeBlocks.GetBlock(g.CodePoint).Start < 0);
+            if (blockFilter is not null && !blockFilter.Contains(g.CodePoint)) continue;
+            if (otherOnly && g.Block.Start >= 0) continue;
+            if (category != GlyphCategory.All && g.Category != category) continue;
+            if (matcher is not null && !matcher(g)) continue;
+            filtered.Add(g);
         }
 
-        if (_glyphCategoryFilter != GlyphCategory.All)
-        {
-            view = view.Where(g => GlyphCategoryClassifier.Classify(g.CodePoint) == _glyphCategoryFilter);
-        }
-
-        if (!string.IsNullOrWhiteSpace(_glyphSearchText))
-        {
-            var needle = _glyphSearchText.Trim();
-            var matcher = BuildSearchMatcher(needle);
-            view = view.Where(g => matcher(g));
-        }
-
-        var filtered = view.ToList();
         GlyphGrid.ItemsSource = filtered;
         GlyphCountText.Text = filtered.Count.ToString();
         GlyphDetailPanel.Visibility = Visibility.Collapsed;
@@ -1033,22 +1091,6 @@ public sealed partial class MainWindow : Window
         return g => g.UnicodeLabel.Contains(needle, StringComparison.OrdinalIgnoreCase);
     }
 
-    private void GlyphGrid_ContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
-    {
-        if (args.Phase == 0 && _loadedFontFamily != null)
-        {
-            args.RegisterUpdateCallback((s, a) =>
-            {
-                if (a.ItemContainer.ContentTemplateRoot is StackPanel panel &&
-                    panel.Children.Count > 0 &&
-                    panel.Children[0] is TextBlock charBlock)
-                {
-                    charBlock.FontFamily = _loadedFontFamily;
-                }
-            });
-        }
-    }
-
     private void GlyphGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (GlyphGrid.SelectedItem is GlyphItem glyph)
@@ -1056,10 +1098,8 @@ public sealed partial class MainWindow : Window
             GlyphDetailPanel.Visibility = Visibility.Visible;
             SelectedGlyphChar.Text = glyph.Character;
             SelectedGlyphUnicode.Text = glyph.UnicodeLabel;
-            var block = UnicodeBlocks.GetBlock(glyph.CodePoint);
-            var category = GlyphCategoryClassifier.Classify(glyph.CodePoint);
             SelectedGlyphName.Text =
-                $"Decimal: {glyph.CodePoint} · Block: {block.Name} · Category: {category}";
+                $"Decimal: {glyph.CodePoint} · Block: {glyph.Block.Name} · Category: {glyph.Category}";
 
             if (_loadedFontFamily != null)
                 SelectedGlyphChar.FontFamily = _loadedFontFamily;
@@ -1107,7 +1147,21 @@ public sealed partial class MainWindow : Window
     {
         if (_suppressGlyphFilterEvents) return;
         _glyphSearchText = sender.Text ?? string.Empty;
-        ApplyGlyphFilters();
+
+        // Debounce: cancel any pending filter and re-arm. The reason for going
+        // through DispatcherQueueTimer rather than a Task.Delay+cancellation
+        // pattern is that the timer Tick already lands on the UI thread, so
+        // touching GlyphGrid / GlyphCountText is safe without marshalling.
+        if (_glyphSearchDebounceTimer is null)
+        {
+            _glyphSearchDebounceTimer = DispatcherQueue.CreateTimer();
+            _glyphSearchDebounceTimer.IsRepeating = false;
+            _glyphSearchDebounceTimer.Tick += (_, _) => ApplyGlyphFilters();
+        }
+
+        _glyphSearchDebounceTimer.Interval = TimeSpan.FromMilliseconds(GlyphSearchDebounceMs);
+        _glyphSearchDebounceTimer.Stop();
+        _glyphSearchDebounceTimer.Start();
     }
 
     /// <summary>Sidebar row model.</summary>
@@ -1374,18 +1428,20 @@ public sealed partial class MainWindow : Window
             SelectedIndex = _settings.InstallMode
         };
 
-        // ── TTF file-association opt-in ──
-        // Windows reserves .ttf in MSIX manifests, so we offer an HKCU
-        // "Open with..." entry for the unpackaged build. Disabled (and labelled)
-        // when running packaged because the writes get virtualized.
-        bool ttfPackaged = FileAssociationService.IsRunningPackaged;
-        var ttfRegisterToggle = new ToggleSwitch
+        // ── Font file-association opt-in ──
+        // Adds Fontager to the Explorer "Open with..." submenu for .ttf, .otf,
+        // .ttc, and .woff2 by writing per-user ProgID entries under HKCU.
+        // Disabled when running packaged because MSIX virtualises HKCU writes
+        // into the package container, where Explorer never looks. See
+        // docs/research/packaging-decision.md for the full rationale.
+        bool fontAssocPackaged = FileAssociationService.IsRunningPackaged;
+        var fontAssocToggle = new ToggleSwitch
         {
-            Header = "Register .ttf for current user",
-            IsOn = !ttfPackaged && FileAssociationService.IsTtfRegistered(),
-            IsEnabled = !ttfPackaged
+            Header = "Register Fontager for font files (current user)",
+            IsOn = !fontAssocPackaged && FileAssociationService.IsRegistered(),
+            IsEnabled = !fontAssocPackaged
         };
-        bool ttfInitial = ttfRegisterToggle.IsOn;
+        bool fontAssocInitial = fontAssocToggle.IsOn;
 
         // ══════════════════════════════════════════════════════════
         // RESET
@@ -1434,10 +1490,10 @@ public sealed partial class MainWindow : Window
         panel.Children.Add(SectionHeader("Install"));
         panel.Children.Add(installModeCombo);
         panel.Children.Add(Description("Select the default target used by the main Install button. All-users install copies to Windows\\Fonts and requires administrator privileges."));
-        panel.Children.Add(ttfRegisterToggle);
-        panel.Children.Add(Description(ttfPackaged
-            ? "Adds Fontager to the Windows 'Open with...' menu for .ttf files. Disabled while running packaged (MSIX) because Windows reserves the .ttf association."
-            : "Adds Fontager to the Windows 'Open with...' menu for .ttf files for the current user only. Does not change the default handler."));
+        panel.Children.Add(fontAssocToggle);
+        panel.Children.Add(Description(fontAssocPackaged
+            ? "Adds Fontager to the Windows 'Open with...' menu for .ttf, .otf, .ttc, and .woff2 files. Disabled while running packaged (MSIX) because the registry writes get virtualised into the package container."
+            : "Adds Fontager to the Windows 'Open with...' menu for .ttf, .otf, .ttc, and .woff2 files for the current user only. Does not change the default handler."));
 
         panel.Children.Add(Divider());
 
@@ -1550,13 +1606,13 @@ public sealed partial class MainWindow : Window
                 _settings.InstallMode = iv;
             UpdateInstallButtonPresentation(GetSavedInstallTarget());
 
-            // Apply TTF "Open with..." toggle changes only when the value moved.
-            if (!ttfPackaged && ttfRegisterToggle.IsOn != ttfInitial)
+            // Apply font-association toggle changes only when the value moved.
+            if (!fontAssocPackaged && fontAssocToggle.IsOn != fontAssocInitial)
             {
-                if (ttfRegisterToggle.IsOn)
-                    FileAssociationService.RegisterTtfForCurrentUser();
+                if (fontAssocToggle.IsOn)
+                    FileAssociationService.RegisterForCurrentUser();
                 else
-                    FileAssociationService.UnregisterTtfForCurrentUser();
+                    FileAssociationService.UnregisterForCurrentUser();
             }
 
             // Apply to UI
