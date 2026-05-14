@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="Fontager.Viewer.Views.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Background="Transparent">
+
+    <!--
+        Settings live on a real Page (not a ContentDialog) so they cover the
+        full window — the back button up in the title bar (see MainWindow.xaml)
+        is what gets users out. There is no Save/Cancel pair anymore: each
+        control writes through to SettingsService immediately, and
+        SettingsService.Changed fires so MainWindow re-applies the relevant
+        UI (theme, backdrop, font display) in real time.
+    -->
+
+    <ScrollViewer Padding="32,16,32,32" VerticalScrollBarVisibility="Auto">
+        <Grid HorizontalAlignment="Stretch">
+            <StackPanel x:Name="ContentRoot" Spacing="24" MaxWidth="780" HorizontalAlignment="Stretch">
+
+                <TextBlock Text="Settings" Style="{StaticResource TitleTextBlockStyle}" />
+
+                <!-- ── Appearance ────────────────────────────────────────── -->
+                <StackPanel Spacing="12">
+                    <TextBlock Text="Appearance" Style="{StaticResource SubtitleTextBlockStyle}" />
+
+                    <ComboBox x:Name="ThemeCombo"
+                              Header="Theme"
+                              HorizontalAlignment="Stretch"
+                              SelectionChanged="ThemeCombo_SelectionChanged">
+                        <ComboBoxItem Content="System default" Tag="0" />
+                        <ComboBoxItem Content="Light" Tag="1" />
+                        <ComboBoxItem Content="Dark" Tag="2" />
+                    </ComboBox>
+
+                    <ComboBox x:Name="BackdropCombo"
+                              Header="Backdrop material"
+                              HorizontalAlignment="Stretch"
+                              SelectionChanged="BackdropCombo_SelectionChanged">
+                        <ComboBoxItem Content="Mica" Tag="0" />
+                        <ComboBoxItem Content="Acrylic" Tag="1" />
+                    </ComboBox>
+                </StackPanel>
+
+                <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+
+                <!-- ── Preview ───────────────────────────────────────────── -->
+                <StackPanel Spacing="12">
+                    <TextBlock Text="Preview" Style="{StaticResource SubtitleTextBlockStyle}" />
+
+                    <TextBox x:Name="PreviewTextBox"
+                             Header="Default preview text"
+                             PlaceholderText="Enter default preview text..."
+                             TextWrapping="Wrap"
+                             AcceptsReturn="False"
+                             MaxLength="500"
+                             LostFocus="PreviewTextBox_LostFocus" />
+
+                    <Slider x:Name="FontSizeSlider"
+                            Minimum="8" Maximum="120" StepFrequency="1"
+                            ValueChanged="FontSizeSlider_ValueChanged" />
+
+                    <ToggleSwitch x:Name="PreviewControlsToggle"
+                                  Header="Editable preview"
+                                  Toggled="PreviewControlsToggle_Toggled" />
+                    <TextBlock Text="Show the editable text preview area with size slider. When off, only the waterfall is shown."
+                               Style="{StaticResource CaptionTextBlockStyle}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               TextWrapping="WrapWholeWords"
+                               Margin="0,-8,0,0" />
+                </StackPanel>
+
+                <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+
+                <!-- ── Display ───────────────────────────────────────────── -->
+                <StackPanel Spacing="12">
+                    <TextBlock Text="Display" Style="{StaticResource SubtitleTextBlockStyle}" />
+
+                    <ToggleSwitch x:Name="QuickViewToggle"
+                                  Header="Quick view"
+                                  Toggled="QuickViewToggle_Toggled" />
+                    <TextBlock Text="Character set overview below the font header. Auto-shows when the window is small."
+                               Style="{StaticResource CaptionTextBlockStyle}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               TextWrapping="WrapWholeWords"
+                               Margin="0,-8,0,0" />
+
+                    <ToggleSwitch x:Name="WaterfallToggle"
+                                  Header="Waterfall"
+                                  Toggled="WaterfallToggle_Toggled" />
+
+                    <TextBox x:Name="WaterfallSizesBox"
+                             Header="Waterfall sizes (comma-separated)"
+                             PlaceholderText="8,12,16,24,32,48,72"
+                             AcceptsReturn="False"
+                             MaxLength="200"
+                             LostFocus="WaterfallSizesBox_LostFocus" />
+                </StackPanel>
+
+                <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+
+                <!-- ── Install ───────────────────────────────────────────── -->
+                <StackPanel Spacing="12">
+                    <TextBlock Text="Install" Style="{StaticResource SubtitleTextBlockStyle}" />
+
+                    <ComboBox x:Name="InstallModeCombo"
+                              Header="Install target"
+                              HorizontalAlignment="Stretch"
+                              SelectionChanged="InstallModeCombo_SelectionChanged">
+                        <ComboBoxItem Content="Current user" Tag="0" />
+                        <ComboBoxItem Content="All users (requires admin)" Tag="1" />
+                    </ComboBox>
+
+                    <TextBlock x:Name="InstallTargetDescription"
+                               Style="{StaticResource CaptionTextBlockStyle}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               TextWrapping="WrapWholeWords"
+                               Margin="0,-8,0,0" />
+
+                    <ToggleSwitch x:Name="FontAssocToggle"
+                                  Header="Register Fontager for font files (current user)"
+                                  Toggled="FontAssocToggle_Toggled" />
+                    <TextBlock x:Name="FontAssocDescription"
+                               Style="{StaticResource CaptionTextBlockStyle}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               TextWrapping="WrapWholeWords"
+                               Margin="0,-8,0,0" />
+                </StackPanel>
+
+                <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+
+                <!-- ── Reset ─────────────────────────────────────────────── -->
+                <StackPanel Spacing="6">
+                    <Button Content="Reset all settings to defaults"
+                            Click="ResetButton_Click" />
+                </StackPanel>
+
+                <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+
+                <!-- ── About ─────────────────────────────────────────────── -->
+                <StackPanel Spacing="4">
+                    <TextBlock Text="About" Style="{StaticResource SubtitleTextBlockStyle}" />
+                    <TextBlock x:Name="AboutVersionText"
+                               FontWeight="SemiBold"
+                               Style="{StaticResource BodyTextBlockStyle}"
+                               Margin="0,8,0,0" />
+                    <TextBlock Text="A modern font viewer for Windows, built with WinUI 3."
+                               Style="{StaticResource CaptionTextBlockStyle}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <TextBlock Text="Made by Yusuf Emre Albayrak"
+                               Style="{StaticResource CaptionTextBlockStyle}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <HyperlinkButton Content="GitHub — ysfemreAlbyrk/Fontager"
+                                     NavigateUri="https://github.com/ysfemreAlbyrk/Fontager"
+                                     Padding="0" Margin="0,2,0,0" />
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+    </ScrollViewer>
+</Page>

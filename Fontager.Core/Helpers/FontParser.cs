@@ -8,10 +8,12 @@ namespace Fontager.Core.Helpers;
 /// </summary>
 public static class FontParser
 {
-    // Name table Name IDs
+    // Name table Name IDs (see docs/research/font-metadata.md for the
+    // full list and how the platform/encoding/language scoring works).
     private const int NameId_Copyright = 0;
     private const int NameId_FontFamily = 1;
     private const int NameId_FontSubfamily = 2;
+    private const int NameId_UniqueId = 3;
     private const int NameId_FullFontName = 4;
     private const int NameId_Version = 5;
     private const int NameId_PostScriptName = 6;
@@ -19,10 +21,13 @@ public static class FontParser
     private const int NameId_Manufacturer = 8;
     private const int NameId_Designer = 9;
     private const int NameId_Description = 10;
+    private const int NameId_ManufacturerUrl = 11;
+    private const int NameId_DesignerUrl = 12;
     private const int NameId_LicenseDescription = 13;
     private const int NameId_LicenseUrl = 14;
     private const int NameId_TypographicFamily = 16;
     private const int NameId_TypographicSubfamily = 17;
+    private const int NameId_SampleText = 19;
 
     /// <summary>
     /// Determines the font format from the file extension.
@@ -144,8 +149,13 @@ public static class FontParser
             int os2TableOffset = -1;
             int os2TableLength = 0;
             int headTableOffset = -1;
+            int hheaTableOffset = -1;
+            int postTableOffset = -1;
             int maxpTableOffset = -1;
             int fvarTableOffset = -1;
+            int fvarTableLength = 0;
+            int gsubTableOffset = -1;
+            int gposTableOffset = -1;
             int cmapTableOffset = -1;
             int cmapTableLength = 0;
 
@@ -171,11 +181,24 @@ public static class FontParser
                     case "head":
                         headTableOffset = offset;
                         break;
+                    case "hhea":
+                        hheaTableOffset = offset;
+                        break;
+                    case "post":
+                        postTableOffset = offset;
+                        break;
                     case "maxp":
                         maxpTableOffset = offset;
                         break;
                     case "fvar":
                         fvarTableOffset = offset;
+                        fvarTableLength = length;
+                        break;
+                    case "GSUB":
+                        gsubTableOffset = offset;
+                        break;
+                    case "GPOS":
+                        gposTableOffset = offset;
                         break;
                     case "cmap":
                         cmapTableOffset = offset;
@@ -191,18 +214,35 @@ public static class FontParser
                 names = ParseNameTable(data, nameTableOffset, nameTableLength);
             }
 
-            // Parse OS/2 table
+            // ── OS/2 ──────────────────────────────────────────────
             int weight = 400;
+            int width = 5;
             bool isItalic = false;
             bool isOblique = false;
             FontClassification classification = FontClassification.None;
             string vendor = string.Empty;
+            string panose = string.Empty;
+            int fsType = 0;
+            string embedRights = string.Empty;
+            int typoAscender = 0, typoDescender = 0, typoLineGap = 0;
+            int winAscent = 0, winDescent = 0;
+            int xHeight = 0, capHeight = 0;
 
             if (os2TableOffset >= 0 && os2TableOffset + 10 <= data.Length)
             {
-                weight = ReadUInt16BE(data, os2TableOffset + 4); // usWeightClass
+                weight = ReadUInt16BE(data, os2TableOffset + 4);
                 if (weight < 100) weight = 100;
-                if (weight > 900) weight = 900;
+                if (weight > 1000) weight = 1000;
+
+                if (os2TableOffset + 8 <= data.Length)
+                {
+                    width = ReadUInt16BE(data, os2TableOffset + 6);
+                    if (width < 1) width = 1;
+                    if (width > 9) width = 9;
+
+                    fsType = ReadUInt16BE(data, os2TableOffset + 8);
+                    embedRights = DecodeFsType(fsType);
+                }
 
                 if (os2TableOffset + 62 <= data.Length)
                 {
@@ -211,18 +251,22 @@ public static class FontParser
                     isOblique = (fsSelection & 0x200) != 0;
                 }
 
-                // Panose classification (offset 32-41)
-                if (os2TableOffset + 36 <= data.Length)
+                // Panose classification (offset 32-41 = 10 bytes)
+                if (os2TableOffset + 42 <= data.Length)
                 {
                     var panoseFamily = data[os2TableOffset + 32];
                     classification = panoseFamily switch
                     {
-                        2 => FontClassification.Serif,     // Latin Text
-                        3 => FontClassification.Script,    // Latin Hand Written
-                        4 => FontClassification.Display,   // Latin Decoratives
-                        5 => FontClassification.Symbol,    // Latin Symbol
+                        2 => FontClassification.Serif,
+                        3 => FontClassification.Script,
+                        4 => FontClassification.Display,
+                        5 => FontClassification.Symbol,
                         _ => FontClassification.None
                     };
+                    var panoseBytes = new int[10];
+                    for (int j = 0; j < 10; j++)
+                        panoseBytes[j] = data[os2TableOffset + 32 + j];
+                    panose = string.Join('-', panoseBytes);
                 }
 
                 // achVendID (offset 58-61)
@@ -230,24 +274,83 @@ public static class FontParser
                 {
                     vendor = ReadTag(data, os2TableOffset + 58);
                 }
+
+                // Vertical metrics (offsets 68/70/72 = sTypoAscender/Descender/LineGap).
+                if (os2TableOffset + 78 <= data.Length)
+                {
+                    typoAscender = ReadInt16BE(data, os2TableOffset + 68);
+                    typoDescender = ReadInt16BE(data, os2TableOffset + 70);
+                    typoLineGap = ReadInt16BE(data, os2TableOffset + 72);
+                    winAscent = ReadUInt16BE(data, os2TableOffset + 74);
+                    winDescent = ReadUInt16BE(data, os2TableOffset + 76);
+                }
+
+                // sxHeight + sCapHeight live at offsets 86/88 in OS/2 v2+
+                // (version is at offset 0). For v0/v1 the table stops earlier;
+                // guarding on table length keeps us safe.
+                if (os2TableOffset + 90 <= data.Length)
+                {
+                    xHeight = ReadInt16BE(data, os2TableOffset + 86);
+                    capHeight = ReadInt16BE(data, os2TableOffset + 88);
+                }
             }
 
-            // Parse head table for unitsPerEm
+            // ── head ──────────────────────────────────────────────
             int unitsPerEm = 0;
-            if (headTableOffset >= 0 && headTableOffset + 20 <= data.Length)
+            int xMin = 0, yMin = 0, xMax = 0, yMax = 0;
+            string created = string.Empty, modified = string.Empty;
+            string macStyle = string.Empty;
+            string fontRevision = string.Empty;
+            if (headTableOffset >= 0 && headTableOffset + 54 <= data.Length)
             {
+                fontRevision = ReadFixed1616(data, headTableOffset + 4).ToString("F3");
+                created = ReadLongDateTime(data, headTableOffset + 20);
+                modified = ReadLongDateTime(data, headTableOffset + 28);
+                xMin = ReadInt16BE(data, headTableOffset + 36);
+                yMin = ReadInt16BE(data, headTableOffset + 38);
+                xMax = ReadInt16BE(data, headTableOffset + 40);
+                yMax = ReadInt16BE(data, headTableOffset + 42);
+                macStyle = DecodeMacStyle(ReadUInt16BE(data, headTableOffset + 44));
+                unitsPerEm = ReadUInt16BE(data, headTableOffset + 18);
+            }
+            else if (headTableOffset >= 0 && headTableOffset + 20 <= data.Length)
+            {
+                // Truncated head — at least pick up unitsPerEm so size math works.
                 unitsPerEm = ReadUInt16BE(data, headTableOffset + 18);
             }
 
-            // Parse maxp table for glyph count
+            // ── hhea ──────────────────────────────────────────────
+            int hheaAscender = 0, hheaDescender = 0, hheaLineGap = 0;
+            if (hheaTableOffset >= 0 && hheaTableOffset + 8 <= data.Length)
+            {
+                hheaAscender = ReadInt16BE(data, hheaTableOffset + 4);
+                hheaDescender = ReadInt16BE(data, hheaTableOffset + 6);
+                hheaLineGap = ReadInt16BE(data, hheaTableOffset + 8);
+            }
+
+            // ── post ──────────────────────────────────────────────
+            string italicAngle = string.Empty;
+            int underlinePosition = 0, underlineThickness = 0;
+            bool isFixedPitch = false;
+            if (postTableOffset >= 0 && postTableOffset + 32 <= data.Length)
+            {
+                italicAngle = ReadFixed1616(data, postTableOffset + 4).ToString("F2");
+                underlinePosition = ReadInt16BE(data, postTableOffset + 8);
+                underlineThickness = ReadInt16BE(data, postTableOffset + 10);
+                isFixedPitch = ReadUInt32BE(data, postTableOffset + 12) != 0;
+            }
+
+            // ── maxp ──────────────────────────────────────────────
             int glyphCount = 0;
             if (maxpTableOffset >= 0 && maxpTableOffset + 6 <= data.Length)
             {
                 glyphCount = ReadUInt16BE(data, maxpTableOffset + 4);
             }
 
-            // Check for variable font (fvar table exists)
+            // ── fvar (variable fonts) ─────────────────────────────
             bool isVariable = fvarTableOffset >= 0;
+            List<VariationAxis> axes = new();
+            Dictionary<int, string> tempNamesForAxes = new();
 
             // Refine classification using subfamily name
             var subfamilyLower = names.GetValueOrDefault(NameId_FontSubfamily, "").ToLowerInvariant();
@@ -277,6 +380,21 @@ public static class FontParser
                 ? ParseCmapTable(data, cmapTableOffset, cmapTableLength)
                 : new HashSet<int>();
 
+            // fvar parsing happens after the name table is available because
+            // each axis carries a nameID we resolve into a human-readable
+            // axis name.
+            if (fvarTableOffset >= 0 && fvarTableLength > 0)
+            {
+                axes = ParseFvarTable(data, fvarTableOffset, fvarTableLength, names);
+            }
+
+            var gsubFeatures = gsubTableOffset >= 0
+                ? ParseLayoutFeatureTags(data, gsubTableOffset)
+                : Array.Empty<string>();
+            var gposFeatures = gposTableOffset >= 0
+                ? ParseLayoutFeatureTags(data, gposTableOffset)
+                : Array.Empty<string>();
+
             return new FontMetadata
             {
                 FamilyName = basicFamily,
@@ -286,20 +404,51 @@ public static class FontParser
                 FullName = names.GetValueOrDefault(NameId_FullFontName, string.Empty),
                 PostScriptName = names.GetValueOrDefault(NameId_PostScriptName, string.Empty),
                 Designer = names.GetValueOrDefault(NameId_Designer, string.Empty),
+                DesignerUrl = names.GetValueOrDefault(NameId_DesignerUrl, string.Empty),
+                Manufacturer = names.GetValueOrDefault(NameId_Manufacturer, string.Empty),
+                ManufacturerUrl = names.GetValueOrDefault(NameId_ManufacturerUrl, string.Empty),
                 Description = names.GetValueOrDefault(NameId_Description, string.Empty),
+                SampleText = names.GetValueOrDefault(NameId_SampleText, string.Empty),
                 License = names.GetValueOrDefault(NameId_LicenseDescription, string.Empty),
                 LicenseUrl = names.GetValueOrDefault(NameId_LicenseUrl, string.Empty),
                 Vendor = vendor.Trim('\0', ' '),
                 Version = names.GetValueOrDefault(NameId_Version, string.Empty),
+                FontRevision = fontRevision,
+                UniqueId = names.GetValueOrDefault(NameId_UniqueId, string.Empty),
                 Copyright = names.GetValueOrDefault(NameId_Copyright, string.Empty),
                 Trademark = names.GetValueOrDefault(NameId_Trademark, string.Empty),
                 GlyphCount = glyphCount,
                 IsVariable = isVariable,
                 UnitsPerEm = unitsPerEm,
+                XMin = xMin, YMin = yMin, XMax = xMax, YMax = yMax,
+                Created = created,
+                Modified = modified,
+                MacStyle = macStyle,
                 Weight = weight,
+                Width = width,
                 IsItalic = isItalic,
                 IsOblique = isOblique,
+                IsFixedPitch = isFixedPitch,
                 Classification = classification,
+                Panose = panose,
+                EmbeddingRights = embedRights,
+                EmbeddingFlags = fsType,
+                TypoAscender = typoAscender,
+                TypoDescender = typoDescender,
+                TypoLineGap = typoLineGap,
+                WinAscent = winAscent,
+                WinDescent = winDescent,
+                XHeight = xHeight,
+                CapHeight = capHeight,
+                HheaAscender = hheaAscender,
+                HheaDescender = hheaDescender,
+                HheaLineGap = hheaLineGap,
+                ItalicAngle = italicAngle,
+                UnderlinePosition = underlinePosition,
+                UnderlineThickness = underlineThickness,
+                Axes = axes,
+                GsubFeatures = gsubFeatures,
+                GposFeatures = gposFeatures,
                 SupportedCodePoints = supportedCodePoints
             };
         }
@@ -307,6 +456,81 @@ public static class FontParser
         {
             return new FontMetadata();
         }
+    }
+
+    // ── fvar (variation axes) ─────────────────────────────────────────
+
+    /// <summary>
+    /// Parses an fvar table and returns its axis records.
+    ///
+    /// fvar layout (https://learn.microsoft.com/en-us/typography/opentype/spec/fvar):
+    ///   uint16 majorVersion, uint16 minorVersion,
+    ///   uint16 offsetToAxesArray, uint16 (reserved),
+    ///   uint16 axisCount, uint16 axisSize (always 20 in v1),
+    ///   uint16 instanceCount, uint16 instanceSize.
+    /// Each VariationAxisRecord is 20 bytes:
+    ///   tag(4) + minValue(Fixed) + defaultValue(Fixed) + maxValue(Fixed)
+    ///   + flags(uint16) + axisNameID(uint16).
+    /// </summary>
+    private static List<VariationAxis> ParseFvarTable(
+        byte[] data, int tableOffset, int tableLength, Dictionary<int, string> names)
+    {
+        var result = new List<VariationAxis>();
+        if (tableOffset + 16 > data.Length) return result;
+
+        int offsetToAxes = ReadUInt16BE(data, tableOffset + 4);
+        int axisCount = ReadUInt16BE(data, tableOffset + 8);
+        int axisSize = ReadUInt16BE(data, tableOffset + 10);
+        if (axisSize < 20) return result; // malformed; bail rather than guess
+
+        int p = tableOffset + offsetToAxes;
+        for (int i = 0; i < axisCount; i++)
+        {
+            if (p + 20 > data.Length || p - tableOffset > tableLength) break;
+
+            string tag = ReadTag(data, p);
+            double min = ReadFixed1616(data, p + 4);
+            double def = ReadFixed1616(data, p + 8);
+            double max = ReadFixed1616(data, p + 12);
+            int nameId = ReadUInt16BE(data, p + 18);
+            string name = names.GetValueOrDefault(nameId, tag);
+
+            result.Add(new VariationAxis(tag, name, min, def, max));
+            p += axisSize;
+        }
+        return result;
+    }
+
+    // ── GSUB / GPOS (OpenType Layout feature tags) ────────────────────
+
+    /// <summary>
+    /// Returns the distinct 4-character feature tags declared by a GSUB or
+    /// GPOS table. Walks the FeatureList only — we don't resolve scripts or
+    /// langSys here; the goal is "what features does this font advertise".
+    /// </summary>
+    private static IReadOnlyList<string> ParseLayoutFeatureTags(byte[] data, int tableOffset)
+    {
+        // GSUB / GPOS header is identical: uint16 major, uint16 minor, then
+        // three offsets (scriptList, featureList, lookupList) and in v1.1 a
+        // featureVariationsOffset (uint32).
+        if (tableOffset + 10 > data.Length) return Array.Empty<string>();
+
+        int featureListOffset = tableOffset + ReadUInt16BE(data, tableOffset + 6);
+        if (featureListOffset + 2 > data.Length) return Array.Empty<string>();
+
+        int featureCount = ReadUInt16BE(data, featureListOffset);
+        var tags = new HashSet<string>(featureCount);
+        for (int i = 0; i < featureCount; i++)
+        {
+            int recordOffset = featureListOffset + 2 + i * 6;
+            if (recordOffset + 6 > data.Length) break;
+            tags.Add(ReadTag(data, recordOffset));
+        }
+
+        var arr = new string[tags.Count];
+        tags.CopyTo(arr);
+        Array.Sort(arr, StringComparer.Ordinal);
+        return arr;
     }
 
     /// <summary>
@@ -526,10 +750,88 @@ public static class FontParser
         return (ushort)((data[offset] << 8) | data[offset + 1]);
     }
 
+    private static short ReadInt16BE(byte[] data, int offset)
+        => unchecked((short)ReadUInt16BE(data, offset));
+
     private static uint ReadUInt32BE(byte[] data, int offset)
     {
         return (uint)((data[offset] << 24) | (data[offset + 1] << 16) |
                        (data[offset + 2] << 8) | data[offset + 3]);
+    }
+
+    /// <summary>OpenType <c>Fixed</c> (16.16) → double.</summary>
+    private static double ReadFixed1616(byte[] data, int offset)
+    {
+        // High 16 bits: signed integer part. Low 16 bits: unsigned fraction.
+        short whole = ReadInt16BE(data, offset);
+        ushort frac = ReadUInt16BE(data, offset + 2);
+        return whole + frac / 65536.0;
+    }
+
+    /// <summary>
+    /// OpenType <c>LONGDATETIME</c> (int64, seconds since 1904-01-01 UTC) →
+    /// ISO-8601 string. Returns empty string for out-of-range values so the
+    /// UI doesn't have to special-case them.
+    /// </summary>
+    private static string ReadLongDateTime(byte[] data, int offset)
+    {
+        long secondsSince1904 =
+            ((long)data[offset] << 56) |
+            ((long)data[offset + 1] << 48) |
+            ((long)data[offset + 2] << 40) |
+            ((long)data[offset + 3] << 32) |
+            ((long)data[offset + 4] << 24) |
+            ((long)data[offset + 5] << 16) |
+            ((long)data[offset + 6] << 8) |
+            ((long)data[offset + 7]);
+
+        try
+        {
+            var epoch = new DateTime(1904, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            var dt = epoch.AddSeconds(secondsSince1904);
+            return dt.ToString("u"); // "yyyy-MM-dd HH:mm:ssZ"
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    /// <summary>Decodes head.macStyle bits into a comma-separated label list.</summary>
+    private static string DecodeMacStyle(ushort flags)
+    {
+        var parts = new List<string>(4);
+        if ((flags & 0x0001) != 0) parts.Add("Bold");
+        if ((flags & 0x0002) != 0) parts.Add("Italic");
+        if ((flags & 0x0004) != 0) parts.Add("Underline");
+        if ((flags & 0x0008) != 0) parts.Add("Outline");
+        if ((flags & 0x0010) != 0) parts.Add("Shadow");
+        if ((flags & 0x0020) != 0) parts.Add("Condensed");
+        if ((flags & 0x0040) != 0) parts.Add("Extended");
+        return parts.Count == 0 ? "Regular" : string.Join(", ", parts);
+    }
+
+    /// <summary>
+    /// Decodes OS/2.fsType embedding-permission bits into a short human
+    /// label following the OpenType spec's interpretation of the lowest
+    /// permission bits as mutually exclusive levels.
+    /// </summary>
+    private static string DecodeFsType(int fsType)
+    {
+        // Bits 1, 2, 3, 8 are exclusive: pick the most restrictive.
+        // Bit 9 (no subsetting) and bit 10 (bitmap-only) are independent
+        // flags we report alongside.
+        string level;
+        if ((fsType & 0x0002) != 0) level = "Restricted";
+        else if ((fsType & 0x0004) != 0) level = "Preview & Print";
+        else if ((fsType & 0x0008) != 0) level = "Editable";
+        else if ((fsType & 0x0200) != 0) level = "Installable (no subset)";
+        else level = "Installable";
+
+        var extras = new List<string>(2);
+        if ((fsType & 0x0100) != 0) extras.Add("no subsetting");
+        if ((fsType & 0x0200) != 0 && level != "Installable (no subset)") extras.Add("bitmap-only embedding");
+        return extras.Count == 0 ? level : $"{level} ({string.Join(", ", extras)})";
     }
 
     private static string ReadTag(byte[] data, int offset)

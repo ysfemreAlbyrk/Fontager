@@ -11,6 +11,7 @@ using Fontager.Core.Models;
 using Fontager.Core.Services;
 using Fontager.Viewer.Services;
 using Fontager.Viewer.ViewModels;
+using Fontager.Viewer.Views;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI;
 using Microsoft.UI.Composition.SystemBackdrops;
@@ -39,91 +40,14 @@ public sealed partial class MainWindow : Window
     private readonly SettingsService _settings;
     private readonly IFontService _fontService;
     private FontFamily? _loadedFontFamily;
-
-    // ── Win32 Interop ───────────────────────────────────────────
-
-    [DllImport("gdi32.dll", CharSet = CharSet.Unicode)]
-    private static extern int AddFontResourceEx(string lpszFilename, uint fl, IntPtr pdv);
-
-    [DllImport("gdi32.dll", CharSet = CharSet.Unicode)]
-    private static extern bool RemoveFontResourceEx(string lpszFilename, uint fl, IntPtr pdv);
-
-    [DllImport("gdi32.dll", CharSet = CharSet.Unicode)]
-    private static extern int AddFontResource(string lpFileName);
-
-    /// <summary>Undoes <see cref="AddFontResource"/> (session-wide font table). May need multiple calls (ref-counted).</summary>
-    [DllImport("gdi32.dll", CharSet = CharSet.Unicode)]
-    private static extern int RemoveFontResource(string lpFileName);
-
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    private static extern IntPtr SendMessageTimeout(
-        IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam,
-        uint fuFlags, uint uTimeout, out IntPtr lpdwResult);
-
-    private const uint WM_FONTCHANGE = 0x001D;
-    private const uint SMTO_ABORTIFHUNG = 0x0002;
-    private static readonly IntPtr HWND_BROADCAST = new(0xFFFF);
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr CallWindowProc(IntPtr lpPrevWndFunc, IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
-
-    [DllImport("user32.dll")]
-    private static extern int GetDpiForWindow(IntPtr hwnd);
-
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    private static extern IntPtr SendMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
-
-    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern IntPtr LoadImage(IntPtr hInst, string name, uint type, int cx, int cy, uint fuLoad);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool ChangeWindowMessageFilterEx(IntPtr hWnd, uint message, uint action, IntPtr pChangeFilterStruct);
-
-    private const uint MSGFLT_ALLOW = 1;
-    private const uint WM_DROPFILES = 0x0233;
-    private const uint WM_COPYDATA = 0x004A;
-    private const uint WM_COPYGLOBALDATA = 0x0049;
-
-    private const uint IMAGE_ICON = 1;
-    private const uint LR_LOADFROMFILE = 0x00000010;
-    private const uint LR_DEFAULTSIZE = 0x00000040;
-    private const uint LR_SHARED = 0x00008000;
-    private const uint WM_SETICON = 0x0080;
-    private const int ICON_SMALL = 0;
-    private const int ICON_BIG = 1;
-
-    private delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
-    private WndProcDelegate? _wndProcDelegate;
-    private IntPtr _oldWndProc;
-
-    private const int GWL_WNDPROC = -4;
-    private const uint WM_GETMINMAXINFO = 0x0024;
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct POINT { public int x, y; }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct MINMAXINFO
-    {
-        public POINT ptReserved;
-        public POINT ptMaxSize;
-        public POINT ptMaxPosition;
-        public POINT ptMinTrackSize;
-        public POINT ptMaxTrackSize;
-    }
-
-    private const uint FR_PRIVATE = 0x10;
     private const string FontCacheFolderName = "FontCache";
 
     private string? _activeFontPath;
     private string? _currentFilePath;
     private int _currentFontIndex;
     private int _currentFontCount = 1;
-    private string? _cachedFontFileName;
+    /// <summary>Full path of the cached preview font file (deleted before writing the next cache entry).</summary>
+    private string? _cachedFontDiskPath;
     private bool _quickViewAutoShown; // true when Quick View was auto-shown due to small window
 
     // ── Glyph filtering state ──────────────────────────────────
@@ -167,11 +91,64 @@ public sealed partial class MainWindow : Window
 
         SetAppVersion();
 
+        // SettingsPage writes through to SettingsService control-by-control;
+        // we listen here so the user sees theme/backdrop/preview changes
+        // take effect the instant they tap a control (no Save button).
+        _settings.Changed += OnSettingsChanged;
+
         // Auto-show/hide Quick View based on window size
         this.SizeChanged += OnWindowSizeChanged;
 
         if (!string.IsNullOrEmpty(App.FontFilePath))
             _ = LoadFontFromPathAsync(App.FontFilePath, 0);
+    }
+
+    private bool _suppressSettingsChangedReaction;
+
+    /// <summary>
+    /// Re-applies window-level settings (theme, backdrop, preview visibility,
+    /// glyph/waterfall sections) after the Settings page mutates them.
+    /// Lightweight on purpose — heavy rebuilds (font display, glyph grid) are
+    /// triggered only when the user navigates back from Settings.
+    /// </summary>
+    private void OnSettingsChanged(object? sender, EventArgs e)
+    {
+        if (_suppressSettingsChangedReaction) return;
+
+        try
+        {
+            // Theme + backdrop are window-level; cheap to re-apply on every
+            // change.
+            if (Content is FrameworkElement fe)
+                fe.RequestedTheme = _settings.Theme;
+            ApplyBackdrop();
+
+            // Install button label tracks the saved target.
+            UpdateInstallButtonPresentation(GetSavedInstallTarget());
+            ApplyInstallElevatedUi();
+
+            // If a font is loaded, mirror the section toggles immediately.
+            if (_viewModel.HasFont)
+            {
+                PreviewSection.Visibility = _settings.ShowPreviewControls
+                    ? Visibility.Visible : Visibility.Collapsed;
+                QuickViewSection.Visibility = _settings.ShowQuickView
+                    ? Visibility.Visible : Visibility.Collapsed;
+                WaterfallSection.Visibility = _settings.ShowWaterfall
+                    ? Visibility.Visible : Visibility.Collapsed;
+            }
+            else
+            {
+                // No font loaded → make sure the empty-state preview reflects
+                // the new default text and size.
+                PreviewTextBox.Text = _settings.DefaultPreviewText;
+                SetPreviewFontSize(_settings.DefaultFontSize);
+            }
+        }
+        catch
+        {
+            // Best-effort. Settings page must never crash MainWindow.
+        }
     }
 
     private void OnWindowSizeChanged(object sender, WindowSizeChangedEventArgs args)
@@ -393,354 +370,6 @@ public sealed partial class MainWindow : Window
             Win32FileDialog.PickSingleFile(hwnd, "Open font file", "Font files", extensions));
     }
 
-    // ── Install ────────────────────────────────────────────────
-
-    private async void InstallSplitButton_Click(SplitButton sender, SplitButtonClickEventArgs args)
-    {
-        await InstallFontAsync(GetSavedInstallTarget());
-    }
-
-    private async void InstallCurrentUserMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        SetSavedInstallTarget(InstallTarget.CurrentUser);
-        await InstallFontAsync(InstallTarget.CurrentUser);
-    }
-
-    private async void InstallAllUsersMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        SetSavedInstallTarget(InstallTarget.AllUsers);
-        await InstallFontAsync(InstallTarget.AllUsers);
-    }
-
-    private InstallTarget GetSavedInstallTarget()
-    {
-        if (!_isProcessElevated)
-            return InstallTarget.CurrentUser;
-
-        return _settings.InstallMode == (int)InstallTarget.AllUsers
-            ? InstallTarget.AllUsers
-            : InstallTarget.CurrentUser;
-    }
-
-    private void SetSavedInstallTarget(InstallTarget target)
-    {
-        if (target == InstallTarget.AllUsers && !_isProcessElevated)
-            target = InstallTarget.CurrentUser;
-
-        _settings.InstallMode = (int)target;
-        UpdateInstallButtonPresentation(GetSavedInstallTarget());
-    }
-
-    private void UpdateInstallButtonPresentation(InstallTarget target)
-    {
-        bool isAllUsers = target == InstallTarget.AllUsers;
-        InstallButtonText.Text = isAllUsers ? "Install (All users)" : "Install (Current user)";
-
-        string tip;
-        if (_isProcessElevated)
-        {
-            tip = isAllUsers
-                ? "Install font for all users (Windows\\Fonts, machine-wide)"
-                : "Install font for the current user only";
-        }
-        else
-        {
-            tip = isAllUsers
-                ? "Install font for all users (requires administrator)"
-                : "Install font for the current user. Start Fontager with Run as administrator to unlock installing for all users from the menu.";
-        }
-
-        ToolTipService.SetToolTip(InstallSplitButton, tip);
-    }
-
-    /// <summary>
-    /// Greys out flyout actions that require elevation when this process is not elevated.
-    /// </summary>
-    private void ApplyInstallElevatedUi()
-    {
-        InstallAllUsersMenuFlyoutItem.IsEnabled = _isProcessElevated;
-    }
-
-    private async Task InstallFontAsync(InstallTarget target)
-    {
-        if (_currentFilePath == null) return;
-
-        bool installSystem = target == InstallTarget.AllUsers;
-        const string FontsRegPath = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts";
-
-        try
-        {
-            var fontDisplayName = _viewModel.CurrentFont?.DisplayName
-                ?? Path.GetFileNameWithoutExtension(_currentFilePath);
-            var fileName = Path.GetFileName(_currentFilePath);
-            var registryValueName = BuildFontRegistryValueName(fontDisplayName, _currentFilePath);
-
-            if (installSystem && !_isProcessElevated)
-            {
-                await ShowInfoDialogAsync(
-                    "Administrator required",
-                    "Installing fonts for all users needs Fontager to be started with Run as administrator (right‑click the app or shortcut → Run as administrator).");
-                return;
-            }
-
-            if (installSystem)
-            {
-                var systemFontsDir = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Fonts");
-                var destPath = Path.Combine(systemFontsDir, fileName);
-
-                if (File.Exists(destPath))
-                {
-                    var confirm = await ShowConfirmDialogAsync("Font Already Installed",
-                        "This font is already installed system-wide. Overwrite?");
-                    if (!confirm) return;
-                }
-
-                await InstallFontFileReplacingAsync(_currentFilePath, destPath);
-
-                using (var regKey = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(FontsRegPath, true))
-                {
-                    regKey?.SetValue(registryValueName, fileName);
-                }
-
-                NotifyFontInstalled(destPath);
-
-                await ShowInfoDialogAsync("Font Installed", $"'{fontDisplayName}' has been installed for all users.");
-            }
-            else
-            {
-                var userFontsDir = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "Microsoft", "Windows", "Fonts");
-                Directory.CreateDirectory(userFontsDir);
-
-                var destPath = Path.Combine(userFontsDir, fileName);
-
-                if (File.Exists(destPath))
-                {
-                    var confirm = await ShowConfirmDialogAsync("Font Already Installed",
-                        "This font is already installed for the current user. Overwrite?");
-                    if (!confirm) return;
-                }
-
-                await InstallFontFileReplacingAsync(_currentFilePath, destPath);
-
-                // HKCU per-user install: full absolute path (HKLM stores filename only).
-                using (var regKey = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(FontsRegPath, writable: true))
-                {
-                    regKey?.SetValue(registryValueName, destPath);
-                }
-
-                // Verify the write reached the real hive (MSIX identity can virtualize
-                // HKCU writes into the package container, in which case Settings → Fonts
-                // never picks them up).
-                bool persisted;
-                using (var verifyKey = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(FontsRegPath, false))
-                {
-                    persisted = verifyKey?.GetValue(registryValueName) is string s
-                        && string.Equals(s, destPath, StringComparison.OrdinalIgnoreCase);
-                }
-
-                if (!persisted)
-                {
-                    await ShowInfoDialogAsync("Installation Incomplete",
-                        $"The font file was copied to:\n{destPath}\n\nbut the registry entry under HKCU could not be verified. This usually means the app is running with a virtualized registry (packaged identity). Run Fontager unpackaged or use 'Install for all users' instead.");
-                    return;
-                }
-
-                NotifyFontInstalled(destPath);
-
-                await ShowInfoDialogAsync("Font Installed", $"'{fontDisplayName}' has been installed for the current user and is now visible in Settings → Fonts.");
-            }
-        }
-        catch (UnauthorizedAccessException)
-        {
-            await ShowInfoDialogAsync("Installation Failed",
-                "Access denied. System-wide installation requires running the application as administrator.");
-        }
-        catch (Exception ex)
-        {
-            await ShowInfoDialogAsync("Installation Failed", $"Could not install font: {ex.Message}");
-        }
-    }
-
-    /// <summary>
-    /// Replaces <paramref name="destPath"/> with the bytes from <paramref name="sourcePath"/>.
-    /// Releases session GDI loads and broadcasts <c>WM_FONTCHANGE</c> so Windows Font Cache
-    /// and other processes can close handles to an existing per-user/system font file before
-    /// we delete or overwrite it (avoids "file is being used by another process" on reinstall).
-    /// </summary>
-    private async Task InstallFontFileReplacingAsync(string sourcePath, string destPath)
-    {
-        var fullSrc = Path.GetFullPath(sourcePath);
-        var fullDst = Path.GetFullPath(destPath);
-
-        // Previewing from the installed path: private GDI mapping locks the destination file.
-        if (string.Equals(fullSrc, fullDst, StringComparison.OrdinalIgnoreCase))
-        {
-            DeactivateCurrentFont();
-            TryUnloadSessionLoadsOfFontFile(fullDst);
-            BroadcastFontChange();
-            await Task.Delay(200);
-            return;
-        }
-
-        if (_activeFontPath is not null
-            && string.Equals(Path.GetFullPath(_activeFontPath), fullDst, StringComparison.OrdinalIgnoreCase))
-        {
-            DeactivateCurrentFont();
-        }
-
-        if (File.Exists(fullDst))
-            TryUnloadSessionLoadsOfFontFile(fullDst);
-
-        BroadcastFontChange();
-        await Task.Delay(200);
-
-        for (var attempt = 0; attempt < 15; attempt++)
-        {
-            try
-            {
-                if (File.Exists(fullDst))
-                    File.Delete(fullDst);
-                break;
-            }
-            catch (IOException)
-            {
-                await Task.Delay(120);
-            }
-            catch (UnauthorizedAccessException)
-            {
-                await Task.Delay(120);
-            }
-        }
-
-        try
-        {
-            File.Copy(fullSrc, fullDst, overwrite: false);
-            return;
-        }
-        catch (IOException)
-        {
-            // FontCache may still hold the destination briefly — try atomic-ish replace via staging.
-        }
-
-        await CopyFontFileViaStagingAsync(fullSrc, fullDst);
-    }
-
-    private static void TryUnloadSessionLoadsOfFontFile(string fontFilePath)
-    {
-        if (string.IsNullOrWhiteSpace(fontFilePath))
-            return;
-
-        try
-        {
-            RemoveFontResourceEx(fontFilePath, FR_PRIVATE, IntPtr.Zero);
-        }
-        catch
-        {
-            // ignore
-        }
-
-        try
-        {
-            for (var n = 0; n < 32; n++)
-            {
-                if (RemoveFontResource(fontFilePath) == 0)
-                    break;
-            }
-        }
-        catch
-        {
-            // ignore
-        }
-    }
-
-    private static void BroadcastFontChange()
-    {
-        SendMessageTimeout(
-            HWND_BROADCAST, WM_FONTCHANGE,
-            IntPtr.Zero, IntPtr.Zero,
-            SMTO_ABORTIFHUNG, 1000, out _);
-    }
-
-    private static async Task CopyFontFileViaStagingAsync(string fullSrc, string fullDst)
-    {
-        var dir = Path.GetDirectoryName(fullDst)
-            ?? throw new InvalidOperationException("Invalid font destination path.");
-        var ext = Path.GetExtension(fullDst);
-        var staging = Path.Combine(dir, $".fontager-{Guid.NewGuid():N}.tmp{ext}");
-        try
-        {
-            File.Copy(fullSrc, staging, overwrite: true);
-
-            for (var attempt = 0; attempt < 20; attempt++)
-            {
-                try
-                {
-                    if (File.Exists(fullDst))
-                        File.Delete(fullDst);
-                    break;
-                }
-                catch (IOException)
-                {
-                    await Task.Delay(120);
-                }
-                catch (UnauthorizedAccessException)
-                {
-                    await Task.Delay(120);
-                }
-            }
-
-            File.Move(staging, fullDst, overwrite: true);
-        }
-        finally
-        {
-            if (File.Exists(staging))
-            {
-                try { File.Delete(staging); } catch { /* ignore */ }
-            }
-        }
-    }
-
-    /// <summary>
-    /// Makes a freshly-installed font visible to every running application:
-    /// loads it into the process group via <c>AddFontResource</c> so the font
-    /// is usable in this session, and broadcasts <c>WM_FONTCHANGE</c> so the
-    /// shell, Settings → Fonts, and the font cache service refresh without a
-    /// logoff.
-    /// </summary>
-    private static void NotifyFontInstalled(string destPath)
-    {
-        try
-        {
-            AddFontResource(destPath);
-        }
-        catch
-        {
-            // Best-effort; the registry entry alone is enough for next-session use.
-        }
-
-        BroadcastFontChange();
-    }
-
-    /// <summary>
-    /// Builds the registry value name Windows expects. The convention is
-    /// "{Family Name} (TrueType)" or "{Family Name} (OpenType)" depending on
-    /// the file format. Without the suffix, Settings → Fonts may show the
-    /// entry but the Font Cache service can refuse to register it.
-    /// </summary>
-    private static string BuildFontRegistryValueName(string displayName, string sourcePath)
-    {
-        var ext = Path.GetExtension(sourcePath).ToLowerInvariant();
-        string suffix = ext switch
-        {
-            ".ttf" or ".ttc" => " (TrueType)",
-            ".otf" => " (OpenType)",
-            _ => string.Empty
-        };
-        return string.IsNullOrEmpty(suffix) ? displayName : displayName + suffix;
-    }
 
     // ── Drag & Drop ────────────────────────────────────────────
 
@@ -801,8 +430,6 @@ public sealed partial class MainWindow : Window
 
             DeactivateCurrentFont();
 
-            AddFontResourceEx(filePath, FR_PRIVATE, IntPtr.Zero);
-            _activeFontPath = filePath;
             _currentFilePath = filePath;
             _currentFontIndex = _viewModel.CurrentFont.FontIndex;
             _currentFontCount = _viewModel.CurrentFont.FontCount;
@@ -811,22 +438,26 @@ public sealed partial class MainWindow : Window
             // This is critical for fonts like Material Icons where name ID 1 differs
             // from the canonical family name that DirectWrite expects.
             var meta = _viewModel.CurrentFont.Metadata;
-            var familyName = !string.IsNullOrWhiteSpace(meta.TypographicFamilyName)
-                ? meta.TypographicFamilyName
-                : !string.IsNullOrWhiteSpace(meta.FamilyName)
-                    ? meta.FamilyName
-                    : Path.GetFileNameWithoutExtension(filePath);
+            var familyName = PickDirectWriteFamilyName(meta, filePath);
 
-            // XAML needs a stable URI to the font bytes. We used to copy into
-            // ApplicationData.LocalFolder and reference ms-appdata:// — that
-            // path is reliable for MSIX, but in an unpackaged WinUI 3 build the
-            // identity bridge for ms-appdata is flaky: CacheFontForXamlAsync
-            // can throw, or DirectWrite resolves the URI to nothing so every
-            // TextBlock falls back to the system UI font. Copying to a real
-            // path under %LocalAppData%\Fontager\FontCache and using file:///
-            // works the same packaged or unpackaged.
-            var fileUri = await CacheFontForXamlAsync(filePath);
-            _loadedFontFamily = new FontFamily($"{fileUri}#{familyName}");
+            // XAML / DirectWrite resolve private fonts most reliably from
+            // ms-appdata:///local/FontCache/… after copying into
+            // ApplicationData.Current.LocalFolder. When that API set is
+            // unavailable, CacheFontForXamlAsync falls back to
+            // %LocalAppData%\Fontager\FontCache with a file:/// FontFamily.
+            //
+            // For .woff2 the cache path runs Woff2Decoder so the on-disk bytes
+            // are SFNT — required for AddFontResourceEx and for DirectWrite.
+            var cached = await CacheFontForXamlAsync(filePath);
+
+            // GDI session-private registration on the *cached* SFNT path:
+            // AddFontResourceEx cannot consume WOFF2, so we register the
+            // decoded copy. Required for any non-XAML preview surfaces
+            // (Win32 controls, third-party hooks) to see the family name.
+            AddFontResourceEx(cached.DiskPath, FR_PRIVATE, IntPtr.Zero);
+            _activeFontPath = cached.DiskPath;
+
+            _loadedFontFamily = CreateLoadedFontFamily(familyName, cached.DiskPath, cached.MsAppDataRelativePath);
 
             // Glyph grid: see BuildGlyphGrid — GridView item templates do not
             // inherit FontFamily from the parent; ContainerContentChanging sets
@@ -844,40 +475,115 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Copies the font into <c>%LocalAppData%\Fontager\FontCache</c> and returns
-    /// a <c>file:///</c> absolute URI string (no fragment) suitable for
-    /// <see cref="FontFamily"/> as <c>{uri}#{familyName}</c>.
+    /// DirectWrite picks a face using family name + weight + style. For a
+    /// single font <i>file</i>, those axes must match the one embedded master
+    /// or resolution falls back to Segoe UI. Prefer typographic/family names from
+    /// the name table; fall back to PostScript name (often required for some CFF
+    /// fonts) and finally the file stem.
     /// </summary>
-    private async Task<string> CacheFontForXamlAsync(string sourceFilePath)
+    private static string PickDirectWriteFamilyName(FontMetadata meta, string sourcePath)
     {
-        var cacheDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Fontager",
-            FontCacheFolderName);
-        Directory.CreateDirectory(cacheDir);
+        foreach (var candidate in new[]
+                 {
+                     meta.TypographicFamilyName,
+                     meta.FamilyName,
+                     meta.PostScriptName
+                 })
+        {
+            if (!string.IsNullOrWhiteSpace(candidate))
+                return candidate.Trim();
+        }
 
-        if (_cachedFontFileName is not null)
+        return Path.GetFileNameWithoutExtension(sourcePath);
+    }
+
+    /// <summary>
+    /// Builds a <see cref="FontFamily"/> WinUI / DirectWrite can resolve for a cached font.
+    /// Prefer <c>ms-appdata:///local/…</c> (see <see cref="CacheFontForXamlAsync"/>): unpackaged
+    /// WinUI often fails to bind private fonts from <c>file:///</c> URIs even though GDI can load
+    /// the same path. Fall back to <c>file:///</c> when <see cref="Windows.Storage.ApplicationData"/>
+    /// is unavailable.
+    /// </summary>
+    private static FontFamily CreateLoadedFontFamily(string familyName, string diskPath, string? msAppDataRelativePath)
+    {
+        var family = familyName.Trim();
+        if (!string.IsNullOrEmpty(msAppDataRelativePath))
+        {
+            var rel = msAppDataRelativePath.Replace('\\', '/');
+            return new FontFamily($"ms-appdata:///local/{rel}#{family}");
+        }
+
+        var uri = new Uri(Path.GetFullPath(diskPath), UriKind.Absolute);
+        return new FontFamily($"{uri.AbsoluteUri}#{family}");
+    }
+
+    /// <summary>
+    /// Stages the font under <see cref="Windows.Storage.ApplicationData.Current"/>/<c>FontCache</c>
+    /// when possible so XAML can use <c>ms-appdata:///local/FontCache/…</c>. Otherwise falls back to
+    /// <c>%LocalAppData%\Fontager\FontCache</c> with a <c>file:///</c> <see cref="FontFamily"/>.
+    /// For <c>.woff2</c>, decompresses to SFNT via <see cref="Woff2Decoder"/>.
+    /// </summary>
+    private async Task<(string DiskPath, string? MsAppDataRelativePath)> CacheFontForXamlAsync(string sourceFilePath)
+    {
+        string cacheDir;
+        string? msAppDataRelativePrefix;
+
+        try
+        {
+            var localFolder = ApplicationData.Current.LocalFolder;
+            var cacheFolder = await localFolder.CreateFolderAsync(FontCacheFolderName,
+                CreationCollisionOption.OpenIfExists);
+            cacheDir = cacheFolder.Path;
+            msAppDataRelativePrefix = FontCacheFolderName;
+        }
+        catch
+        {
+            cacheDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Fontager",
+                FontCacheFolderName);
+            Directory.CreateDirectory(cacheDir);
+            msAppDataRelativePrefix = null;
+        }
+
+        if (_cachedFontDiskPath is not null)
         {
             try
             {
-                var oldPath = Path.Combine(cacheDir, _cachedFontFileName);
-                if (File.Exists(oldPath))
-                    File.Delete(oldPath);
+                if (File.Exists(_cachedFontDiskPath))
+                    File.Delete(_cachedFontDiskPath);
             }
             catch { /* ignore */ }
         }
 
-        var ext = Path.GetExtension(sourceFilePath);
-        var uniqueName = $"{Guid.NewGuid():N}{ext}";
-        var destPath = Path.Combine(cacheDir, uniqueName);
+        var destPath = await Task.Run(() =>
+        {
+            var rawBytes = File.ReadAllBytes(sourceFilePath);
 
-        await Task.Run(() => File.Copy(sourceFilePath, destPath, overwrite: true));
+            if (Woff2Decoder.IsWoff2(rawBytes))
+            {
+                var sfntBytes = Woff2Decoder.DecodeToSfnt(rawBytes);
+                var newExt = Woff2Decoder.IsOpenTypeFlavor(sfntBytes) ? ".otf" : ".ttf";
+                var name = $"{Guid.NewGuid():N}{newExt}";
+                var path = Path.Combine(cacheDir, name);
+                File.WriteAllBytes(path, sfntBytes);
+                return path;
+            }
 
-        _cachedFontFileName = uniqueName;
+            var ext = Path.GetExtension(sourceFilePath);
+            var uniqueName = $"{Guid.NewGuid():N}{ext}";
+            var path2 = Path.Combine(cacheDir, uniqueName);
+            File.Copy(sourceFilePath, path2, overwrite: true);
+            return path2;
+        });
 
-        var full = Path.GetFullPath(destPath).Replace('\\', '/');
-        // Local disk path -> file:///C:/Users/.../font.otf
-        return $"file:///{full}";
+        _cachedFontDiskPath = destPath;
+
+        var msRelative = msAppDataRelativePrefix is not null
+            ? $"{msAppDataRelativePrefix}/{Path.GetFileName(destPath)}".Replace('\\', '/')
+            : null;
+
+        return (destPath, msRelative);
     }
 
     private void DeactivateCurrentFont()
@@ -947,7 +653,14 @@ public sealed partial class MainWindow : Window
     private void ApplyFontToElement(Control element, FontMetadata meta)
     {
         if (_loadedFontFamily != null)
+        {
             element.FontFamily = _loadedFontFamily;
+            // Single face in the cached file: requesting OS/2 weight/style often makes
+            // DirectWrite miss the face and substitute Segoe UI. Outlines already encode the style.
+            element.FontWeight = new Windows.UI.Text.FontWeight(400);
+            element.FontStyle = Windows.UI.Text.FontStyle.Normal;
+            return;
+        }
 
         element.FontWeight = new Windows.UI.Text.FontWeight((ushort)meta.Weight);
         element.FontStyle = meta.IsItalic ? Windows.UI.Text.FontStyle.Italic
@@ -958,7 +671,12 @@ public sealed partial class MainWindow : Window
     private void ApplyFontToTextBlock(TextBlock tb, FontMetadata meta)
     {
         if (_loadedFontFamily != null)
+        {
             tb.FontFamily = _loadedFontFamily;
+            tb.FontWeight = new Windows.UI.Text.FontWeight(400);
+            tb.FontStyle = Windows.UI.Text.FontStyle.Normal;
+            return;
+        }
 
         tb.FontWeight = new Windows.UI.Text.FontWeight((ushort)meta.Weight);
         tb.FontStyle = meta.IsItalic ? Windows.UI.Text.FontStyle.Italic
@@ -1072,387 +790,6 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    // ── Glyph Grid ─────────────────────────────────────────────
-
-    /// <summary>
-    /// Rebuilds everything related to the Glyphs tab when a new font loads:
-    /// the master glyph list, the Unicode-block sidebar, the functional
-    /// category chips, and resets the active filters.
-    /// </summary>
-    private void BuildGlyphGrid()
-    {
-        _viewModel.GenerateGlyphItemsPublic();
-
-        BuildBlockSidebar();
-        BuildCategoryChips();
-        ResetGlyphFilters();
-        ApplyGlyphFilters();
-
-        // GridView item roots live under GridViewItem, not as logical children of
-        // the GridView itself — FontFamily set on the GridView does NOT reliably
-        // inherit into DataTemplate TextBlocks (they keep the system UI font).
-        // Apply the loaded face per realized container only; virtualization means
-        // we only touch on-screen rows.
-        GlyphGrid.ContainerContentChanging -= GlyphGrid_ContainerContentChanging;
-        GlyphGrid.ContainerContentChanging += GlyphGrid_ContainerContentChanging;
-
-        if (_loadedFontFamily is not null)
-            GlyphGrid.FontFamily = _loadedFontFamily;
-    }
-
-    private void GlyphGrid_ContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
-    {
-        if (args.Phase != 0 || _loadedFontFamily is null)
-            return;
-
-        args.RegisterUpdateCallback(GlyphGrid_ApplyFontToItemContainer);
-    }
-
-    private void GlyphGrid_ApplyFontToItemContainer(ListViewBase sender, ContainerContentChangingEventArgs args)
-    {
-        if (_loadedFontFamily is null)
-            return;
-
-        if (args.ItemContainer?.ContentTemplateRoot is StackPanel panel
-            && panel.Children.Count > 0
-            && panel.Children[0] is TextBlock charBlock)
-        {
-            charBlock.FontFamily = _loadedFontFamily;
-        }
-    }
-
-    private void BuildBlockSidebar()
-    {
-        _glyphBlockEntries.Clear();
-
-        var perBlockCounts = new Dictionary<string, (UnicodeBlocks.UnicodeBlock? Block, int Count)>();
-        foreach (var item in _viewModel.GlyphItems)
-        {
-            // item.Block is precomputed in the GlyphItem constructor — no
-            // per-pass classifier work here.
-            var block = item.Block;
-            var key = block.Name;
-            if (perBlockCounts.TryGetValue(key, out var existing))
-            {
-                perBlockCounts[key] = (existing.Block, existing.Count + 1);
-            }
-            else
-            {
-                perBlockCounts[key] = (block.Start >= 0 ? block : null, 1);
-            }
-        }
-
-        _glyphBlockEntries.Add(new GlyphBlockEntry("All blocks", _viewModel.GlyphItems.Count, null));
-
-        // Preserve the curated order from UnicodeBlocks.All; "Other" goes last.
-        foreach (var b in UnicodeBlocks.All)
-        {
-            if (perBlockCounts.TryGetValue(b.Name, out var entry))
-                _glyphBlockEntries.Add(new GlyphBlockEntry(b.Name, entry.Count, b));
-        }
-        if (perBlockCounts.TryGetValue("Other", out var other))
-            _glyphBlockEntries.Add(new GlyphBlockEntry("Other", other.Count, null));
-
-        GlyphBlockList.ItemsSource = _glyphBlockEntries;
-    }
-
-    private void BuildCategoryChips()
-    {
-        GlyphCategoryChips.Children.Clear();
-
-        foreach (GlyphCategory cat in Enum.GetValues<GlyphCategory>())
-        {
-            var btn = new ToggleButton
-            {
-                Content = cat.ToString(),
-                Tag = cat,
-                MinWidth = 0,
-                Padding = new Thickness(10, 4, 10, 4),
-                IsChecked = cat == GlyphCategory.All
-            };
-            btn.Click += GlyphCategoryChip_Click;
-            GlyphCategoryChips.Children.Add(btn);
-        }
-    }
-
-    private void ResetGlyphFilters()
-    {
-        _suppressGlyphFilterEvents = true;
-        try
-        {
-            _glyphCategoryFilter = GlyphCategory.All;
-            _glyphBlockFilter = null;
-            _glyphSearchText = string.Empty;
-
-            foreach (var child in GlyphCategoryChips.Children)
-            {
-                if (child is ToggleButton tb && tb.Tag is GlyphCategory cat)
-                    tb.IsChecked = cat == GlyphCategory.All;
-            }
-
-            if (_glyphBlockEntries.Count > 0)
-                GlyphBlockList.SelectedIndex = 0;
-
-            GlyphSearchBox.Text = string.Empty;
-        }
-        finally
-        {
-            _suppressGlyphFilterEvents = false;
-        }
-    }
-
-    private void ApplyGlyphFilters()
-    {
-        // Build a single composite predicate and run it once over the master
-        // list. Two wins over chained LINQ Wheres:
-        //   1. one allocation for the result list instead of N enumerators,
-        //   2. JIT can keep the precomputed-property reads tight.
-        var blockFilter = _glyphBlockFilter;
-        var otherOnly = blockFilter is null
-            && GlyphBlockList.SelectedItem is GlyphBlockEntry entry
-            && entry.Name == "Other";
-        var category = _glyphCategoryFilter;
-        var needle = _glyphSearchText.Trim();
-        var matcher = string.IsNullOrEmpty(needle) ? null : BuildSearchMatcher(needle);
-
-        var master = _viewModel.GlyphItems;
-        var filtered = new List<GlyphItem>(capacity: master.Count);
-        foreach (var g in master)
-        {
-            if (blockFilter is not null && !blockFilter.Contains(g.CodePoint)) continue;
-            if (otherOnly && g.Block.Start >= 0) continue;
-            if (category != GlyphCategory.All && g.Category != category) continue;
-            if (matcher is not null && !matcher(g)) continue;
-            filtered.Add(g);
-        }
-
-        GlyphGrid.ItemsSource = filtered;
-        GlyphCountText.Text = filtered.Count.ToString();
-        GlyphDetailPanel.Visibility = Visibility.Collapsed;
-    }
-
-    /// <summary>
-    /// Builds a predicate that matches a glyph by raw character ("A"), hex code
-    /// point ("U+00A0" / "00A0" / "0x00A0"), or decimal code point ("9731").
-    /// </summary>
-    private static Func<GlyphItem, bool> BuildSearchMatcher(string needle)
-    {
-        // Hex form: "U+xxxx" or "0xXXXX"
-        if (needle.StartsWith("U+", StringComparison.OrdinalIgnoreCase)
-            || needle.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
-        {
-            var hex = needle[2..];
-            if (int.TryParse(hex, System.Globalization.NumberStyles.HexNumber, null, out var cpHex))
-                return g => g.CodePoint == cpHex;
-        }
-
-        // Bare hex (4+ digits, all hex)
-        if (needle.Length >= 4 && needle.All(c => Uri.IsHexDigit(c)))
-        {
-            if (int.TryParse(needle, System.Globalization.NumberStyles.HexNumber, null, out var cpHex))
-                return g => g.CodePoint == cpHex;
-        }
-
-        // Decimal
-        if (int.TryParse(needle, out var cpDec))
-            return g => g.CodePoint == cpDec;
-
-        // Single character literal
-        if (needle.Length <= 2)
-        {
-            try
-            {
-                var cp = char.ConvertToUtf32(needle, 0);
-                return g => g.CodePoint == cp;
-            }
-            catch
-            {
-                // fall through
-            }
-        }
-
-        // Substring on hex label (covers things like "F60" hitting U+1F600..U+1F60F)
-        return g => g.UnicodeLabel.Contains(needle, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private void GlyphGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (GlyphGrid.SelectedItem is GlyphItem glyph)
-        {
-            GlyphDetailPanel.Visibility = Visibility.Visible;
-            SelectedGlyphChar.Text = glyph.Character;
-            SelectedGlyphUnicode.Text = glyph.UnicodeLabel;
-            SelectedGlyphName.Text =
-                $"Decimal: {glyph.CodePoint} · Block: {glyph.Block.Name} · Category: {glyph.Category}";
-
-            if (_loadedFontFamily != null)
-                SelectedGlyphChar.FontFamily = _loadedFontFamily;
-        }
-        else
-        {
-            GlyphDetailPanel.Visibility = Visibility.Collapsed;
-        }
-    }
-
-    private void GlyphBlockList_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (_suppressGlyphFilterEvents) return;
-        if (GlyphBlockList.SelectedItem is GlyphBlockEntry entry)
-        {
-            _glyphBlockFilter = entry.Block;
-            ApplyGlyphFilters();
-        }
-    }
-
-    private void GlyphCategoryChip_Click(object sender, RoutedEventArgs e)
-    {
-        if (_suppressGlyphFilterEvents) return;
-        if (sender is not ToggleButton btn || btn.Tag is not GlyphCategory selected) return;
-
-        _suppressGlyphFilterEvents = true;
-        try
-        {
-            // Single-select: clear any previous chip, force the clicked one on.
-            foreach (var child in GlyphCategoryChips.Children)
-            {
-                if (child is ToggleButton other && other.Tag is GlyphCategory cat)
-                    other.IsChecked = cat == selected;
-            }
-            _glyphCategoryFilter = selected;
-        }
-        finally
-        {
-            _suppressGlyphFilterEvents = false;
-        }
-        ApplyGlyphFilters();
-    }
-
-    private void GlyphSearchBox_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
-    {
-        if (_suppressGlyphFilterEvents) return;
-        _glyphSearchText = sender.Text ?? string.Empty;
-
-        // Debounce: cancel any pending filter and re-arm. The reason for going
-        // through DispatcherQueueTimer rather than a Task.Delay+cancellation
-        // pattern is that the timer Tick already lands on the UI thread, so
-        // touching GlyphGrid / GlyphCountText is safe without marshalling.
-        if (_glyphSearchDebounceTimer is null)
-        {
-            _glyphSearchDebounceTimer = DispatcherQueue.CreateTimer();
-            _glyphSearchDebounceTimer.IsRepeating = false;
-            _glyphSearchDebounceTimer.Tick += (_, _) => ApplyGlyphFilters();
-        }
-
-        _glyphSearchDebounceTimer.Interval = TimeSpan.FromMilliseconds(GlyphSearchDebounceMs);
-        _glyphSearchDebounceTimer.Stop();
-        _glyphSearchDebounceTimer.Start();
-    }
-
-    /// <summary>Sidebar row model.</summary>
-    private sealed record GlyphBlockEntry(string Name, int Count, UnicodeBlocks.UnicodeBlock? Block);
-
-    // ── Metadata ───────────────────────────────────────────────
-
-    private void BuildMetadataView()
-    {
-        MetadataPanel.Children.Clear();
-        var font = _viewModel.CurrentFont;
-        if (font is null) return;
-        var meta = font.Metadata;
-
-        AddMetadataSection("General");
-        AddMetadataRow("Family Name", meta.FamilyName);
-        if (meta.TypographicFamilyName != meta.FamilyName)
-            AddMetadataRow("Typographic Family", meta.TypographicFamilyName);
-        AddMetadataRow("Subfamily", meta.SubfamilyName);
-        AddMetadataRow("Full Name", meta.FullName);
-        AddMetadataRow("PostScript Name", meta.PostScriptName);
-        AddMetadataRow("Version", meta.Version);
-        AddMetadataRow("Format", font.Format.ToString());
-        AddMetadataRow("File Size", font.FormattedFileSize);
-        AddMetadataRow("File Path", font.FilePath);
-        if (font.FontCount > 1)
-            AddMetadataRow("Font in Collection", $"{font.FontIndex + 1} of {font.FontCount}");
-
-        AddMetadataSection("Metrics");
-        AddMetadataRow("Glyphs", meta.GlyphCount.ToString());
-        AddMetadataRow("Units per Em", meta.UnitsPerEm.ToString());
-        AddMetadataRow("Weight", GetWeightName(meta.Weight));
-        AddMetadataRow("Style", meta.IsItalic ? "Italic" : meta.IsOblique ? "Oblique" : "Normal");
-        AddMetadataRow("Variable Font", meta.IsVariable ? "Yes" : "No");
-        AddMetadataRow("Classification", meta.Classification.ToString());
-
-        AddMetadataSection("Credits");
-        AddMetadataRow("Designer", meta.Designer);
-        AddMetadataRow("Vendor", meta.Vendor);
-        AddMetadataRow("Copyright", meta.Copyright);
-        AddMetadataRow("Trademark", meta.Trademark);
-
-        AddMetadataSection("License");
-        AddMetadataRow("License", meta.License);
-        AddMetadataRow("License URL", meta.LicenseUrl);
-
-        if (!string.IsNullOrWhiteSpace(meta.Description))
-        {
-            AddMetadataSection("Description");
-            AddMetadataRow("", meta.Description);
-        }
-    }
-
-    private void AddMetadataSection(string title)
-    {
-        MetadataPanel.Children.Add(new TextBlock
-        {
-            Text = title,
-            Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"],
-            Margin = new Thickness(0, 16, 0, 8)
-        });
-    }
-
-    private void AddMetadataRow(string label, string value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return;
-
-        var border = new Border
-        {
-            Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
-            CornerRadius = new CornerRadius(4),
-            Padding = new Thickness(16, 10, 16, 10),
-            Margin = new Thickness(0, 1, 0, 1)
-        };
-
-        var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-        if (!string.IsNullOrWhiteSpace(label))
-        {
-            var labelBlock = new TextBlock
-            {
-                Text = label,
-                Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
-                Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            Grid.SetColumn(labelBlock, 0);
-            grid.Children.Add(labelBlock);
-        }
-
-        var valueBlock = new TextBlock
-        {
-            Text = value,
-            TextWrapping = TextWrapping.WrapWholeWords,
-            IsTextSelectionEnabled = true,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        Grid.SetColumn(valueBlock, string.IsNullOrWhiteSpace(label) ? 0 : 1);
-        if (string.IsNullOrWhiteSpace(label))
-            Grid.SetColumnSpan(valueBlock, 2);
-        grid.Children.Add(valueBlock);
-
-        border.Child = grid;
-        MetadataPanel.Children.Add(border);
-    }
 
     // ── State Management ───────────────────────────────────────
 
@@ -1481,364 +818,73 @@ public sealed partial class MainWindow : Window
         ApplyInstallElevatedUi();
     }
 
-    private async void SettingsButton_Click(object sender, RoutedEventArgs e)
+    // ── Settings navigation ────────────────────────────────────────
+    // We treat the settings overlay as a Frame so SettingsPage gets the full
+    // WinUI 3 page lifecycle (OnNavigatedTo, caching, etc.). The visual
+    // swap is just toggling MainContentArea vs. SettingsFrame visibility —
+    // there's no need for a Window-level Frame because we never navigate
+    // anywhere else.
+
+    /// <summary>
+    /// Pushes the SettingsPage onto the SettingsFrame and hides the viewer.
+    /// </summary>
+    private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
-        var dividerBrush = (Brush)Application.Current.Resources["DividerStrokeColorDefaultBrush"];
-        var sectionStyle = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"];
-        var captionStyle = (Style)Application.Current.Resources["CaptionTextBlockStyle"];
-        var secondaryBrush = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
+        // Disable the Settings button while the page is up so a stray double
+        // click can't re-navigate over itself.
+        SettingsButton.IsEnabled = false;
 
-        // ── Helper: section header ──
-        UIElement SectionHeader(string text) => new TextBlock
-        {
-            Text = text,
-            Style = sectionStyle,
-            Margin = new Thickness(0, 4, 0, 0)
-        };
+        MainContentArea.Visibility = Visibility.Collapsed;
+        SettingsFrame.Visibility = Visibility.Visible;
+        BackButton.Visibility = Visibility.Visible;
+        OpenButtonPanel.Visibility = Visibility.Collapsed;
 
-        UIElement Divider() => new Border
-        {
-            Height = 1,
-            Background = dividerBrush,
-            Margin = new Thickness(0, 4, 0, 4)
-        };
+        // Ensure the overlay Frame shares the window XamlRoot so navigated
+        // pages and dialogs never see a null XamlRoot (WinRT throws).
+        if (RootGrid.XamlRoot is not null)
+            SettingsFrame.XamlRoot = RootGrid.XamlRoot;
 
-        UIElement Description(string text) => new TextBlock
-        {
-            Text = text,
-            Style = captionStyle,
-            Foreground = secondaryBrush,
-            TextWrapping = TextWrapping.WrapWholeWords,
-            Margin = new Thickness(0, -8, 0, 0)
-        };
+        // Parameter carries the elevation state so the install-target combo
+        // can be disabled appropriately. The page reads this in
+        // OnNavigatedTo.
+        SettingsFrame.Navigate(typeof(SettingsPage), _isProcessElevated);
+    }
 
-        // ══════════════════════════════════════════════════════════
-        // APPEARANCE
-        // ══════════════════════════════════════════════════════════
+    /// <summary>
+    /// Closes the SettingsPage, returns the user to the viewer, and triggers
+    /// the heavier "post-settings" refresh (font display + glyph grid + nav
+    /// state) that the per-change SettingsChanged handler intentionally skips.
+    /// </summary>
+    private void BackButton_Click(object sender, RoutedEventArgs e)
+    {
+        SettingsFrame.Visibility = Visibility.Collapsed;
+        SettingsFrame.Content = null; // free the page
 
-        var themeCombo = new ComboBox
-        {
-            Header = "Theme",
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            Items =
-            {
-                new ComboBoxItem { Content = "System default", Tag = ElementTheme.Default },
-                new ComboBoxItem { Content = "Light", Tag = ElementTheme.Light },
-                new ComboBoxItem { Content = "Dark", Tag = ElementTheme.Dark }
-            },
-            SelectedIndex = (int)_settings.Theme
-        };
+        BackButton.Visibility = Visibility.Collapsed;
+        OpenButtonPanel.Visibility = Visibility.Visible;
+        SettingsButton.IsEnabled = true;
+        MainContentArea.Visibility = Visibility.Visible;
 
-        var backdropCombo = new ComboBox
-        {
-            Header = "Backdrop material",
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            Items =
-            {
-                new ComboBoxItem { Content = "Mica", Tag = 0 },
-                new ComboBoxItem { Content = "Acrylic", Tag = 1 }
-            },
-            SelectedIndex = _settings.Backdrop
-        };
-
-        // ══════════════════════════════════════════════════════════
-        // PREVIEW
-        // ══════════════════════════════════════════════════════════
-
-        var previewTextBox = new TextBox
-        {
-            Header = "Default preview text",
-            Text = _settings.DefaultPreviewText,
-            PlaceholderText = "Enter default preview text...",
-            TextWrapping = TextWrapping.Wrap,
-            AcceptsReturn = false,
-            MaxLength = 500
-        };
-
-        var fontSizeSlider = new Slider
-        {
-            Header = $"Default font size ({(int)_settings.DefaultFontSize}px)",
-            Minimum = 8,
-            Maximum = 120,
-            Value = _settings.DefaultFontSize,
-            StepFrequency = 1
-        };
-        fontSizeSlider.ValueChanged += (_, args) =>
-            fontSizeSlider.Header = $"Default font size ({(int)args.NewValue}px)";
-
-        var previewControlsToggle = new ToggleSwitch
-        {
-            Header = "Editable preview",
-            IsOn = _settings.ShowPreviewControls
-        };
-
-        // ══════════════════════════════════════════════════════════
-        // DISPLAY
-        // ══════════════════════════════════════════════════════════
-
-        var quickViewToggle = new ToggleSwitch
-        {
-            Header = "Quick view",
-            IsOn = _settings.ShowQuickView
-        };
-
-        var waterfallToggle = new ToggleSwitch
-        {
-            Header = "Waterfall",
-            IsOn = _settings.ShowWaterfall
-        };
-
-        var waterfallSizesBox = new TextBox
-        {
-            Header = "Waterfall sizes (comma-separated)",
-            Text = _settings.WaterfallSizesRaw,
-            PlaceholderText = "8,12,16,24,32,48,72",
-            AcceptsReturn = false,
-            MaxLength = 200
-        };
-
-        // ══════════════════════════════════════════════════════════
-        // INSTALL
-        // ══════════════════════════════════════════════════════════
-
-        var installModeCombo = new ComboBox
-        {
-            Header = "Install target",
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            Items =
-            {
-                new ComboBoxItem { Content = "Current user", Tag = 0 },
-                new ComboBoxItem { Content = "All users (requires admin)", Tag = 1 }
-            },
-            SelectedIndex = _settings.InstallMode
-        };
-        if (installModeCombo.Items.Count > 1 && installModeCombo.Items[1] is ComboBoxItem allUsersInstallOption)
-            allUsersInstallOption.IsEnabled = _isProcessElevated;
-
-        var installTargetDescription = _isProcessElevated
-            ? "Select the default target used by the main Install button. All-users install copies to Windows\\Fonts and requires administrator privileges."
-            : "Without administrator elevation, only the current user can be selected. Start Fontager with Run as administrator to enable the 'All users' option in this list and in the Install menu.";
-
-        // ── Font file-association opt-in ──
-        // Adds Fontager to the Explorer "Open with..." submenu for .ttf, .otf,
-        // .ttc, and .woff2 by writing per-user ProgID entries under HKCU.
-        // Disabled when running packaged because MSIX virtualises HKCU writes
-        // into the package container, where Explorer never looks. See
-        // docs/research/packaging-decision.md for the full rationale.
-        bool fontAssocPackaged = FileAssociationService.IsRunningPackaged;
-        var fontAssocToggle = new ToggleSwitch
-        {
-            Header = "Register Fontager for font files (current user)",
-            IsOn = !fontAssocPackaged && FileAssociationService.IsRegistered(),
-            IsEnabled = !fontAssocPackaged
-        };
-        bool fontAssocInitial = fontAssocToggle.IsOn;
-
-        // ══════════════════════════════════════════════════════════
-        // RESET
-        // ══════════════════════════════════════════════════════════
-
-        var resetButton = new HyperlinkButton
-        {
-            Content = "Reset all settings to defaults",
-            Margin = new Thickness(0, 4, 0, 0)
-        };
-        bool resetRequested = false;
-        resetButton.Click += (_, _) => resetRequested = true;
-
-        // ══════════════════════════════════════════════════════════
-        // LAYOUT
-        // ══════════════════════════════════════════════════════════
-
-        var panel = new StackPanel { Spacing = 12 };
-
-        // Appearance
-        panel.Children.Add(SectionHeader("Appearance"));
-        panel.Children.Add(themeCombo);
-        panel.Children.Add(backdropCombo);
-
-        panel.Children.Add(Divider());
-
-        // Preview
-        panel.Children.Add(SectionHeader("Preview"));
-        panel.Children.Add(previewTextBox);
-        panel.Children.Add(fontSizeSlider);
-        panel.Children.Add(previewControlsToggle);
-        panel.Children.Add(Description("Show the editable text preview area with size slider. When off, only the waterfall is shown."));
-
-        panel.Children.Add(Divider());
-
-        // Display
-        panel.Children.Add(SectionHeader("Display"));
-        panel.Children.Add(quickViewToggle);
-        panel.Children.Add(Description("Character set overview below the font header. Auto-shows when the window is small."));
-        panel.Children.Add(waterfallToggle);
-        panel.Children.Add(waterfallSizesBox);
-
-        panel.Children.Add(Divider());
-
-        // Install
-        panel.Children.Add(SectionHeader("Install"));
-        panel.Children.Add(installModeCombo);
-        panel.Children.Add(Description(installTargetDescription));
-        if (!_isProcessElevated && _settings.InstallMode == (int)InstallTarget.AllUsers)
-        {
-            panel.Children.Add(Description(
-                "Your saved default is still 'All users'; the main Install button will use it automatically after you start Fontager as administrator."));
-        }
-        panel.Children.Add(fontAssocToggle);
-        panel.Children.Add(Description(fontAssocPackaged
-            ? "Adds Fontager to the Windows 'Open with...' menu for .ttf, .otf, .ttc, and .woff2 files. Disabled while running packaged (MSIX) because the registry writes get virtualised into the package container."
-            : "Adds Fontager to the Windows 'Open with...' menu for .ttf, .otf, .ttc, and .woff2 files for the current user only. Does not change the default handler."));
-
-        panel.Children.Add(Divider());
-
-        // Reset
-        panel.Children.Add(resetButton);
-
-        panel.Children.Add(Divider());
-
-        // About
-        panel.Children.Add(SectionHeader("About"));
-
-        string aboutVersion;
+        // Suppress the cascade of SettingsChanged events that would fire
+        // during a heavy rebuild — we want one batch refresh, not N.
+        _suppressSettingsChangedReaction = true;
         try
         {
-            var ver = Package.Current.Id.Version;
-            aboutVersion = $"{ver.Major}.{ver.Minor}.{ver.Build}.{ver.Revision}";
-        }
-        catch
-        {
-            var asm = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
-            aboutVersion = asm?.ToString() ?? "0.0.0.0";
-        }
-
-        panel.Children.Add(new TextBlock
-        {
-            Text = $"Fontager Viewer  v{aboutVersion}",
-            FontWeight = FontWeights.SemiBold,
-            Style = (Style)Application.Current.Resources["BodyTextBlockStyle"]
-        });
-        panel.Children.Add(Description("A modern font viewer for Windows, built with WinUI 3."));
-        panel.Children.Add(new TextBlock
-        {
-            Text = "Made by Yusuf Emre Albayrak",
-            Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
-            Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
-            Margin = new Thickness(0, -4, 0, 0)
-        });
-
-        var githubLink = new HyperlinkButton
-        {
-            Content = "GitHub — ysfemreAlbyrk/Fontager",
-            NavigateUri = new Uri("https://github.com/ysfemreAlbyrk/Fontager"),
-            Padding = new Thickness(0),
-            Margin = new Thickness(0, 2, 0, 0)
-        };
-        panel.Children.Add(githubLink);
-
-        // ══════════════════════════════════════════════════════════
-        // DIALOG
-        // ══════════════════════════════════════════════════════════
-
-        var contentContainer = new Grid { MinWidth = 580, HorizontalAlignment = HorizontalAlignment.Stretch };
-        contentContainer.Children.Add(new ScrollViewer
-        {
-            Content = panel,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            MaxHeight = 560
-        });
-
-        var dialog = new ContentDialog
-        {
-            Title = "Settings",
-            Content = contentContainer,
-            PrimaryButtonText = "Save",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = Content.XamlRoot
-        };
-
-        var result = await dialog.ShowAsync();
-
-        if (result == ContentDialogResult.Primary)
-        {
-            if (resetRequested)
-            {
-                _settings.ResetToDefaults();
-                ApplySettings();
-                ApplyBackdrop();
-                if (_viewModel.HasFont)
-                    UpdateFontDisplay();
-                return;
-            }
-
-            // Theme
-            if (themeCombo.SelectedItem is ComboBoxItem st && st.Tag is ElementTheme theme)
-            {
-                _settings.Theme = theme;
-                ((FrameworkElement)Content).RequestedTheme = theme;
-            }
-
-            // Backdrop
-            if (backdropCombo.SelectedItem is ComboBoxItem sb && sb.Tag is int bv)
-            {
-                _settings.Backdrop = bv;
-                ApplyBackdrop();
-            }
-
-            // Preview
-            _settings.DefaultPreviewText = previewTextBox.Text;
-            _settings.DefaultFontSize = fontSizeSlider.Value;
-            _settings.ShowPreviewControls = previewControlsToggle.IsOn;
-
-            // Display
-            _settings.ShowQuickView = quickViewToggle.IsOn;
-            _settings.ShowWaterfall = waterfallToggle.IsOn;
-            _settings.WaterfallSizesRaw = waterfallSizesBox.Text;
-
-            // Install — only persist target from the combo when elevated; otherwise
-            // the 'All users' row is disabled and SelectedIndex can disagree with the
-            // saved preference (kept for the next elevated launch).
-            if (_isProcessElevated
-                && installModeCombo.SelectedItem is ComboBoxItem si
-                && si.Tag is int iv)
-            {
-                _settings.InstallMode = iv;
-            }
-
-            UpdateInstallButtonPresentation(GetSavedInstallTarget());
-            ApplyInstallElevatedUi();
-
-            // Apply font-association toggle changes only when the value moved.
-            if (!fontAssocPackaged && fontAssocToggle.IsOn != fontAssocInitial)
-            {
-                if (fontAssocToggle.IsOn)
-                    FileAssociationService.RegisterForCurrentUser();
-                else
-                    FileAssociationService.UnregisterForCurrentUser();
-            }
-
-            // Apply to UI
-            if (!_viewModel.HasFont)
-            {
-                PreviewTextBox.Text = _settings.DefaultPreviewText;
-                SetPreviewFontSize(_settings.DefaultFontSize);
-            }
-
-            PreviewSection.Visibility = _settings.ShowPreviewControls
-                ? Visibility.Visible : Visibility.Collapsed;
-
             if (_viewModel.HasFont)
             {
-                QuickViewSection.Visibility = _settings.ShowQuickView ? Visibility.Visible : Visibility.Collapsed;
-                if (_settings.ShowQuickView) BuildQuickView();
-
-                WaterfallSection.Visibility = _settings.ShowWaterfall ? Visibility.Visible : Visibility.Collapsed;
-                if (_settings.ShowWaterfall) BuildWaterfallView();
+                // Rebuilds preview, quick view, waterfall, glyph grid, and
+                // metadata against any new settings.
+                UpdateFontDisplay();
             }
+            UpdateInstallButtonPresentation(GetSavedInstallTarget());
+            ApplyInstallElevatedUi();
+        }
+        finally
+        {
+            _suppressSettingsChangedReaction = false;
         }
     }
+
 
     // ── Helpers ─────────────────────────────────────────────────
 

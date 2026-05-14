@@ -1,0 +1,267 @@
+using System;
+using Fontager.Viewer.Services;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Navigation;
+
+namespace Fontager.Viewer.Views;
+
+/// <summary>
+/// Full-window Settings page. Replaces the legacy <c>ContentDialog</c>.
+///
+/// Architecture:
+/// <list type="bullet">
+///   <item>
+///     <description>Each control's change handler writes through to
+///       <see cref="SettingsService"/> immediately — there is no Save or
+///       Cancel button. <see cref="SettingsService"/> raises
+///       <see cref="SettingsService.Changed"/> on every property write, and
+///       <c>MainWindow</c> is subscribed; the user sees theme / backdrop /
+///       preview changes the instant they tap the control.</description>
+///   </item>
+///   <item>
+///     <description>Controls are populated in <see cref="OnLoaded"/> with
+///       <see cref="_initialized"/> set to <c>false</c> first, so the
+///       initial <c>SelectionChanged</c> / <c>Toggled</c> events that fire
+///       as we set <c>SelectedIndex</c> / <c>IsOn</c> don't ricochet back
+///       into <see cref="SettingsService"/>.</description>
+///   </item>
+///   <item>
+///     <description>Returning to the viewer is handled by the back button in
+///       the title bar (see <c>MainWindow.xaml</c>) — this Page is not aware
+///       of how it was navigated to.</description>
+///   </item>
+/// </list>
+/// </summary>
+public sealed partial class SettingsPage : Page
+{
+    private readonly SettingsService _settings;
+    private bool _initialized;
+    private bool _isProcessElevated;
+
+    public SettingsPage()
+    {
+        InitializeComponent();
+        _settings = App.Services.GetRequiredService<SettingsService>();
+        Loaded += OnLoaded;
+    }
+
+    /// <summary>
+    /// Optional environment flag the host passes when navigating to the page.
+    /// Currently used to enable / disable the "All users" install option.
+    /// </summary>
+    protected override void OnNavigatedTo(NavigationEventArgs e)
+    {
+        base.OnNavigatedTo(e);
+        if (e.Parameter is bool elevated)
+            _isProcessElevated = elevated;
+    }
+
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        // Appearance
+        ThemeCombo.SelectedIndex = (int)_settings.Theme;
+        BackdropCombo.SelectedIndex = _settings.Backdrop;
+
+        // Preview
+        PreviewTextBox.Text = _settings.DefaultPreviewText;
+        FontSizeSlider.Value = _settings.DefaultFontSize;
+        FontSizeSlider.Header = $"Default font size ({(int)_settings.DefaultFontSize}px)";
+        PreviewControlsToggle.IsOn = _settings.ShowPreviewControls;
+
+        // Display
+        QuickViewToggle.IsOn = _settings.ShowQuickView;
+        WaterfallToggle.IsOn = _settings.ShowWaterfall;
+        WaterfallSizesBox.Text = _settings.WaterfallSizesRaw;
+
+        // Install
+        InstallModeCombo.SelectedIndex = _settings.InstallMode;
+        if (InstallModeCombo.Items.Count > 1
+            && InstallModeCombo.Items[1] is ComboBoxItem allUsersOption)
+        {
+            allUsersOption.IsEnabled = _isProcessElevated;
+        }
+        InstallTargetDescription.Text = _isProcessElevated
+            ? "Select the default target used by the main Install button. All-users install copies to Windows\\Fonts and requires administrator privileges."
+            : "Without administrator elevation, only the current user can be selected. Start Fontager with Run as administrator to enable the 'All users' option in this list and in the Install menu.";
+
+        // File association
+        bool fontAssocPackaged = FileAssociationService.IsRunningPackaged;
+        FontAssocToggle.IsOn = !fontAssocPackaged && FileAssociationService.IsRegistered();
+        FontAssocToggle.IsEnabled = !fontAssocPackaged;
+        FontAssocDescription.Text = fontAssocPackaged
+            ? "Adds Fontager to the Windows 'Open with...' menu for .ttf, .otf, .ttc, and .woff2 files. Disabled while running packaged (MSIX) because the registry writes get virtualised into the package container."
+            : "Adds Fontager to the Windows 'Open with...' menu for .ttf, .otf, .ttc, and .woff2 files for the current user only. Does not change the default handler.";
+
+        // About
+        string version;
+        try
+        {
+            var ver = Windows.ApplicationModel.Package.Current.Id.Version;
+            version = $"{ver.Major}.{ver.Minor}.{ver.Build}.{ver.Revision}";
+        }
+        catch
+        {
+            var asm = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+            version = asm?.ToString() ?? "0.0.0.0";
+        }
+        AboutVersionText.Text = $"Fontager Viewer  v{version}";
+
+        _initialized = true;
+    }
+
+    /// <summary>
+    /// WinRT XAML often boxes <see cref="ComboBoxItem.Tag"/> as an <see cref="int"/>
+    /// when the markup uses <c>Tag="0"</c>, so <c>Tag as string</c> is null.
+    /// </summary>
+    private static bool TryReadComboBoxIntTag(ComboBoxItem item, out int value)
+    {
+        value = 0;
+        switch (item.Tag)
+        {
+            case int i:
+                value = i;
+                return true;
+            case long l:
+                checked
+                {
+                    value = (int)l;
+                }
+                return true;
+            case string s:
+                return int.TryParse(s, out value);
+            default:
+                return item.Tag != null && int.TryParse(item.Tag.ToString(), out value);
+        }
+    }
+
+    // ── Appearance ────────────────────────────────────────────────
+
+    private void ThemeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_initialized) return;
+        if (ThemeCombo.SelectedItem is ComboBoxItem item
+            && TryReadComboBoxIntTag(item, out var v)
+            && v is >= 0 and <= 2)
+        {
+            _settings.Theme = (ElementTheme)v;
+        }
+    }
+
+    private void BackdropCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_initialized) return;
+        if (BackdropCombo.SelectedItem is ComboBoxItem item
+            && TryReadComboBoxIntTag(item, out var v)
+            && v is >= 0 and <= 1)
+        {
+            _settings.Backdrop = v;
+        }
+    }
+
+    // ── Preview ───────────────────────────────────────────────────
+
+    private void PreviewTextBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (!_initialized) return;
+        _settings.DefaultPreviewText = PreviewTextBox.Text;
+    }
+
+    private void FontSizeSlider_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
+    {
+        FontSizeSlider.Header = $"Default font size ({(int)e.NewValue}px)";
+        if (!_initialized) return;
+        _settings.DefaultFontSize = e.NewValue;
+    }
+
+    private void PreviewControlsToggle_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (!_initialized) return;
+        _settings.ShowPreviewControls = PreviewControlsToggle.IsOn;
+    }
+
+    // ── Display ───────────────────────────────────────────────────
+
+    private void QuickViewToggle_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (!_initialized) return;
+        _settings.ShowQuickView = QuickViewToggle.IsOn;
+    }
+
+    private void WaterfallToggle_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (!_initialized) return;
+        _settings.ShowWaterfall = WaterfallToggle.IsOn;
+    }
+
+    private void WaterfallSizesBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (!_initialized) return;
+        _settings.WaterfallSizesRaw = WaterfallSizesBox.Text;
+    }
+
+    // ── Install ───────────────────────────────────────────────────
+
+    private void InstallModeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_initialized) return;
+        if (!_isProcessElevated)
+        {
+            // The "All users" option is disabled in this case; ignore any
+            // SelectedIndex slip so we don't overwrite the user's saved
+            // preference with a value the unelevated process can't actually
+            // honour.
+            return;
+        }
+        if (InstallModeCombo.SelectedItem is ComboBoxItem item
+            && TryReadComboBoxIntTag(item, out var v)
+            && v is >= 0 and <= 1)
+        {
+            _settings.InstallMode = v;
+        }
+    }
+
+    private void FontAssocToggle_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (!_initialized) return;
+        if (FileAssociationService.IsRunningPackaged) return;
+
+        if (FontAssocToggle.IsOn)
+            FileAssociationService.RegisterForCurrentUser();
+        else
+            FileAssociationService.UnregisterForCurrentUser();
+    }
+
+    // ── Reset ─────────────────────────────────────────────────────
+
+    private async void ResetButton_Click(object sender, RoutedEventArgs e)
+    {
+        var xamlRoot = this.XamlRoot ?? (Content as FrameworkElement)?.XamlRoot;
+        if (xamlRoot is null)
+            return;
+
+        var dialog = new ContentDialog
+        {
+            Title = "Reset settings",
+            Content = "Reset all settings to their defaults? This cannot be undone.",
+            PrimaryButtonText = "Reset",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = xamlRoot
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+        _initialized = false;
+        try
+        {
+            _settings.ResetToDefaults();
+            OnLoaded(this, new RoutedEventArgs()); // re-populate from defaults
+        }
+        finally
+        {
+            _initialized = true;
+        }
+    }
+}

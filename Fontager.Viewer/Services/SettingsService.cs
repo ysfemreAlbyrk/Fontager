@@ -105,6 +105,7 @@ public sealed class SettingsService
     {
         _values[key] = JsonSerializer.SerializeToElement(value);
         Save();
+        Changed?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>
@@ -114,7 +115,15 @@ public sealed class SettingsService
     {
         _values = new();
         Save();
+        Changed?.Invoke(this, EventArgs.Empty);
     }
+
+    /// <summary>
+    /// Fired after any setting is persisted. Listeners (typically <c>MainWindow</c>)
+    /// re-apply theme / backdrop / preview state so the user sees the effect
+    /// immediately while still on the Settings page — no Save button required.
+    /// </summary>
+    public event EventHandler? Changed;
 
     public ElementTheme Theme
     {

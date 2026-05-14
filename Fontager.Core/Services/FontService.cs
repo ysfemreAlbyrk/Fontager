@@ -39,26 +39,32 @@ public sealed class FontService : IFontService
             FontMetadata metadata;
             int fontCount = 1;
 
-            if (format == FontFormat.WebOpenFont)
-            {
-                metadata = CreateMetadataFromFileName(filePath);
-            }
-            else
-            {
-                fontCount = await Task.Run(() => FontParser.GetFontCount(filePath));
-                if (fontIndex < 0 || fontIndex >= fontCount)
-                    fontIndex = 0;
+            // WOFF2 used to fall back to filename-only metadata because the
+            // binary parser only spoke raw SFNT. With Woff2Decoder available
+            // we now decompress to SFNT bytes first and run the full parser
+            // against them — same code path as TTF/OTF, real family names
+            // and glyph counts instead of "Inter-Bold" guesses.
+            byte[] sfntBytes = await Task.Run(() =>
+                Woff2Decoder.DecodeIfWoff2(File.ReadAllBytes(filePath)));
 
-                metadata = await Task.Run(() => FontParser.Parse(filePath, fontIndex));
+            fontCount = await Task.Run(() => FontParser.GetFontCount(sfntBytes));
+            if (fontIndex < 0 || fontIndex >= fontCount)
+                fontIndex = 0;
 
-                if (string.IsNullOrWhiteSpace(metadata.FamilyName))
-                {
-                    metadata = metadata with
+            metadata = await Task.Run(() => FontParser.Parse(sfntBytes, fontIndex));
+
+            if (string.IsNullOrWhiteSpace(metadata.FamilyName))
+            {
+                // Decode failed silently (rare WOFF2 transforms we don't
+                // handle yet, or an off-spec file). Fall back to filename
+                // heuristics so the UI still has something to display.
+                metadata = format == FontFormat.WebOpenFont
+                    ? CreateMetadataFromFileName(filePath)
+                    : metadata with
                     {
                         FamilyName = CleanFontName(Path.GetFileNameWithoutExtension(filePath)),
                         FullName = CleanFontName(Path.GetFileNameWithoutExtension(filePath))
                     };
-                }
             }
 
             return new FontModel
