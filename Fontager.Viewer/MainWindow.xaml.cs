@@ -51,6 +51,10 @@ public sealed partial class MainWindow : Window
     [DllImport("gdi32.dll", CharSet = CharSet.Unicode)]
     private static extern int AddFontResource(string lpFileName);
 
+    /// <summary>Undoes <see cref="AddFontResource"/> (session-wide font table). May need multiple calls (ref-counted).</summary>
+    [DllImport("gdi32.dll", CharSet = CharSet.Unicode)]
+    private static extern int RemoveFontResource(string lpFileName);
+
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern IntPtr SendMessageTimeout(
         IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam,
@@ -448,7 +452,7 @@ public sealed partial class MainWindow : Window
                     if (!confirm) return;
                 }
 
-                File.Copy(_currentFilePath, destPath, true);
+                await InstallFontFileReplacingAsync(_currentFilePath, destPath);
 
                 using (var regKey = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(FontsRegPath, true))
                 {
@@ -475,7 +479,7 @@ public sealed partial class MainWindow : Window
                     if (!confirm) return;
                 }
 
-                File.Copy(_currentFilePath, destPath, true);
+                await InstallFontFileReplacingAsync(_currentFilePath, destPath);
 
                 // HKCU per-user install: full absolute path (HKLM stores filename only).
                 using (var regKey = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(FontsRegPath, writable: true))
@@ -517,6 +521,145 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Replaces <paramref name="destPath"/> with the bytes from <paramref name="sourcePath"/>.
+    /// Releases session GDI loads and broadcasts <c>WM_FONTCHANGE</c> so Windows Font Cache
+    /// and other processes can close handles to an existing per-user/system font file before
+    /// we delete or overwrite it (avoids "file is being used by another process" on reinstall).
+    /// </summary>
+    private async Task InstallFontFileReplacingAsync(string sourcePath, string destPath)
+    {
+        var fullSrc = Path.GetFullPath(sourcePath);
+        var fullDst = Path.GetFullPath(destPath);
+
+        // Previewing from the installed path: private GDI mapping locks the destination file.
+        if (string.Equals(fullSrc, fullDst, StringComparison.OrdinalIgnoreCase))
+        {
+            DeactivateCurrentFont();
+            TryUnloadSessionLoadsOfFontFile(fullDst);
+            BroadcastFontChange();
+            await Task.Delay(200);
+            return;
+        }
+
+        if (_activeFontPath is not null
+            && string.Equals(Path.GetFullPath(_activeFontPath), fullDst, StringComparison.OrdinalIgnoreCase))
+        {
+            DeactivateCurrentFont();
+        }
+
+        if (File.Exists(fullDst))
+            TryUnloadSessionLoadsOfFontFile(fullDst);
+
+        BroadcastFontChange();
+        await Task.Delay(200);
+
+        for (var attempt = 0; attempt < 15; attempt++)
+        {
+            try
+            {
+                if (File.Exists(fullDst))
+                    File.Delete(fullDst);
+                break;
+            }
+            catch (IOException)
+            {
+                await Task.Delay(120);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                await Task.Delay(120);
+            }
+        }
+
+        try
+        {
+            File.Copy(fullSrc, fullDst, overwrite: false);
+            return;
+        }
+        catch (IOException)
+        {
+            // FontCache may still hold the destination briefly — try atomic-ish replace via staging.
+        }
+
+        await CopyFontFileViaStagingAsync(fullSrc, fullDst);
+    }
+
+    private static void TryUnloadSessionLoadsOfFontFile(string fontFilePath)
+    {
+        if (string.IsNullOrWhiteSpace(fontFilePath))
+            return;
+
+        try
+        {
+            RemoveFontResourceEx(fontFilePath, FR_PRIVATE, IntPtr.Zero);
+        }
+        catch
+        {
+            // ignore
+        }
+
+        try
+        {
+            for (var n = 0; n < 32; n++)
+            {
+                if (RemoveFontResource(fontFilePath) == 0)
+                    break;
+            }
+        }
+        catch
+        {
+            // ignore
+        }
+    }
+
+    private static void BroadcastFontChange()
+    {
+        SendMessageTimeout(
+            HWND_BROADCAST, WM_FONTCHANGE,
+            IntPtr.Zero, IntPtr.Zero,
+            SMTO_ABORTIFHUNG, 1000, out _);
+    }
+
+    private static async Task CopyFontFileViaStagingAsync(string fullSrc, string fullDst)
+    {
+        var dir = Path.GetDirectoryName(fullDst)
+            ?? throw new InvalidOperationException("Invalid font destination path.");
+        var ext = Path.GetExtension(fullDst);
+        var staging = Path.Combine(dir, $".fontager-{Guid.NewGuid():N}.tmp{ext}");
+        try
+        {
+            File.Copy(fullSrc, staging, overwrite: true);
+
+            for (var attempt = 0; attempt < 20; attempt++)
+            {
+                try
+                {
+                    if (File.Exists(fullDst))
+                        File.Delete(fullDst);
+                    break;
+                }
+                catch (IOException)
+                {
+                    await Task.Delay(120);
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    await Task.Delay(120);
+                }
+            }
+
+            File.Move(staging, fullDst, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(staging))
+            {
+                try { File.Delete(staging); } catch { /* ignore */ }
+            }
+        }
+    }
+
+    /// <summary>
     /// Makes a freshly-installed font visible to every running application:
     /// loads it into the process group via <c>AddFontResource</c> so the font
     /// is usable in this session, and broadcasts <c>WM_FONTCHANGE</c> so the
@@ -534,10 +677,7 @@ public sealed partial class MainWindow : Window
             // Best-effort; the registry entry alone is enough for next-session use.
         }
 
-        SendMessageTimeout(
-            HWND_BROADCAST, WM_FONTCHANGE,
-            IntPtr.Zero, IntPtr.Zero,
-            SMTO_ABORTIFHUNG, 1000, out _);
+        BroadcastFontChange();
     }
 
     /// <summary>
