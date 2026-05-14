@@ -142,9 +142,16 @@ public sealed partial class MainWindow : Window
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _glyphSearchDebounceTimer;
     private const int GlyphSearchDebounceMs = 150;
 
+    /// <summary>
+    /// True when this process is running with an elevated administrator token
+    /// (e.g. "Run as administrator"). Per-machine font install requires this.
+    /// </summary>
+    private readonly bool _isProcessElevated;
+
     public MainWindow()
     {
         InitializeComponent();
+        _isProcessElevated = IsRunningElevated();
 
         _viewModel = App.Services.GetRequiredService<FontViewerViewModel>();
         _settings = App.Services.GetRequiredService<SettingsService>();
@@ -405,24 +412,53 @@ public sealed partial class MainWindow : Window
         await InstallFontAsync(InstallTarget.AllUsers);
     }
 
-    private InstallTarget GetSavedInstallTarget() =>
-        _settings.InstallMode == (int)InstallTarget.AllUsers
+    private InstallTarget GetSavedInstallTarget()
+    {
+        if (!_isProcessElevated)
+            return InstallTarget.CurrentUser;
+
+        return _settings.InstallMode == (int)InstallTarget.AllUsers
             ? InstallTarget.AllUsers
             : InstallTarget.CurrentUser;
+    }
 
     private void SetSavedInstallTarget(InstallTarget target)
     {
+        if (target == InstallTarget.AllUsers && !_isProcessElevated)
+            target = InstallTarget.CurrentUser;
+
         _settings.InstallMode = (int)target;
-        UpdateInstallButtonPresentation(target);
+        UpdateInstallButtonPresentation(GetSavedInstallTarget());
     }
 
     private void UpdateInstallButtonPresentation(InstallTarget target)
     {
         bool isAllUsers = target == InstallTarget.AllUsers;
         InstallButtonText.Text = isAllUsers ? "Install (All users)" : "Install (Current user)";
-        ToolTipService.SetToolTip(
-            InstallSplitButton,
-            isAllUsers ? "Install font for all users (requires admin)" : "Install font for current user");
+
+        string tip;
+        if (_isProcessElevated)
+        {
+            tip = isAllUsers
+                ? "Install font for all users (Windows\\Fonts, machine-wide)"
+                : "Install font for the current user only";
+        }
+        else
+        {
+            tip = isAllUsers
+                ? "Install font for all users (requires administrator)"
+                : "Install font for the current user. Start Fontager with Run as administrator to unlock installing for all users from the menu.";
+        }
+
+        ToolTipService.SetToolTip(InstallSplitButton, tip);
+    }
+
+    /// <summary>
+    /// Greys out flyout actions that require elevation when this process is not elevated.
+    /// </summary>
+    private void ApplyInstallElevatedUi()
+    {
+        InstallAllUsersMenuFlyoutItem.IsEnabled = _isProcessElevated;
     }
 
     private async Task InstallFontAsync(InstallTarget target)
@@ -438,6 +474,14 @@ public sealed partial class MainWindow : Window
                 ?? Path.GetFileNameWithoutExtension(_currentFilePath);
             var fileName = Path.GetFileName(_currentFilePath);
             var registryValueName = BuildFontRegistryValueName(fontDisplayName, _currentFilePath);
+
+            if (installSystem && !_isProcessElevated)
+            {
+                await ShowInfoDialogAsync(
+                    "Administrator required",
+                    "Installing fonts for all users needs Fontager to be started with Run as administrator (right‑click the app or shortcut → Run as administrator).");
+                return;
+            }
 
             if (installSystem)
             {
@@ -1434,6 +1478,7 @@ public sealed partial class MainWindow : Window
         _viewModel.PreviewText = _settings.DefaultPreviewText;
         SetPreviewFontSize(_settings.DefaultFontSize);
         UpdateInstallButtonPresentation(GetSavedInstallTarget());
+        ApplyInstallElevatedUi();
     }
 
     private async void SettingsButton_Click(object sender, RoutedEventArgs e)
@@ -1567,6 +1612,12 @@ public sealed partial class MainWindow : Window
             },
             SelectedIndex = _settings.InstallMode
         };
+        if (installModeCombo.Items.Count > 1 && installModeCombo.Items[1] is ComboBoxItem allUsersInstallOption)
+            allUsersInstallOption.IsEnabled = _isProcessElevated;
+
+        var installTargetDescription = _isProcessElevated
+            ? "Select the default target used by the main Install button. All-users install copies to Windows\\Fonts and requires administrator privileges."
+            : "Without administrator elevation, only the current user can be selected. Start Fontager with Run as administrator to enable the 'All users' option in this list and in the Install menu.";
 
         // ── Font file-association opt-in ──
         // Adds Fontager to the Explorer "Open with..." submenu for .ttf, .otf,
@@ -1629,7 +1680,12 @@ public sealed partial class MainWindow : Window
         // Install
         panel.Children.Add(SectionHeader("Install"));
         panel.Children.Add(installModeCombo);
-        panel.Children.Add(Description("Select the default target used by the main Install button. All-users install copies to Windows\\Fonts and requires administrator privileges."));
+        panel.Children.Add(Description(installTargetDescription));
+        if (!_isProcessElevated && _settings.InstallMode == (int)InstallTarget.AllUsers)
+        {
+            panel.Children.Add(Description(
+                "Your saved default is still 'All users'; the main Install button will use it automatically after you start Fontager as administrator."));
+        }
         panel.Children.Add(fontAssocToggle);
         panel.Children.Add(Description(fontAssocPackaged
             ? "Adds Fontager to the Windows 'Open with...' menu for .ttf, .otf, .ttc, and .woff2 files. Disabled while running packaged (MSIX) because the registry writes get virtualised into the package container."
@@ -1741,10 +1797,18 @@ public sealed partial class MainWindow : Window
             _settings.ShowWaterfall = waterfallToggle.IsOn;
             _settings.WaterfallSizesRaw = waterfallSizesBox.Text;
 
-            // Install
-            if (installModeCombo.SelectedItem is ComboBoxItem si && si.Tag is int iv)
+            // Install — only persist target from the combo when elevated; otherwise
+            // the 'All users' row is disabled and SelectedIndex can disagree with the
+            // saved preference (kept for the next elevated launch).
+            if (_isProcessElevated
+                && installModeCombo.SelectedItem is ComboBoxItem si
+                && si.Tag is int iv)
+            {
                 _settings.InstallMode = iv;
+            }
+
             UpdateInstallButtonPresentation(GetSavedInstallTarget());
+            ApplyInstallElevatedUi();
 
             // Apply font-association toggle changes only when the value moved.
             if (!fontAssocPackaged && fontAssocToggle.IsOn != fontAssocInitial)

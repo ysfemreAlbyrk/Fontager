@@ -191,7 +191,6 @@
                             <SplitButton x:Name="InstallSplitButton"
                                          Click="InstallSplitButton_Click"
                                          Padding="12,8"
-                                         ToolTipService.ToolTip="Install font for current user"
                                          IsEnabled="False">
                                 <SplitButton.Content>
                                     <StackPanel Orientation="Horizontal" Spacing="6">
@@ -203,9 +202,11 @@
                                 </SplitButton.Content>
                                 <SplitButton.Flyout>
                                     <MenuFlyout>
-                                        <MenuFlyoutItem Text="Install for current user"
+                                        <MenuFlyoutItem x:Name="InstallCurrentUserMenuFlyoutItem"
+                                                        Text="Install for current user"
                                                         Click="InstallCurrentUserMenuItem_Click" />
-                                        <MenuFlyoutItem Text="Install for all users (requires admin)"
+                                        <MenuFlyoutItem x:Name="InstallAllUsersMenuFlyoutItem"
+                                                        Text="Install for all users (requires admin)"
                                                         Click="InstallAllUsersMenuItem_Click" />
                                     </MenuFlyout>
                                 </SplitButton.Flyout>

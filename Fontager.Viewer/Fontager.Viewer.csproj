@@ -5,6 +5,9 @@
     <NoWarn>$(NoWarn);MVVMTK0045</NoWarn>
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <RootNamespace>Fontager.Viewer</RootNamespace>
+    <!-- UAC / shell: Win32 FileDescription (defaults to project name if unset). -->
+    <AssemblyTitle>Fontager Viewer</AssemblyTitle>
+    <Product>Fontager</Product>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\Logo.ico</ApplicationIcon>
     <Platforms>x86;x64;ARM64</Platforms>
