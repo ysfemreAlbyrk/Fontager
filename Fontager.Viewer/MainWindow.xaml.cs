@@ -74,6 +74,13 @@ public sealed partial class MainWindow : Window
     private bool _titleBarPassthroughScheduled;
 
     /// <summary>
+    /// Last backdrop mode applied to <see cref="Window.SystemBackdrop"/> (0 Mica, 1 Acrylic,
+    /// 2 Solid, 3 Mica Alt). Avoids replacing the backdrop instance on unrelated settings
+    /// writes — that recreation flashes Mica/Acrylic.
+    /// </summary>
+    private int _appliedBackdropKind = int.MinValue;
+
+    /// <summary>
     /// True when this process is running with an elevated administrator token
     /// (e.g. "Run as administrator"). Per-machine font install requires this.
     /// </summary>
@@ -400,29 +407,46 @@ public sealed partial class MainWindow : Window
 
     private void ApplyBackdrop()
     {
+        int mode = _settings.Backdrop;
+        if (mode == 4) mode = 1; // legacy acrylic-thin tag
+        if (mode is < 0 or > 3) mode = 0;
+
         var transparent = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
 
-        switch (_settings.Backdrop)
+        switch (mode)
         {
             case 2:
                 SystemBackdrop = null;
                 RootGrid.Background = new SolidColorBrush(ResolveSolidBackdropColor());
+                _appliedBackdropKind = 2;
                 return;
 
             case 1:
-                RootGrid.Background = transparent;
-                SystemBackdrop = new DesktopAcrylicBackdrop();
-                break;
+                if (_appliedBackdropKind != 1)
+                {
+                    RootGrid.Background = transparent;
+                    SystemBackdrop = new DesktopAcrylicBackdrop();
+                }
+                _appliedBackdropKind = 1;
+                return;
 
             case 3:
-                RootGrid.Background = transparent;
-                SystemBackdrop = new MicaBackdrop { Kind = MicaKind.BaseAlt };
-                break;
+                if (_appliedBackdropKind != 3)
+                {
+                    RootGrid.Background = transparent;
+                    SystemBackdrop = new MicaBackdrop { Kind = MicaKind.BaseAlt };
+                }
+                _appliedBackdropKind = 3;
+                return;
 
             default:
-                RootGrid.Background = transparent;
-                SystemBackdrop = new MicaBackdrop { Kind = MicaKind.Base };
-                break;
+                if (_appliedBackdropKind != 0)
+                {
+                    RootGrid.Background = transparent;
+                    SystemBackdrop = new MicaBackdrop { Kind = MicaKind.Base };
+                }
+                _appliedBackdropKind = 0;
+                return;
         }
     }
 
@@ -1096,6 +1120,83 @@ public sealed partial class MainWindow : Window
             XamlRoot = Content.XamlRoot
         };
         await dialog.ShowAsync();
+    }
+
+    private async Task ShowSuccessDialogAsync(string title, string message)
+    {
+        var dialog = new ContentDialog
+        {
+            Title = title,
+            Content = BuildDialogHeroPanel(
+                "\uE73E",
+                ResolveThemeBrush("SystemFillColorSuccessBrush", Microsoft.UI.Colors.ForestGreen),
+                message),
+            CloseButtonText = "OK",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = Content.XamlRoot
+        };
+        await dialog.ShowAsync();
+    }
+
+    private async Task ShowWarningDialogAsync(string title, string message)
+    {
+        var dialog = new ContentDialog
+        {
+            Title = title,
+            Content = BuildDialogHeroPanel(
+                "\uE7BA",
+                ResolveThemeBrush("SystemFillColorCautionBrush", Microsoft.UI.Colors.DarkOrange),
+                message),
+            CloseButtonText = "OK",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = Content.XamlRoot
+        };
+        await dialog.ShowAsync();
+    }
+
+    private async Task ShowErrorDialogAsync(string title, string message)
+    {
+        var dialog = new ContentDialog
+        {
+            Title = title,
+            Content = BuildDialogHeroPanel(
+                "\uE783",
+                ResolveThemeBrush("SystemFillColorCriticalBrush", Microsoft.UI.Colors.Firebrick),
+                message),
+            CloseButtonText = "OK",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = Content.XamlRoot
+        };
+        await dialog.ShowAsync();
+    }
+
+    private static StackPanel BuildDialogHeroPanel(string glyph, Brush iconBrush, string message)
+    {
+        var panel = new StackPanel { Spacing = 16 };
+
+        panel.Children.Add(new FontIcon
+        {
+            Glyph = glyph,
+            FontSize = 44,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Foreground = iconBrush
+        });
+
+        panel.Children.Add(new TextBlock
+        {
+            Text = message,
+            TextWrapping = TextWrapping.Wrap,
+            IsTextSelectionEnabled = true
+        });
+
+        return panel;
+    }
+
+    private static Brush ResolveThemeBrush(string resourceKey, Windows.UI.Color fallback)
+    {
+        if (Application.Current.Resources.TryGetValue(resourceKey, out var o) && o is Brush br)
+            return br;
+        return new SolidColorBrush(fallback);
     }
 
     private static string GetWeightName(int weight) => weight switch

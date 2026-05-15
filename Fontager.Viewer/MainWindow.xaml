@@ -11,9 +11,7 @@
     mc:Ignorable="d"
     Title="Fontager Viewer">
 
-    <Window.SystemBackdrop>
-        <MicaBackdrop />
-    </Window.SystemBackdrop>
+    <!-- SystemBackdrop is applied from code (ApplyBackdrop) so we don't recreate it on every settings save. -->
 
     <Grid x:Name="RootGrid" Background="Transparent">
         <Grid.Resources>

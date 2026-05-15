@@ -161,7 +161,7 @@ public sealed partial class MainWindow
 
                 NotifyFontInstalled(destPath);
 
-                await ShowInfoDialogAsync("Font Installed", $"'{fontDisplayName}' has been installed for all users.");
+                await ShowSuccessDialogAsync("Font installed", $"'{fontDisplayName}' has been installed for all users.");
             }
             else
             {
@@ -199,24 +199,24 @@ public sealed partial class MainWindow
 
                 if (!persisted)
                 {
-                    await ShowInfoDialogAsync("Installation Incomplete",
+                    await ShowWarningDialogAsync("Installation incomplete",
                         $"The font file was copied to:\n{destPath}\n\nbut the registry entry under HKCU could not be verified. This usually means the app is running with a virtualized registry (packaged identity). Run Fontager unpackaged or use 'Install for all users' instead.");
                     return;
                 }
 
                 NotifyFontInstalled(destPath);
 
-                await ShowInfoDialogAsync("Font Installed", $"'{fontDisplayName}' has been installed for the current user and is now visible in Settings → Fonts.");
+                await ShowSuccessDialogAsync("Font installed", $"'{fontDisplayName}' has been installed for the current user and is now visible in Settings → Fonts.");
             }
         }
         catch (UnauthorizedAccessException)
         {
-            await ShowInfoDialogAsync("Installation Failed",
+            await ShowErrorDialogAsync("Installation failed",
                 "Access denied. System-wide installation requires running the application as administrator.");
         }
         catch (Exception ex)
         {
-            await ShowInfoDialogAsync("Installation Failed", $"Could not install font: {ex.Message}");
+            await ShowErrorDialogAsync("Installation failed", $"Could not install font: {ex.Message}");
         }
     }
 
