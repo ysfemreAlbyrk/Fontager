@@ -59,7 +59,7 @@ paket-files/
 *_wpftmp.csproj
 publish/
 *.Publish.xml
-*.pubxml
+*.pubxml.user
 *.azurePubxml
 *.publishsettings
 .localhistory/
@@ -91,3 +91,8 @@ Thumbs.db
 
 *.pfx
 BundleArtifacts/
+
+# Inno Setup / release artifacts
+installer/output/
+*-setup.exe
+Fontager.Viewer-*.zip
