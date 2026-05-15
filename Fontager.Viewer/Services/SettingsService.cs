@@ -166,7 +166,10 @@ public sealed class SettingsService
         get
         {
             var v = GetValue<int?>(BackdropKey);
-            return v is >= 0 and <= 1 ? v.Value : 0;
+            if (v is null) return 0;
+            // Legacy tag 4 ("acrylic thin") matched standard acrylic; normalize reads.
+            if (v == 4) return 1;
+            return v is >= 0 and <= 3 ? v.Value : 0;
         }
         set => SetValue(BackdropKey, value);
     }

@@ -134,6 +134,18 @@ public sealed partial class MainWindow
         GlyphBlockList.ItemsSource = _glyphBlockEntries;
     }
 
+    /// <summary>
+    /// Prefer Basic Latin when the font contains glyphs in that block; otherwise All blocks.
+    /// </summary>
+    private void SelectPreferredGlyphBlockListItem()
+    {
+        if (_glyphBlockEntries.Count == 0)
+            return;
+
+        var basic = _glyphBlockEntries.FirstOrDefault(e => e.Name == "Basic Latin" && e.Count > 0);
+        GlyphBlockList.SelectedItem = basic ?? _glyphBlockEntries[0];
+    }
+
     private void BuildCategoryChips()
     {
         GlyphCategoryChips.Children.Clear();
@@ -169,7 +181,7 @@ public sealed partial class MainWindow
             }
 
             if (_glyphBlockEntries.Count > 0)
-                GlyphBlockList.SelectedIndex = 0;
+                SelectPreferredGlyphBlockListItem();
 
             GlyphSearchBox.Text = string.Empty;
         }

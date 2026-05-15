@@ -324,9 +324,16 @@
                             <Setter Property="Height" Value="32" />
                         </Style>
                     </Pivot.Resources>
+                    <!-- Framework-provided content transition only (no custom storyboards). -->
+                    <Pivot.ItemContainerTransitions>
+                        <TransitionCollection>
+                            <ContentThemeTransition />
+                        </TransitionCollection>
+                    </Pivot.ItemContainerTransitions>
 
                     <!-- Preview Tab -->
                     <PivotItem Header="Preview">
+                        <Border Background="Transparent">
                         <ScrollViewer Padding="-12,8,12,0" VerticalScrollBarVisibility="Auto">
                             <StackPanel Spacing="12">
 
@@ -385,10 +392,12 @@
                                 </StackPanel>
                             </StackPanel>
                         </ScrollViewer>
+                        </Border>
                     </PivotItem>
 
                     <!-- Glyphs Tab -->
                     <PivotItem Header="Glyphs">
+                        <Border Background="Transparent">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
@@ -581,13 +590,16 @@
                                 </Grid>
                             </Grid>
                         </Grid>
+                        </Border>
                     </PivotItem>
 
                     <!-- Metadata Tab -->
                     <PivotItem Header="Info">
+                        <Border Background="Transparent">
                         <ScrollViewer Padding="12,8" VerticalScrollBarVisibility="Auto">
                             <StackPanel Spacing="4" x:Name="MetadataPanel" />
                         </ScrollViewer>
+                        </Border>
                     </PivotItem>
 
                 </Pivot>

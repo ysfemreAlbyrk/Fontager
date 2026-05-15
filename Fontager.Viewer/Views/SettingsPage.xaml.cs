@@ -64,7 +64,7 @@ public sealed partial class SettingsPage : Page
     {
         // Appearance
         ThemeCombo.SelectedIndex = (int)_settings.Theme;
-        BackdropCombo.SelectedIndex = _settings.Backdrop;
+        SyncBackdropComboSelection();
 
         // Preview
         PreviewTextBox.Text = _settings.DefaultPreviewText;
@@ -114,6 +114,24 @@ public sealed partial class SettingsPage : Page
 
         DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low,
             () => ApplyTwoPaneLayout(TwoPaneRoot.ActualWidth > 1 ? TwoPaneRoot.ActualWidth : ActualWidth));
+    }
+
+    /// <summary>Selects backdrop row by persisted <see cref="SettingsService.Backdrop"/> tag (not list index).</summary>
+    private void SyncBackdropComboSelection()
+    {
+        int saved = _settings.Backdrop;
+        for (int i = 0; i < BackdropCombo.Items.Count; i++)
+        {
+            if (BackdropCombo.Items[i] is ComboBoxItem cbi
+                && TryReadComboBoxIntTag(cbi, out var tag)
+                && tag == saved)
+            {
+                BackdropCombo.SelectedIndex = i;
+                return;
+            }
+        }
+
+        BackdropCombo.SelectedIndex = 0;
     }
 
     private void TwoPaneRoot_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -207,7 +225,7 @@ public sealed partial class SettingsPage : Page
         if (!_initialized) return;
         if (BackdropCombo.SelectedItem is ComboBoxItem item
             && TryReadComboBoxIntTag(item, out var v)
-            && v is >= 0 and <= 1)
+            && v is >= 0 and <= 3)
         {
             _settings.Backdrop = v;
         }

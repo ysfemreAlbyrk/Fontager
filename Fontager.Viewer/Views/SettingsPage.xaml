@@ -19,9 +19,9 @@
             <Setter Property="Background" Value="{ThemeResource LayerFillColorDefaultBrush}" />
             <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="CornerRadius" Value="4" />
             <Setter Property="Padding" Value="16,14" />
-            <Setter Property="Margin" Value="0,0,0,8" />
+            <Setter Property="Margin" Value="0,0,0,0" />
         </Style>
         <Style x:Key="SettingsSectionHeaderStyle" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}">
             <Setter Property="FontWeight" Value="SemiBold" />
@@ -129,7 +129,7 @@
                                         Margin="0,0,12,0">
                                 <TextBlock Text="Backdrop material"
                                            Style="{StaticResource BodyStrongTextBlockStyle}" />
-                                <TextBlock Text="Mica or acrylic behind window content."
+                                <TextBlock Text="Window backdrop: Mica, Mica Alt, acrylic, or solid theme fill."
                                            Style="{StaticResource CaptionTextBlockStyle}"
                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                            TextWrapping="WrapWholeWords" />
@@ -140,7 +140,9 @@
                                       MinWidth="200"
                                       SelectionChanged="BackdropCombo_SelectionChanged">
                                 <ComboBoxItem Content="Mica" Tag="0" />
+                                <ComboBoxItem Content="Mica Alt" Tag="3" />
                                 <ComboBoxItem Content="Acrylic" Tag="1" />
+                                <ComboBoxItem Content="Solid" Tag="2" />
                             </ComboBox>
                         </Grid>
                     </Border>
@@ -226,7 +228,7 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="52" />
                             </Grid.ColumnDefinitions>
                             <FontIcon Grid.Column="0"
                                       Glyph="&#xE70F;"
@@ -248,6 +250,8 @@
                             <ToggleSwitch x:Name="PreviewControlsToggle"
                                           Grid.Column="2"
                                           VerticalAlignment="Center"
+                                          HorizontalAlignment="Right"
+                                          MinWidth="0"
                                           OnContent=""
                                           OffContent=""
                                           Toggled="PreviewControlsToggle_Toggled" />
@@ -262,7 +266,7 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="52" />
                             </Grid.ColumnDefinitions>
                             <FontIcon Grid.Column="0"
                                       Glyph="&#xE8FF;"
@@ -284,6 +288,8 @@
                             <ToggleSwitch x:Name="QuickViewToggle"
                                           Grid.Column="2"
                                           VerticalAlignment="Center"
+                                          HorizontalAlignment="Right"
+                                          MinWidth="0"
                                           OnContent=""
                                           OffContent=""
                                           Toggled="QuickViewToggle_Toggled" />
@@ -295,7 +301,7 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="52" />
                             </Grid.ColumnDefinitions>
                             <FontIcon Grid.Column="0"
                                       Glyph="&#xE81E;"
@@ -317,6 +323,8 @@
                             <ToggleSwitch x:Name="WaterfallToggle"
                                           Grid.Column="2"
                                           VerticalAlignment="Center"
+                                          HorizontalAlignment="Right"
+                                          MinWidth="0"
                                           OnContent=""
                                           OffContent=""
                                           Toggled="WaterfallToggle_Toggled" />
@@ -407,7 +415,7 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="52" />
                             </Grid.ColumnDefinitions>
                             <FontIcon Grid.Column="0"
                                       Glyph="&#xE71B;"
@@ -429,6 +437,8 @@
                             <ToggleSwitch x:Name="FontAssocToggle"
                                           Grid.Column="2"
                                           VerticalAlignment="Center"
+                                          HorizontalAlignment="Right"
+                                          MinWidth="0"
                                           OnContent=""
                                           OffContent=""
                                           Toggled="FontAssocToggle_Toggled" />

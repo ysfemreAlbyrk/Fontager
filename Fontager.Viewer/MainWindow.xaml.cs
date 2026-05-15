@@ -400,9 +400,46 @@ public sealed partial class MainWindow : Window
 
     private void ApplyBackdrop()
     {
-        SystemBackdrop = _settings.Backdrop == 1
-            ? new DesktopAcrylicBackdrop()
-            : new MicaBackdrop();
+        var transparent = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+
+        switch (_settings.Backdrop)
+        {
+            case 2:
+                SystemBackdrop = null;
+                RootGrid.Background = new SolidColorBrush(ResolveSolidBackdropColor());
+                return;
+
+            case 1:
+                RootGrid.Background = transparent;
+                SystemBackdrop = new DesktopAcrylicBackdrop();
+                break;
+
+            case 3:
+                RootGrid.Background = transparent;
+                SystemBackdrop = new MicaBackdrop { Kind = MicaKind.BaseAlt };
+                break;
+
+            default:
+                RootGrid.Background = transparent;
+                SystemBackdrop = new MicaBackdrop { Kind = MicaKind.Base };
+                break;
+        }
+    }
+
+    private Windows.UI.Color ResolveSolidBackdropColor()
+    {
+        if (Application.Current.Resources.TryGetValue("ApplicationPageBackgroundThemeBrush", out var o)
+            && o is SolidColorBrush scb)
+            return scb.Color;
+
+        var theme = RootGrid.ActualTheme;
+        var dark = theme == ElementTheme.Dark
+            || (theme == ElementTheme.Default
+                && Application.Current.RequestedTheme == ApplicationTheme.Dark);
+
+        return dark
+            ? Windows.UI.Color.FromArgb(255, 32, 32, 32)
+            : Windows.UI.Color.FromArgb(255, 243, 243, 243);
     }
 
     // ── File Open ──────────────────────────────────────────────
