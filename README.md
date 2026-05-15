@@ -79,20 +79,65 @@ Shared library containing models, services, and helpers used by both application
 3. Set `Fontager.Viewer` as the startup project
 4. Build and run (F5)
 
+### 💻 Command Line Build *(Not Recommended for Development)*
+
+If you prefer not to use Visual Studio, you can build the project using the **dotnet CLI**.
+
+<span style="color: #ee6600; background-color: #ffdd99; padding: 2px 4px; border-radius: 3px;">
+While you can build the project using the **dotnet CLI**, **Visual Studio 2022 is the recommended way** for development due to its seamless integration with WinUI 3 and Windows App SDK.
+</span>
+
+#### Steps
+1. Navigate to the project directory:
+  ```sh
+    cd Fontager
+  ```
+2. Restore dependencies:
+  ```sh
+    dotnet restore
+  ```
+3. Build the project:
+  ```sh
+  dotnet build Fontager.Viewer -c Debug -f net8.0-windows10.0.19041.0 -r win-x64
+  ```
+  - `-c Debug` : Uses the Release configuration. (`Debug`,  `Release`)
+  - `-f net8.0-windows10.0.19041.0` : Specifies the target framework
+  - `-r win-x64` : RuntimeIdentifier (RID), target platform (`win-x64`, `win-x86`, `win-arm64`)
+  
+4. Output files will be in:
+  `Fontager.Viewer\bin\Release\net8.0-windows10.0.19041.0\`
+
 ### 📦 Installation
 
-**Visual Studio (MSIX):**
+Fontager ships as an **unpackaged WinUI 3 app**: the runtime payload is a folder containing
+`Fontager Viewer.exe` and the self-contained Windows App SDK / .NET runtime — typically delivered inside an **installer** (shortcuts + uninstall) rather than as a loose zip.
+No MSIX/Store identity on that path, so no separate runtime install on the target machine.
+
+The rationale (and the path to switch back to MSIX/Store later) is documented
+in [`docs/research/packaging-decision.md`](docs/research/packaging-decision.md).
+
+**Visual Studio:**
 1. Set configuration to **Release** and platform to **x64**
-2. Right-click `Fontager.Viewer` → **Package and Publish** → **Create App Packages**
-3. Select **Sideloading** → **Next**
-4. Create or select a certificate → **Create**
+2. Right-click `Fontager.Viewer` → **Publish** → **Folder**
+3. Accept **self-contained** + **win-x64** (see `Properties/PublishProfiles/FolderProfile.pubxml`).
+4. Ship the folder **`bin\x64\Release\net8.0-windows10.0.19041.0\win-x64\publish\`** — same output as `dotnet publish`.
 
-📁 **Output:** `Fontager.Viewer\AppPackages\Fontager.Viewer_X.X.X.X_x64.msix`  
-Double-click the `.msix` file to install, or distribute it to other users.
+Do **not** rely on **`bin\Release\Publish`**. That was an old default `PublishDir` outside the normal SDK folder layout; publishes there often missed native / WinAppSDK files while **`bin\x64\Release\net8.0-windows10.0.19041.0\`** looked fine after a normal **Build** because MSBuild copies the full dependency set during compile.
 
-**Download From GitHub Release:**
-1. Go to [latest release page](https://github.com/ysfemreAlbyrk/Fontager/releases/latest) and download.
-2. Run the bat file.
+**Command line:**
+```sh
+dotnet publish Fontager.Viewer -c Release -r win-x64 --self-contained
+```
+Output lands in `Fontager.Viewer\bin\x64\Release\net8.0-windows10.0.19041.0\win-x64\publish\` when publishing with platform **x64**.
+Run `Fontager Viewer.exe` from there directly, or copy the folder anywhere.
+
+**Note:** Always ship the **entire** publish folder — not only the `.exe`. Also unzip fully before running (running from inside the zip often fails).
+
+**Download from GitHub Releases:**
+1. Go to the [latest release page](https://github.com/ysfemreAlbyrk/Fontager/releases/latest) and download.
+2. Extract the zip and run `Fontager Viewer.exe`.
+
+> **Microsoft Store / MSIX:** not pursued at this stage.
 
 ## 🛠️ Tech Stack
 
@@ -102,12 +147,25 @@ Double-click the `.msix` file to install, or distribute it to other users.
 | 💻 **Language** | C# / .NET 8 | Modern .NET platform |
 | 🏗️ **Architecture** | MVVM with `CommunityToolkit.Mvvm` | Model-View-ViewModel pattern |
 | 🔌 **DI** | `Microsoft.Extensions.DependencyInjection` | Dependency injection |
-| 🔍 **Font Parsing** | Custom binary parser | No external dependencies |
+| 🔍 **Font Parsing** | Custom binary parser (`name`, `OS/2`, `head`, `maxp`, `fvar`, `cmap`) | No external dependencies |
 | 📦 **Font Loading** | Win32 GDI (`AddFontResourceEx`) + XAML `ms-appdata` URI caching | Native font handling |
+| 📐 **Packaging** | Unpackaged WinUI 3, self-contained WinAppSDK | See [packaging-decision](docs/research/packaging-decision.md) |
 
 ## 🔗 File Association
 
-Fontager.Viewer registers for `.otf`, `.ttc`, and `.woff2` files. After installation, double-click a font file or set Fontager as default in **Settings → Apps → Default apps → Choose default apps by file type**. For `.ttf` files (reserved by Windows), you can manually select Fontager from the "Open with" menu.
+Because the build is unpackaged, file associations are opt-in: open
+**Settings → Install → "Register Fontager for font files (current user)"**.
+That single toggle adds Fontager to the Explorer *Open with...* submenu for
+**`.ttf`, `.otf`, `.ttc`, and `.woff2`** by writing per-user entries under
+`HKCU\Software\Classes`. No admin needed, and the same toggle reverses it.
+
+You can also right-click any font file → *Open with* → *Choose another app*
+→ pick Fontager Viewer and tick *Always use this app*. That works even
+without flipping the Settings toggle.
+
+A deeper write-up of why `.ttf` is the awkward one (Windows reserves it and
+the MSIX manifest schema bans it) lives in
+[`docs/research/font-parsing.md`](docs/research/font-parsing.md#6-ttf-file-association-limitation-on-windows-appendix).
 
 ## 📄 License
 

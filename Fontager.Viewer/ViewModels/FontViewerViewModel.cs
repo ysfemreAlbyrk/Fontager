@@ -1,7 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
+using Fontager.Core.Helpers;
 using Fontager.Core.Models;
 using Fontager.Core.Services;
 
@@ -55,7 +58,14 @@ public partial class FontViewerViewModel : ObservableObject
 
     // ── Glyph Grid ─────────────────────────────────────────────
 
-    public ObservableCollection<GlyphItem> GlyphItems { get; } = [];
+    /// <summary>
+    /// Master glyph list. Plain <see cref="List{T}"/> on purpose — this is
+    /// never bound to a control (the GridView is bound to a filtered view in
+    /// <c>MainWindow.xaml.cs</c>), so the change-notification machinery of
+    /// <see cref="ObservableCollection{T}"/> would just be paid-for overhead
+    /// every time we rebuild it for a new font (can be 10k+ items).
+    /// </summary>
+    public List<GlyphItem> GlyphItems { get; } = [];
 
     // ── Public Methods ─────────────────────────────────────────
 
@@ -120,29 +130,59 @@ public partial class FontViewerViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Generates glyph items for the character map. Public for code-behind access.
+    /// Generates glyph items for the character map from the font's actual cmap.
+    /// Falls back to Basic Latin / Latin-1 / Latin Extended-A when the cmap
+    /// could not be parsed (e.g. WOFF2 with the current binary parser).
     /// </summary>
     public void GenerateGlyphItemsPublic()
     {
         GlyphItems.Clear();
 
-        // Basic Latin (U+0020 - U+007E)
-        for (int cp = 0x0020; cp <= 0x007E; cp++)
+        var supported = CurrentFont?.Metadata.SupportedCodePoints;
+        if (supported is { Count: > 0 })
         {
-            GlyphItems.Add(new GlyphItem(cp));
+            // Reserve capacity up-front to avoid repeated List resizes for
+            // large CJK / emoji fonts (can hit 20k+ glyphs).
+            GlyphItems.Capacity = Math.Max(GlyphItems.Capacity, supported.Count);
+
+            // Pre-sort once; downstream filtering relies on List order being
+            // stable in code-point order.
+            var sorted = new int[supported.Count];
+            int i = 0;
+            foreach (var cp in supported) sorted[i++] = cp;
+            Array.Sort(sorted);
+
+            foreach (var cp in sorted)
+            {
+                if (!IsRenderableCodePoint(cp)) continue;
+                GlyphItems.Add(new GlyphItem(cp));
+            }
+            return;
         }
 
-        // Latin-1 Supplement (U+00A0 - U+00FF)
-        for (int cp = 0x00A0; cp <= 0x00FF; cp++)
-        {
-            GlyphItems.Add(new GlyphItem(cp));
-        }
+        // Fallback for fonts whose cmap we could not decode.
+        AddRange(0x0020, 0x007E);
+        AddRange(0x00A0, 0x00FF);
+        AddRange(0x0100, 0x017F);
 
-        // Latin Extended-A (U+0100 - U+017F)
-        for (int cp = 0x0100; cp <= 0x017F; cp++)
+        void AddRange(int start, int end)
         {
-            GlyphItems.Add(new GlyphItem(cp));
+            for (int cp = start; cp <= end; cp++) GlyphItems.Add(new GlyphItem(cp));
         }
+    }
+
+    /// <summary>
+    /// Skips code points that have no visible glyph (controls, surrogates,
+    /// private use, formatting). The cmap can technically claim these.
+    /// </summary>
+    private static bool IsRenderableCodePoint(int cp)
+    {
+        if (cp < 0x20) return false;                  // C0 controls
+        if (cp == 0x7F) return false;                 // DEL
+        if (cp >= 0x80 && cp <= 0x9F) return false;   // C1 controls
+        if (cp >= 0xD800 && cp <= 0xDFFF) return false; // surrogate halves
+        if (cp > 0x10FFFF) return false;              // out of range
+        return true;
     }
 }
 
@@ -156,9 +196,26 @@ public record WaterfallItem(int Size, string Text)
 
 /// <summary>
 /// Represents a single glyph in the character map grid.
+///
+/// Designed to be allocated once and read many times — for a CJK font we can
+/// have 20k+ of these. Everything (Character / UnicodeLabel / Block /
+/// Category) is precomputed in the constructor so per-frame filtering and
+/// data-binding stays O(items) with a tiny constant, not O(items × classify).
 /// </summary>
-public record GlyphItem(int CodePoint)
+public sealed class GlyphItem
 {
-    public string Character => char.ConvertFromUtf32(CodePoint);
-    public string UnicodeLabel => $"U+{CodePoint:X4}";
+    public int CodePoint { get; }
+    public string Character { get; }
+    public string UnicodeLabel { get; }
+    public UnicodeBlocks.UnicodeBlock Block { get; }
+    public GlyphCategory Category { get; }
+
+    public GlyphItem(int codePoint)
+    {
+        CodePoint = codePoint;
+        Character = char.ConvertFromUtf32(codePoint);
+        UnicodeLabel = $"U+{codePoint:X4}";
+        Block = UnicodeBlocks.GetBlock(codePoint);
+        Category = GlyphCategoryClassifier.Classify(codePoint);
+    }
 }

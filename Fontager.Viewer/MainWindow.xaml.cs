@@ -1,20 +1,31 @@
 using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
+using System.Security.Principal;
 using System.Threading.Tasks;
+using Fontager.Core.Helpers;
 using Fontager.Core.Models;
 using Fontager.Core.Services;
 using Fontager.Viewer.Services;
 using Fontager.Viewer.ViewModels;
+using Fontager.Viewer.Views;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI;
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Text;
 using Microsoft.UI.Windowing;
+using Microsoft.UI.Dispatching;
+using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Windows.ApplicationModel;
+using Windows.Graphics;
 using Windows.Storage;
 using Windows.Storage.Pickers;
 using WinRT.Interop;
@@ -23,61 +34,62 @@ namespace Fontager.Viewer;
 
 public sealed partial class MainWindow : Window
 {
+    private enum InstallTarget
+    {
+        CurrentUser = 0,
+        AllUsers = 1
+    }
+
     private readonly FontViewerViewModel _viewModel;
     private readonly SettingsService _settings;
     private readonly IFontService _fontService;
     private FontFamily? _loadedFontFamily;
-
-    // ── Win32 Interop ───────────────────────────────────────────
-
-    [DllImport("gdi32.dll", CharSet = CharSet.Unicode)]
-    private static extern int AddFontResourceEx(string lpszFilename, uint fl, IntPtr pdv);
-
-    [DllImport("gdi32.dll", CharSet = CharSet.Unicode)]
-    private static extern bool RemoveFontResourceEx(string lpszFilename, uint fl, IntPtr pdv);
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr CallWindowProc(IntPtr lpPrevWndFunc, IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
-
-    [DllImport("user32.dll")]
-    private static extern int GetDpiForWindow(IntPtr hwnd);
-
-    private delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
-    private WndProcDelegate? _wndProcDelegate;
-    private IntPtr _oldWndProc;
-
-    private const int GWL_WNDPROC = -4;
-    private const uint WM_GETMINMAXINFO = 0x0024;
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct POINT { public int x, y; }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct MINMAXINFO
-    {
-        public POINT ptReserved;
-        public POINT ptMaxSize;
-        public POINT ptMaxPosition;
-        public POINT ptMinTrackSize;
-        public POINT ptMaxTrackSize;
-    }
-
-    private const uint FR_PRIVATE = 0x10;
     private const string FontCacheFolderName = "FontCache";
 
     private string? _activeFontPath;
     private string? _currentFilePath;
     private int _currentFontIndex;
     private int _currentFontCount = 1;
-    private string? _cachedFontFileName;
+    /// <summary>Full path of the cached preview font file (deleted before writing the next cache entry).</summary>
+    private string? _cachedFontDiskPath;
     private bool _quickViewAutoShown; // true when Quick View was auto-shown due to small window
+
+    // ── Glyph filtering state ──────────────────────────────────
+    // The grid is the intersection of three filters: a Unicode block
+    // (sidebar), a functional category (chips), and a free-text search.
+    private readonly ObservableCollection<GlyphBlockEntry> _glyphBlockEntries = new();
+    private GlyphCategory _glyphCategoryFilter = GlyphCategory.All;
+    private UnicodeBlocks.UnicodeBlock? _glyphBlockFilter;
+    private string _glyphSearchText = string.Empty;
+    private bool _suppressGlyphFilterEvents;
+
+    // Search input is debounced: a fast typist hitting the search box would
+    // otherwise re-filter 11k+ glyphs and rebuild the GridView ItemsSource on
+    // every keystroke. 150 ms is short enough to feel instant and long enough
+    // to coalesce a typed word.
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _glyphSearchDebounceTimer;
+    private const int GlyphSearchDebounceMs = 150;
+
+    /// <summary>Coalesces custom title-bar passthrough recomputation (avoid resize storms).</summary>
+    private bool _titleBarPassthroughScheduled;
+
+    /// <summary>
+    /// Last backdrop mode applied to <see cref="Window.SystemBackdrop"/> (0 Mica, 1 Acrylic,
+    /// 2 Solid, 3 Mica Alt). Avoids replacing the backdrop instance on unrelated settings
+    /// writes — that recreation flashes Mica/Acrylic.
+    /// </summary>
+    private int _appliedBackdropKind = int.MinValue;
+
+    /// <summary>
+    /// True when this process is running with an elevated administrator token
+    /// (e.g. "Run as administrator"). Per-machine font install requires this.
+    /// </summary>
+    private readonly bool _isProcessElevated;
 
     public MainWindow()
     {
         InitializeComponent();
+        _isProcessElevated = IsRunningElevated();
 
         _viewModel = App.Services.GetRequiredService<FontViewerViewModel>();
         _settings = App.Services.GetRequiredService<SettingsService>();
@@ -93,11 +105,68 @@ public sealed partial class MainWindow : Window
 
         SetAppVersion();
 
+        // SettingsPage writes through to SettingsService control-by-control;
+        // we listen here so the user sees theme/backdrop/preview changes
+        // take effect the instant they tap a control (no Save button).
+        _settings.Changed += OnSettingsChanged;
+
         // Auto-show/hide Quick View based on window size
         this.SizeChanged += OnWindowSizeChanged;
+        this.SizeChanged += (_, _) => ScheduleTitleBarPassthroughUpdate();
+
+        AppTitleBar.Loaded += (_, _) => ScheduleTitleBarPassthroughUpdate();
+        AppTitleBar.SizeChanged += (_, _) => ScheduleTitleBarPassthroughUpdate();
 
         if (!string.IsNullOrEmpty(App.FontFilePath))
             _ = LoadFontFromPathAsync(App.FontFilePath, 0);
+    }
+
+    private bool _suppressSettingsChangedReaction;
+
+    /// <summary>
+    /// Re-applies window-level settings (theme, backdrop, preview visibility,
+    /// glyph/waterfall sections) after the Settings page mutates them.
+    /// Lightweight on purpose — heavy rebuilds (font display, glyph grid) are
+    /// triggered only when the user navigates back from Settings.
+    /// </summary>
+    private void OnSettingsChanged(object? sender, EventArgs e)
+    {
+        if (_suppressSettingsChangedReaction) return;
+
+        try
+        {
+            // Theme + backdrop are window-level; cheap to re-apply on every
+            // change.
+            if (Content is FrameworkElement fe)
+                fe.RequestedTheme = _settings.Theme;
+            ApplyBackdrop();
+
+            // Install button label tracks the saved target.
+            UpdateInstallButtonPresentation(GetSavedInstallTarget());
+            ApplyInstallElevatedUi();
+
+            // Keep the main preview strip in sync with persisted defaults whenever
+            // Settings changes (including while a font is loaded — previously only
+            // the empty-state path refreshed DefaultPreviewText / DefaultFontSize).
+            PreviewTextBox.Text = _settings.DefaultPreviewText;
+            _viewModel.PreviewText = _settings.DefaultPreviewText;
+            SetPreviewFontSize(_settings.DefaultFontSize);
+
+            if (_viewModel.HasFont)
+            {
+                PreviewSection.Visibility = _settings.ShowPreviewControls
+                    ? Visibility.Visible : Visibility.Collapsed;
+                QuickViewSection.Visibility = _settings.ShowQuickView
+                    ? Visibility.Visible : Visibility.Collapsed;
+                WaterfallSection.Visibility = _settings.ShowWaterfall
+                    ? Visibility.Visible : Visibility.Collapsed;
+                BuildWaterfallView();
+            }
+        }
+        catch
+        {
+            // Best-effort. Settings page must never crash MainWindow.
+        }
     }
 
     private void OnWindowSizeChanged(object sender, WindowSizeChangedEventArgs args)
@@ -132,26 +201,197 @@ public sealed partial class MainWindow : Window
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
 
-        // Set minimum window size via Win32 WM_GETMINMAXINFO
         SetMinimumWindowSize(600, 266);
+
+        ApplyWindowIcon();
+        AllowDragDropFromLowerIntegrity();
+    }
+
+    /// <summary>
+    /// One passthrough update per UI frame — avoids O(n) WinRT work on every
+    /// intermediate resize pixel when the user drags the window edge.
+    /// </summary>
+    private void ScheduleTitleBarPassthroughUpdate()
+    {
+        if (_titleBarPassthroughScheduled)
+            return;
+        _titleBarPassthroughScheduled = true;
+        DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () =>
+        {
+            _titleBarPassthroughScheduled = false;
+            UpdateCustomTitleBarPassthroughRects();
+        });
+    }
+
+    /// <summary>
+    /// Marks caption-button safe zones and forwards hits for interactive title-bar
+    /// controls per <see href="https://learn.microsoft.com/windows/apps/develop/title-bar">title-bar guidance</see>.
+    /// </summary>
+    private void UpdateCustomTitleBarPassthroughRects()
+    {
+        if (!ExtendsContentIntoTitleBar || AppTitleBar.XamlRoot is null)
+            return;
+
+        try
+        {
+            var scale = AppTitleBar.XamlRoot.RasterizationScale;
+            var chrome = AppWindow.TitleBar;
+            TitleBarLeftInsetColumn.Width = new GridLength(chrome.LeftInset / scale);
+            TitleBarRightInsetColumn.Width = new GridLength(chrome.RightInset / scale);
+
+            var rects = new List<RectInt32>();
+
+            void AddIfInteractive(FrameworkElement? el)
+            {
+                if (el is null || el.Visibility != Visibility.Visible)
+                    return;
+                if (el.ActualWidth <= 1 || el.ActualHeight <= 1)
+                    return;
+                rects.Add(ToPhysicalPassthroughRect(el, scale));
+            }
+
+            AddIfInteractive(BackButton);
+            AddIfInteractive(OpenButtonPanel);
+            AddIfInteractive(SettingsButton);
+
+            var src = InputNonClientPointerSource.GetForWindowId(AppWindow.Id);
+            src.ClearRegionRects(NonClientRegionKind.Passthrough);
+            if (rects.Count > 0)
+                src.SetRegionRects(NonClientRegionKind.Passthrough, rects.ToArray());
+        }
+        catch
+        {
+            // Shells without full InputNonClientPointerSource support: skip silently.
+        }
+    }
+
+    private static RectInt32 ToPhysicalPassthroughRect(FrameworkElement el, double scale)
+    {
+        var gt = el.TransformToVisual(null);
+        var b = gt.TransformBounds(new Windows.Foundation.Rect(0, 0, el.ActualWidth, el.ActualHeight));
+        return new RectInt32(
+            (int)Math.Round(b.X * scale),
+            (int)Math.Round(b.Y * scale),
+            (int)Math.Round(b.Width * scale),
+            (int)Math.Round(b.Height * scale));
+    }
+
+    /// <summary>
+    /// When Fontager runs elevated, Windows UIPI blocks lower-integrity Explorer
+    /// from delivering drag-drop and clipboard messages. Whitelist the three
+    /// relevant window messages so drag-drop and paste keep working under
+    /// "Run as administrator".
+    /// </summary>
+    private void AllowDragDropFromLowerIntegrity()
+    {
+        if (!IsRunningElevated()) return;
+
+        var hwnd = WindowNative.GetWindowHandle(this);
+        ChangeWindowMessageFilterEx(hwnd, WM_DROPFILES, MSGFLT_ALLOW, IntPtr.Zero);
+        ChangeWindowMessageFilterEx(hwnd, WM_COPYDATA, MSGFLT_ALLOW, IntPtr.Zero);
+        ChangeWindowMessageFilterEx(hwnd, WM_COPYGLOBALDATA, MSGFLT_ALLOW, IntPtr.Zero);
+    }
+
+    private static bool IsRunningElevated()
+    {
+        try
+        {
+            using var identity = WindowsIdentity.GetCurrent();
+            var principal = new WindowsPrincipal(identity);
+            return principal.IsInRole(WindowsBuiltInRole.Administrator);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Sets the window icon used by Alt+Tab, the taskbar, and the title bar.
+    /// AppWindow.SetIcon works for packaged and unpackaged builds; we also push
+    /// the icon via WM_SETICON so the Alt+Tab thumbnail picks it up reliably
+    /// when the package install directory differs from the working directory.
+    /// </summary>
+    private void ApplyWindowIcon()
+    {
+        var hwnd = WindowNative.GetWindowHandle(this);
+
+        // Resolve the icon path: prefer the package install location when
+        // running packaged, fall back to the executable directory.
+        string iconPath = ResolveAssetPath("Assets\\Logo.ico");
+
+        try
+        {
+            if (File.Exists(iconPath))
+            {
+                AppWindow.SetIcon(iconPath);
+            }
+        }
+        catch
+        {
+            // SetIcon can throw on some platform/SDK combinations; fall through
+            // to the Win32 path which is what populates the Alt+Tab thumbnail.
+        }
+
+        if (!File.Exists(iconPath)) return;
+
+        var smallIcon = LoadImage(IntPtr.Zero, iconPath, IMAGE_ICON, 16, 16, LR_LOADFROMFILE);
+        var bigIcon = LoadImage(IntPtr.Zero, iconPath, IMAGE_ICON, 32, 32, LR_LOADFROMFILE);
+
+        if (smallIcon != IntPtr.Zero)
+            SendMessage(hwnd, WM_SETICON, (IntPtr)ICON_SMALL, smallIcon);
+        if (bigIcon != IntPtr.Zero)
+            SendMessage(hwnd, WM_SETICON, (IntPtr)ICON_BIG, bigIcon);
+    }
+
+    private static string ResolveAssetPath(string relativePath)
+    {
+        if (FileAssociationService.IsRunningPackaged)
+        {
+            try
+            {
+                var packagePath = Package.Current.InstalledLocation.Path;
+                var packaged = Path.Combine(packagePath, relativePath);
+                if (File.Exists(packaged)) return packaged;
+            }
+            catch
+            {
+                // Rare: packaged but Storage API unavailable — fall through.
+            }
+        }
+
+        var baseDir = AppContext.BaseDirectory;
+        return Path.Combine(baseDir, relativePath);
     }
 
     private void SetAppVersion()
     {
         string versionStr;
-        try
+        if (FileAssociationService.IsRunningPackaged)
         {
-            var version = Package.Current.Id.Version;
-            versionStr = $"v{version.Major}.{version.Minor}.{version.Build}";
+            try
+            {
+                var version = Package.Current.Id.Version;
+                versionStr = $"v{version.Major}.{version.Minor}.{version.Build}";
+            }
+            catch
+            {
+                versionStr = AssemblyVersionFallback();
+            }
         }
-        catch
+        else
         {
-            var asm = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
-            versionStr = asm != null ? $"v{asm.Major}.{asm.Minor}.{asm.Build}" : "v0.0.0";
+            versionStr = AssemblyVersionFallback();
         }
         TitleBarVersion.Text = versionStr;
         if (EmptyStateVersion != null)
             EmptyStateVersion.Text = versionStr;
+    }
+
+    private static string AssemblyVersionFallback()
+    {
+        var asm = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+        return asm != null ? $"v{asm.Major}.{asm.Minor}.{asm.Build}" : "v0.0.0";
     }
 
     private async void EmptyStateGitHub_Click(object sender, RoutedEventArgs e)
@@ -182,104 +422,110 @@ public sealed partial class MainWindow : Window
 
     private void ApplyBackdrop()
     {
-        SystemBackdrop = _settings.Backdrop == 1
-            ? new DesktopAcrylicBackdrop()
-            : new MicaBackdrop();
+        int mode = _settings.Backdrop;
+        if (mode == 4) mode = 1; // legacy acrylic-thin tag
+        if (mode is < 0 or > 3) mode = 0;
+
+        var transparent = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+
+        switch (mode)
+        {
+            case 2:
+                SystemBackdrop = null;
+                RootGrid.Background = new SolidColorBrush(ResolveSolidBackdropColor());
+                _appliedBackdropKind = 2;
+                return;
+
+            case 1:
+                if (_appliedBackdropKind != 1)
+                {
+                    RootGrid.Background = transparent;
+                    SystemBackdrop = new DesktopAcrylicBackdrop();
+                }
+                _appliedBackdropKind = 1;
+                return;
+
+            case 3:
+                if (_appliedBackdropKind != 3)
+                {
+                    RootGrid.Background = transparent;
+                    SystemBackdrop = new MicaBackdrop { Kind = MicaKind.BaseAlt };
+                }
+                _appliedBackdropKind = 3;
+                return;
+
+            default:
+                if (_appliedBackdropKind != 0)
+                {
+                    RootGrid.Background = transparent;
+                    SystemBackdrop = new MicaBackdrop { Kind = MicaKind.Base };
+                }
+                _appliedBackdropKind = 0;
+                return;
+        }
+    }
+
+    private Windows.UI.Color ResolveSolidBackdropColor()
+    {
+        if (Application.Current.Resources.TryGetValue("ApplicationPageBackgroundThemeBrush", out var o)
+            && o is SolidColorBrush scb)
+            return scb.Color;
+
+        var theme = RootGrid.ActualTheme;
+        var dark = theme == ElementTheme.Dark
+            || (theme == ElementTheme.Default
+                && Application.Current.RequestedTheme == ApplicationTheme.Dark);
+
+        return dark
+            ? Windows.UI.Color.FromArgb(255, 32, 32, 32)
+            : Windows.UI.Color.FromArgb(255, 243, 243, 243);
     }
 
     // ── File Open ──────────────────────────────────────────────
 
     private async void OpenFileButton_Click(object sender, RoutedEventArgs e)
     {
-        var picker = new FileOpenPicker();
-        InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(this));
-
-        picker.ViewMode = PickerViewMode.List;
-        picker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
-        picker.FileTypeFilter.Add(".ttf");
-        picker.FileTypeFilter.Add(".otf");
-        picker.FileTypeFilter.Add(".ttc");
-        picker.FileTypeFilter.Add(".woff2");
-
-        var file = await picker.PickSingleFileAsync();
-        if (file != null)
-            await LoadFontFromPathAsync(file.Path, 0);
+        string? path = await PickFontFilePathAsync();
+        if (!string.IsNullOrEmpty(path))
+            await LoadFontFromPathAsync(path, 0);
     }
 
-    // ── Install ────────────────────────────────────────────────
-
-    private async void InstallButton_Click(object sender, RoutedEventArgs e)
+    /// <summary>
+    /// Opens an Open File dialog and returns the chosen path. Uses the WinRT
+    /// FileOpenPicker by default, but falls back to a Win32 IFileOpenDialog
+    /// when running elevated because the WinRT picker fails under UAC.
+    /// </summary>
+    private async Task<string?> PickFontFilePathAsync()
     {
-        if (_currentFilePath == null) return;
+        var hwnd = WindowNative.GetWindowHandle(this);
+        string[] extensions = [".ttf", ".otf", ".ttc", ".woff2"];
 
-        bool installSystem = _settings.InstallMode == 1;
-
-        try
+        if (!IsRunningElevated())
         {
-            var fontDisplayName = _viewModel.CurrentFont?.DisplayName
-                ?? Path.GetFileNameWithoutExtension(_currentFilePath);
-            var fileName = Path.GetFileName(_currentFilePath);
-
-            if (installSystem)
+            try
             {
-                // System-wide install: copy to C:\Windows\Fonts, register in HKLM
-                var systemFontsDir = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Fonts");
-                var destPath = Path.Combine(systemFontsDir, fileName);
-
-                if (File.Exists(destPath))
+                var picker = new FileOpenPicker
                 {
-                    var confirm = await ShowConfirmDialogAsync("Font Already Installed",
-                        "This font is already installed system-wide. Overwrite?");
-                    if (!confirm) return;
-                }
+                    ViewMode = PickerViewMode.List,
+                    SuggestedStartLocation = PickerLocationId.DocumentsLibrary
+                };
+                InitializeWithWindow.Initialize(picker, hwnd);
+                foreach (var ext in extensions)
+                    picker.FileTypeFilter.Add(ext);
 
-                File.Copy(_currentFilePath, destPath, true);
-
-                using var regKey = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
-                    @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts", true);
-                regKey?.SetValue(fontDisplayName, fileName);
-
-                await ShowInfoDialogAsync("Font Installed",
-                    $"'{fontDisplayName}' has been installed for all users.");
+                var file = await picker.PickSingleFileAsync();
+                return file?.Path;
             }
-            else
+            catch
             {
-                // Per-user install: copy to LocalAppData\Microsoft\Windows\Fonts, register in HKCU
-                var userFontsDir = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "Microsoft", "Windows", "Fonts");
-                Directory.CreateDirectory(userFontsDir);
-
-                var destPath = Path.Combine(userFontsDir, fileName);
-
-                if (File.Exists(destPath))
-                {
-                    var confirm = await ShowConfirmDialogAsync("Font Already Installed",
-                        "This font is already installed for the current user. Overwrite?");
-                    if (!confirm) return;
-                }
-
-                File.Copy(_currentFilePath, destPath, true);
-
-                using var regKey = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
-                    @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts", true);
-                regKey?.SetValue(fontDisplayName, destPath);
-
-                await ShowInfoDialogAsync("Font Installed",
-                    $"'{fontDisplayName}' has been installed for the current user.");
+                // Fall through to the Win32 path.
             }
         }
-        catch (UnauthorizedAccessException)
-        {
-            await ShowInfoDialogAsync("Installation Failed",
-                "Access denied. System-wide installation requires running the application as administrator.");
-        }
-        catch (Exception ex)
-        {
-            await ShowInfoDialogAsync("Installation Failed", $"Could not install font: {ex.Message}");
-        }
+
+        return await Task.Run(() =>
+            Win32FileDialog.PickSingleFile(hwnd, "Open font file", "Font files", extensions));
     }
+
 
     // ── Drag & Drop ────────────────────────────────────────────
 
@@ -340,8 +586,6 @@ public sealed partial class MainWindow : Window
 
             DeactivateCurrentFont();
 
-            AddFontResourceEx(filePath, FR_PRIVATE, IntPtr.Zero);
-            _activeFontPath = filePath;
             _currentFilePath = filePath;
             _currentFontIndex = _viewModel.CurrentFont.FontIndex;
             _currentFontCount = _viewModel.CurrentFont.FontCount;
@@ -350,14 +594,33 @@ public sealed partial class MainWindow : Window
             // This is critical for fonts like Material Icons where name ID 1 differs
             // from the canonical family name that DirectWrite expects.
             var meta = _viewModel.CurrentFont.Metadata;
-            var familyName = !string.IsNullOrWhiteSpace(meta.TypographicFamilyName)
-                ? meta.TypographicFamilyName
-                : !string.IsNullOrWhiteSpace(meta.FamilyName)
-                    ? meta.FamilyName
-                    : Path.GetFileNameWithoutExtension(filePath);
+            var familyName = PickDirectWriteFamilyName(meta, filePath);
 
-            var cachedUri = await CacheFontForXamlAsync(filePath);
-            _loadedFontFamily = new FontFamily($"{cachedUri}#{familyName}");
+            // WinUI 3 resolves FontFamily through the XAML resource manager,
+            // which accepts ms-appx / ms-appdata / ms-resource only — not file:/// .
+            // For unpackaged apps (this project), ms-appdata URIs do not bind
+            // private fonts; fonts must live under the executable directory and
+            // be referenced as ms-appx:///FontCache/… (see CacheFontForXamlAsync).
+            // Packaged builds still use ApplicationData + ms-appdata:///local/… .
+            //
+            // For .woff2 the cache path runs Woff2Decoder so the on-disk bytes
+            // are SFNT — required for AddFontResourceEx and for DirectWrite.
+            var (diskPath, msAppDataRelativePath, msAppxRelativePath) = await CacheFontForXamlAsync(filePath);
+
+            // GDI session-private registration on the *cached* SFNT path:
+            // AddFontResourceEx cannot consume WOFF2, so we register the
+            // decoded copy. Required for any non-XAML preview surfaces
+            // (Win32 controls, third-party hooks) to see the family name.
+            _ = AddFontResourceEx(diskPath, FR_PRIVATE, IntPtr.Zero);
+            _activeFontPath = diskPath;
+
+            _loadedFontFamily = CreateLoadedFontFamily(
+                familyName, diskPath, msAppDataRelativePath, msAppxRelativePath);
+
+            // Glyph grid: see BuildGlyphGrid — GridView item templates do not
+            // inherit FontFamily from the parent; ContainerContentChanging sets
+            // the character TextBlock per realized cell.
+            GlyphGrid.FontFamily = _loadedFontFamily;
 
             UpdateFontDisplay();
             ShowState(content: true);
@@ -369,33 +632,141 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private async Task<string> CacheFontForXamlAsync(string sourceFilePath)
+    /// <summary>
+    /// DirectWrite picks a face using family name + weight + style. For a
+    /// single font <i>file</i>, those axes must match the one embedded master
+    /// or resolution falls back to Segoe UI. Prefer typographic/family names from
+    /// the name table; fall back to PostScript name (often required for some CFF
+    /// fonts) and finally the file stem.
+    /// </summary>
+    private static string PickDirectWriteFamilyName(FontMetadata meta, string sourcePath)
     {
-        var localFolder = ApplicationData.Current.LocalFolder;
-        var cacheFolder = await localFolder.CreateFolderAsync(
-            FontCacheFolderName, CreationCollisionOption.OpenIfExists);
+        foreach (var candidate in new[]
+                 {
+                     meta.TypographicFamilyName,
+                     meta.FamilyName,
+                     meta.PostScriptName
+                 })
+        {
+            if (!string.IsNullOrWhiteSpace(candidate))
+                return candidate.Trim();
+        }
 
-        // Clean previous cached font
-        if (_cachedFontFileName != null)
+        return Path.GetFileNameWithoutExtension(sourcePath);
+    }
+
+    /// <summary>
+    /// Builds a <see cref="FontFamily"/> WinUI can resolve for a cached font.
+    /// Unpackaged: <c>ms-appx:///FontCache/…</c> (executable-relative). Packaged:
+    /// <c>ms-appdata:///local/FontCache/…</c>. Last resort <c>file:///</c> (often
+    /// ignored by WinUI; kept for diagnostics / future runtime changes).
+    /// </summary>
+    private static FontFamily CreateLoadedFontFamily(
+        string familyName,
+        string diskPath,
+        string? msAppDataRelativePath,
+        string? msAppxRelativePath)
+    {
+        var family = familyName.Trim();
+        if (!string.IsNullOrEmpty(msAppxRelativePath))
+        {
+            var rel = msAppxRelativePath.Replace('\\', '/');
+            return new FontFamily($"ms-appx:///{rel}#{family}");
+        }
+
+        if (!string.IsNullOrEmpty(msAppDataRelativePath))
+        {
+            var rel = msAppDataRelativePath.Replace('\\', '/');
+            return new FontFamily($"ms-appdata:///local/{rel}#{family}");
+        }
+
+        var uri = new Uri(Path.GetFullPath(diskPath), UriKind.Absolute);
+        return new FontFamily($"{uri.AbsoluteUri}#{family}");
+    }
+
+    /// <summary>
+    /// Stages the font for XAML preview: packaged apps use
+    /// <see cref="ApplicationData.Current"/>/<c>FontCache</c> with
+    /// <c>ms-appdata:///local/…</c>; unpackaged apps use
+    /// <see cref="AppContext.BaseDirectory"/>/<c>FontCache</c> with
+    /// <c>ms-appx:///…</c> (required because WinUI does not load private fonts
+    /// from <c>file:///</c> or unpackaged <c>ms-appdata</c> URIs).
+    /// For <c>.woff2</c>, decompresses to SFNT via <see cref="Woff2Decoder"/>.
+    /// </summary>
+    private async Task<(string DiskPath, string? MsAppDataRelativePath, string? MsAppxRelativePath)> CacheFontForXamlAsync(string sourceFilePath)
+    {
+        bool useMsAppData;
+        string cacheDir;
+
+        if (IsWindowsPackaged())
         {
             try
             {
-                var oldFile = await cacheFolder.TryGetItemAsync(_cachedFontFileName);
-                if (oldFile is StorageFile sf)
-                    await sf.DeleteAsync(StorageDeleteOption.PermanentDelete);
+                var localFolder = ApplicationData.Current.LocalFolder;
+                var cacheFolder = await localFolder.CreateFolderAsync(FontCacheFolderName,
+                    CreationCollisionOption.OpenIfExists);
+                cacheDir = cacheFolder.Path;
+                useMsAppData = true;
+            }
+            catch
+            {
+                cacheDir = Path.Combine(AppContext.BaseDirectory, FontCacheFolderName);
+                Directory.CreateDirectory(cacheDir);
+                useMsAppData = false;
+            }
+        }
+        else
+        {
+            cacheDir = Path.Combine(AppContext.BaseDirectory, FontCacheFolderName);
+            Directory.CreateDirectory(cacheDir);
+            useMsAppData = false;
+        }
+
+        if (_cachedFontDiskPath is not null)
+        {
+            try
+            {
+                if (File.Exists(_cachedFontDiskPath))
+                    File.Delete(_cachedFontDiskPath);
             }
             catch { /* ignore */ }
         }
 
-        var ext = Path.GetExtension(sourceFilePath);
-        var uniqueName = $"{Guid.NewGuid():N}{ext}";
+        var destPath = await Task.Run(() =>
+        {
+            var rawBytes = File.ReadAllBytes(sourceFilePath);
 
-        var sourceFile = await StorageFile.GetFileFromPathAsync(sourceFilePath);
-        await sourceFile.CopyAsync(cacheFolder, uniqueName, NameCollisionOption.ReplaceExisting);
+            if (Woff2Decoder.IsWoff2(rawBytes))
+            {
+                var sfntBytes = Woff2Decoder.DecodeToSfnt(rawBytes);
+                var newExt = Woff2Decoder.IsOpenTypeFlavor(sfntBytes) ? ".otf" : ".ttf";
+                var name = $"{Guid.NewGuid():N}{newExt}";
+                var path = Path.Combine(cacheDir, name);
+                File.WriteAllBytes(path, sfntBytes);
+                return path;
+            }
 
-        _cachedFontFileName = uniqueName;
-        return $"ms-appdata:///local/{FontCacheFolderName}/{uniqueName}";
+            var ext = Path.GetExtension(sourceFilePath);
+            var uniqueName = $"{Guid.NewGuid():N}{ext}";
+            var path2 = Path.Combine(cacheDir, uniqueName);
+            File.Copy(sourceFilePath, path2, overwrite: true);
+            return path2;
+        });
+
+        _cachedFontDiskPath = destPath;
+
+        var fileName = Path.GetFileName(destPath);
+        var relative = $"{FontCacheFolderName}/{fileName}".Replace('\\', '/');
+
+        if (useMsAppData)
+            return (destPath, relative, null);
+        return (destPath, null, relative);
     }
+
+    /// <summary>
+    /// True when the process has a package identity (MSIX / sparse package).
+    /// </summary>
+    private static bool IsWindowsPackaged() => FileAssociationService.IsRunningPackaged;
 
     private void DeactivateCurrentFont()
     {
@@ -414,8 +785,7 @@ public sealed partial class MainWindow : Window
         if (font is null) return;
         var meta = font.Metadata;
 
-        // Title bar
-        TitleBarFontName.Text = font.DisplayName;
+        // Title bar (font name is in the main header; window title still shows file identity)
         AppWindow.Title = $"Fontager \u2014 {font.DisplayName}";
 
         // Header
@@ -438,6 +808,11 @@ public sealed partial class MainWindow : Window
         {
             FontNavPanel.Visibility = Visibility.Collapsed;
         }
+
+        // Install: Windows font setup does not accept WOFF2; only preview here.
+        bool isWoff2 = font.Format == FontFormat.WebOpenFont;
+        InstallSplitButton.Visibility = isWoff2 ? Visibility.Collapsed : Visibility.Visible;
+        InstallNotSupportedMessage.Visibility = isWoff2 ? Visibility.Visible : Visibility.Collapsed;
 
         // Apply font to preview
         ApplyFontToElement(PreviewTextBox, meta);
@@ -464,7 +839,14 @@ public sealed partial class MainWindow : Window
     private void ApplyFontToElement(Control element, FontMetadata meta)
     {
         if (_loadedFontFamily != null)
+        {
             element.FontFamily = _loadedFontFamily;
+            // Single face in the cached file: requesting OS/2 weight/style often makes
+            // DirectWrite miss the face and substitute Segoe UI. Outlines already encode the style.
+            element.FontWeight = new Windows.UI.Text.FontWeight(400);
+            element.FontStyle = Windows.UI.Text.FontStyle.Normal;
+            return;
+        }
 
         element.FontWeight = new Windows.UI.Text.FontWeight((ushort)meta.Weight);
         element.FontStyle = meta.IsItalic ? Windows.UI.Text.FontStyle.Italic
@@ -475,7 +857,12 @@ public sealed partial class MainWindow : Window
     private void ApplyFontToTextBlock(TextBlock tb, FontMetadata meta)
     {
         if (_loadedFontFamily != null)
+        {
             tb.FontFamily = _loadedFontFamily;
+            tb.FontWeight = new Windows.UI.Text.FontWeight(400);
+            tb.FontStyle = Windows.UI.Text.FontStyle.Normal;
+            return;
+        }
 
         tb.FontWeight = new Windows.UI.Text.FontWeight((ushort)meta.Weight);
         tb.FontStyle = meta.IsItalic ? Windows.UI.Text.FontStyle.Italic
@@ -589,154 +976,6 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    // ── Glyph Grid ─────────────────────────────────────────────
-
-    private void BuildGlyphGrid()
-    {
-        _viewModel.GenerateGlyphItemsPublic();
-        GlyphGrid.ItemsSource = _viewModel.GlyphItems;
-        GlyphCountText.Text = _viewModel.CurrentFont?.Metadata.GlyphCount.ToString() ?? "0";
-
-        GlyphGrid.ContainerContentChanging -= GlyphGrid_ContainerContentChanging;
-        GlyphGrid.ContainerContentChanging += GlyphGrid_ContainerContentChanging;
-    }
-
-    private void GlyphGrid_ContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
-    {
-        if (args.Phase == 0 && _loadedFontFamily != null)
-        {
-            args.RegisterUpdateCallback((s, a) =>
-            {
-                if (a.ItemContainer.ContentTemplateRoot is StackPanel panel &&
-                    panel.Children.Count > 0 &&
-                    panel.Children[0] is TextBlock charBlock)
-                {
-                    charBlock.FontFamily = _loadedFontFamily;
-                }
-            });
-        }
-    }
-
-    private void GlyphGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (GlyphGrid.SelectedItem is GlyphItem glyph)
-        {
-            GlyphDetailPanel.Visibility = Visibility.Visible;
-            SelectedGlyphChar.Text = glyph.Character;
-            SelectedGlyphUnicode.Text = glyph.UnicodeLabel;
-            SelectedGlyphName.Text = $"Decimal: {glyph.CodePoint} | Character: {glyph.Character}";
-
-            if (_loadedFontFamily != null)
-                SelectedGlyphChar.FontFamily = _loadedFontFamily;
-        }
-        else
-        {
-            GlyphDetailPanel.Visibility = Visibility.Collapsed;
-        }
-    }
-
-    // ── Metadata ───────────────────────────────────────────────
-
-    private void BuildMetadataView()
-    {
-        MetadataPanel.Children.Clear();
-        var font = _viewModel.CurrentFont;
-        if (font is null) return;
-        var meta = font.Metadata;
-
-        AddMetadataSection("General");
-        AddMetadataRow("Family Name", meta.FamilyName);
-        if (meta.TypographicFamilyName != meta.FamilyName)
-            AddMetadataRow("Typographic Family", meta.TypographicFamilyName);
-        AddMetadataRow("Subfamily", meta.SubfamilyName);
-        AddMetadataRow("Full Name", meta.FullName);
-        AddMetadataRow("PostScript Name", meta.PostScriptName);
-        AddMetadataRow("Version", meta.Version);
-        AddMetadataRow("Format", font.Format.ToString());
-        AddMetadataRow("File Size", font.FormattedFileSize);
-        AddMetadataRow("File Path", font.FilePath);
-        if (font.FontCount > 1)
-            AddMetadataRow("Font in Collection", $"{font.FontIndex + 1} of {font.FontCount}");
-
-        AddMetadataSection("Metrics");
-        AddMetadataRow("Glyphs", meta.GlyphCount.ToString());
-        AddMetadataRow("Units per Em", meta.UnitsPerEm.ToString());
-        AddMetadataRow("Weight", GetWeightName(meta.Weight));
-        AddMetadataRow("Style", meta.IsItalic ? "Italic" : meta.IsOblique ? "Oblique" : "Normal");
-        AddMetadataRow("Variable Font", meta.IsVariable ? "Yes" : "No");
-        AddMetadataRow("Classification", meta.Classification.ToString());
-
-        AddMetadataSection("Credits");
-        AddMetadataRow("Designer", meta.Designer);
-        AddMetadataRow("Vendor", meta.Vendor);
-        AddMetadataRow("Copyright", meta.Copyright);
-        AddMetadataRow("Trademark", meta.Trademark);
-
-        AddMetadataSection("License");
-        AddMetadataRow("License", meta.License);
-        AddMetadataRow("License URL", meta.LicenseUrl);
-
-        if (!string.IsNullOrWhiteSpace(meta.Description))
-        {
-            AddMetadataSection("Description");
-            AddMetadataRow("", meta.Description);
-        }
-    }
-
-    private void AddMetadataSection(string title)
-    {
-        MetadataPanel.Children.Add(new TextBlock
-        {
-            Text = title,
-            Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"],
-            Margin = new Thickness(0, 16, 0, 8)
-        });
-    }
-
-    private void AddMetadataRow(string label, string value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return;
-
-        var border = new Border
-        {
-            Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
-            CornerRadius = new CornerRadius(4),
-            Padding = new Thickness(16, 10, 16, 10),
-            Margin = new Thickness(0, 1, 0, 1)
-        };
-
-        var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-        if (!string.IsNullOrWhiteSpace(label))
-        {
-            var labelBlock = new TextBlock
-            {
-                Text = label,
-                Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
-                Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            Grid.SetColumn(labelBlock, 0);
-            grid.Children.Add(labelBlock);
-        }
-
-        var valueBlock = new TextBlock
-        {
-            Text = value,
-            TextWrapping = TextWrapping.WrapWholeWords,
-            IsTextSelectionEnabled = true,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        Grid.SetColumn(valueBlock, string.IsNullOrWhiteSpace(label) ? 0 : 1);
-        if (string.IsNullOrWhiteSpace(label))
-            Grid.SetColumnSpan(valueBlock, 2);
-        grid.Children.Add(valueBlock);
-
-        border.Child = grid;
-        MetadataPanel.Children.Add(border);
-    }
 
     // ── State Management ───────────────────────────────────────
 
@@ -746,6 +985,13 @@ public sealed partial class MainWindow : Window
         LoadingState.Visibility = loading ? Visibility.Visible : Visibility.Collapsed;
         ErrorState.Visibility = error ? Visibility.Visible : Visibility.Collapsed;
         FontContent.Visibility = content ? Visibility.Visible : Visibility.Collapsed;
+        bool canInstall = content
+                          && !string.IsNullOrWhiteSpace(_currentFilePath)
+                          && _viewModel.CurrentFont?.Format != FontFormat.WebOpenFont;
+        InstallSplitButton.IsEnabled = canInstall;
+
+        if (error)
+            AppWindow.Title = "Fontager";
     }
 
     // ── Settings ────────────────────────────────────────────────
@@ -760,318 +1006,92 @@ public sealed partial class MainWindow : Window
         PreviewTextBox.Text = _settings.DefaultPreviewText;
         _viewModel.PreviewText = _settings.DefaultPreviewText;
         SetPreviewFontSize(_settings.DefaultFontSize);
+        UpdateInstallButtonPresentation(GetSavedInstallTarget());
+        ApplyInstallElevatedUi();
     }
 
-    private async void SettingsButton_Click(object sender, RoutedEventArgs e)
+    // ── Settings navigation ────────────────────────────────────────
+    // We treat the settings overlay as a Frame so SettingsPage gets the full
+    // WinUI 3 page lifecycle (OnNavigatedTo, caching, etc.). The visual
+    // swap is just toggling MainContentArea vs. SettingsFrame visibility —
+    // there's no need for a Window-level Frame because we never navigate
+    // anywhere else.
+
+    /// <summary>
+    /// Pushes the SettingsPage onto the SettingsFrame and hides the viewer.
+    /// </summary>
+    private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
-        var dividerBrush = (Brush)Application.Current.Resources["DividerStrokeColorDefaultBrush"];
-        var sectionStyle = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"];
-        var captionStyle = (Style)Application.Current.Resources["CaptionTextBlockStyle"];
-        var secondaryBrush = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
+        SettingsButton.Visibility = Visibility.Collapsed;
 
-        // ── Helper: section header ──
-        UIElement SectionHeader(string text) => new TextBlock
-        {
-            Text = text,
-            Style = sectionStyle,
-            Margin = new Thickness(0, 4, 0, 0)
-        };
+        MainContentArea.Visibility = Visibility.Collapsed;
+        SettingsFrame.Visibility = Visibility.Visible;
+        BackButton.Visibility = Visibility.Visible;
+        ScheduleTitleBarPassthroughUpdate();
 
-        UIElement Divider() => new Border
-        {
-            Height = 1,
-            Background = dividerBrush,
-            Margin = new Thickness(0, 4, 0, 4)
-        };
+        // Ensure the overlay Frame shares the window XamlRoot so navigated
+        // pages and dialogs never see a null XamlRoot (WinRT throws).
+        if (RootGrid.XamlRoot is not null)
+            SettingsFrame.XamlRoot = RootGrid.XamlRoot;
 
-        UIElement Description(string text) => new TextBlock
-        {
-            Text = text,
-            Style = captionStyle,
-            Foreground = secondaryBrush,
-            TextWrapping = TextWrapping.WrapWholeWords,
-            Margin = new Thickness(0, -8, 0, 0)
-        };
+        // Defer navigation one tick so the Frame is visible and laid out;
+        // navigating while the subtree was Collapsed contributed to first-click
+        // failures and WinRT InvalidOperationException noise.
+        var elevated = _isProcessElevated;
+        DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Normal,
+            () => SettingsFrame.Navigate(typeof(SettingsPage), elevated));
+    }
 
-        // ══════════════════════════════════════════════════════════
-        // APPEARANCE
-        // ══════════════════════════════════════════════════════════
+    /// <summary>
+    /// Custom chrome back — <see cref="AnimatedIcon"/> over <c>AnimatedBackVisualSource</c>.
+    /// </summary>
+    private void CustomTitleBarBack_Click(object sender, RoutedEventArgs e)
+    {
+        if (SettingsFrame.Visibility != Visibility.Visible)
+            return;
+        CloseSettingsOverlay();
+    }
 
-        var themeCombo = new ComboBox
-        {
-            Header = "Theme",
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            Items =
-            {
-                new ComboBoxItem { Content = "System default", Tag = ElementTheme.Default },
-                new ComboBoxItem { Content = "Light", Tag = ElementTheme.Light },
-                new ComboBoxItem { Content = "Dark", Tag = ElementTheme.Dark }
-            },
-            SelectedIndex = (int)_settings.Theme
-        };
+    private void BackButton_PointerEntered(object sender, PointerRoutedEventArgs e)
+    {
+        AnimatedIcon.SetState(BackAnimatedIcon, "PointerOver");
+    }
 
-        var backdropCombo = new ComboBox
-        {
-            Header = "Backdrop material",
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            Items =
-            {
-                new ComboBoxItem { Content = "Mica", Tag = 0 },
-                new ComboBoxItem { Content = "Acrylic", Tag = 1 }
-            },
-            SelectedIndex = _settings.Backdrop
-        };
+    private void BackButton_PointerExited(object sender, PointerRoutedEventArgs e)
+    {
+        AnimatedIcon.SetState(BackAnimatedIcon, "Normal");
+    }
 
-        // ══════════════════════════════════════════════════════════
-        // PREVIEW
-        // ══════════════════════════════════════════════════════════
+    /// <summary>
+    /// Closes the SettingsPage, returns the user to the viewer, and triggers
+    /// the heavier "post-settings" refresh (font display + glyph grid + nav
+    /// state) that the per-change SettingsChanged handler intentionally skips.
+    /// </summary>
+    private void CloseSettingsOverlay()
+    {
+        SettingsFrame.Visibility = Visibility.Collapsed;
+        SettingsFrame.Content = null;
 
-        var previewTextBox = new TextBox
-        {
-            Header = "Default preview text",
-            Text = _settings.DefaultPreviewText,
-            PlaceholderText = "Enter default preview text...",
-            TextWrapping = TextWrapping.Wrap,
-            AcceptsReturn = false,
-            MaxLength = 500
-        };
+        BackButton.Visibility = Visibility.Collapsed;
+        AnimatedIcon.SetState(BackAnimatedIcon, "Normal");
+        SettingsButton.Visibility = Visibility.Visible;
+        ScheduleTitleBarPassthroughUpdate();
+        MainContentArea.Visibility = Visibility.Visible;
 
-        var fontSizeSlider = new Slider
-        {
-            Header = $"Default font size ({(int)_settings.DefaultFontSize}px)",
-            Minimum = 8,
-            Maximum = 120,
-            Value = _settings.DefaultFontSize,
-            StepFrequency = 1
-        };
-        fontSizeSlider.ValueChanged += (_, args) =>
-            fontSizeSlider.Header = $"Default font size ({(int)args.NewValue}px)";
-
-        var previewControlsToggle = new ToggleSwitch
-        {
-            Header = "Editable preview",
-            IsOn = _settings.ShowPreviewControls
-        };
-
-        // ══════════════════════════════════════════════════════════
-        // DISPLAY
-        // ══════════════════════════════════════════════════════════
-
-        var quickViewToggle = new ToggleSwitch
-        {
-            Header = "Quick view",
-            IsOn = _settings.ShowQuickView
-        };
-
-        var waterfallToggle = new ToggleSwitch
-        {
-            Header = "Waterfall",
-            IsOn = _settings.ShowWaterfall
-        };
-
-        var waterfallSizesBox = new TextBox
-        {
-            Header = "Waterfall sizes (comma-separated)",
-            Text = _settings.WaterfallSizesRaw,
-            PlaceholderText = "8,12,16,24,32,48,72",
-            AcceptsReturn = false,
-            MaxLength = 200
-        };
-
-        // ══════════════════════════════════════════════════════════
-        // INSTALL
-        // ══════════════════════════════════════════════════════════
-
-        var installModeCombo = new ComboBox
-        {
-            Header = "Install target",
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            Items =
-            {
-                new ComboBoxItem { Content = "Current user", Tag = 0 },
-                new ComboBoxItem { Content = "All users (requires admin)", Tag = 1 }
-            },
-            SelectedIndex = _settings.InstallMode
-        };
-
-        // ══════════════════════════════════════════════════════════
-        // RESET
-        // ══════════════════════════════════════════════════════════
-
-        var resetButton = new HyperlinkButton
-        {
-            Content = "Reset all settings to defaults",
-            Margin = new Thickness(0, 4, 0, 0)
-        };
-        bool resetRequested = false;
-        resetButton.Click += (_, _) => resetRequested = true;
-
-        // ══════════════════════════════════════════════════════════
-        // LAYOUT
-        // ══════════════════════════════════════════════════════════
-
-        var panel = new StackPanel { Spacing = 12 };
-
-        // Appearance
-        panel.Children.Add(SectionHeader("Appearance"));
-        panel.Children.Add(themeCombo);
-        panel.Children.Add(backdropCombo);
-
-        panel.Children.Add(Divider());
-
-        // Preview
-        panel.Children.Add(SectionHeader("Preview"));
-        panel.Children.Add(previewTextBox);
-        panel.Children.Add(fontSizeSlider);
-        panel.Children.Add(previewControlsToggle);
-        panel.Children.Add(Description("Show the editable text preview area with size slider. When off, only the waterfall is shown."));
-
-        panel.Children.Add(Divider());
-
-        // Display
-        panel.Children.Add(SectionHeader("Display"));
-        panel.Children.Add(quickViewToggle);
-        panel.Children.Add(Description("Character set overview below the font header. Auto-shows when the window is small."));
-        panel.Children.Add(waterfallToggle);
-        panel.Children.Add(waterfallSizesBox);
-
-        panel.Children.Add(Divider());
-
-        // Install
-        panel.Children.Add(SectionHeader("Install"));
-        panel.Children.Add(installModeCombo);
-        panel.Children.Add(Description("System-wide install copies to Windows\\Fonts and requires administrator privileges."));
-
-        panel.Children.Add(Divider());
-
-        // Reset
-        panel.Children.Add(resetButton);
-
-        panel.Children.Add(Divider());
-
-        // About
-        panel.Children.Add(SectionHeader("About"));
-
-        string aboutVersion;
+        _suppressSettingsChangedReaction = true;
         try
         {
-            var ver = Package.Current.Id.Version;
-            aboutVersion = $"{ver.Major}.{ver.Minor}.{ver.Build}.{ver.Revision}";
-        }
-        catch
-        {
-            var asm = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
-            aboutVersion = asm?.ToString() ?? "0.0.0.0";
-        }
-
-        panel.Children.Add(new TextBlock
-        {
-            Text = $"Fontager Viewer  v{aboutVersion}",
-            FontWeight = FontWeights.SemiBold,
-            Style = (Style)Application.Current.Resources["BodyTextBlockStyle"]
-        });
-        panel.Children.Add(Description("A modern font viewer for Windows, built with WinUI 3."));
-        panel.Children.Add(new TextBlock
-        {
-            Text = "Made by Yusuf Emre Albayrak",
-            Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
-            Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
-            Margin = new Thickness(0, -4, 0, 0)
-        });
-
-        var githubLink = new HyperlinkButton
-        {
-            Content = "GitHub — ysfemreAlbyrk/Fontager",
-            NavigateUri = new Uri("https://github.com/ysfemreAlbyrk/Fontager"),
-            Padding = new Thickness(0),
-            Margin = new Thickness(0, 2, 0, 0)
-        };
-        panel.Children.Add(githubLink);
-
-        // ══════════════════════════════════════════════════════════
-        // DIALOG
-        // ══════════════════════════════════════════════════════════
-
-        var contentContainer = new Grid { MinWidth = 580, HorizontalAlignment = HorizontalAlignment.Stretch };
-        contentContainer.Children.Add(new ScrollViewer
-        {
-            Content = panel,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            MaxHeight = 560
-        });
-
-        var dialog = new ContentDialog
-        {
-            Title = "Settings",
-            Content = contentContainer,
-            PrimaryButtonText = "Save",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = Content.XamlRoot
-        };
-
-        var result = await dialog.ShowAsync();
-
-        if (result == ContentDialogResult.Primary)
-        {
-            if (resetRequested)
-            {
-                _settings.ResetToDefaults();
-                ApplySettings();
-                ApplyBackdrop();
-                if (_viewModel.HasFont)
-                    UpdateFontDisplay();
-                return;
-            }
-
-            // Theme
-            if (themeCombo.SelectedItem is ComboBoxItem st && st.Tag is ElementTheme theme)
-            {
-                _settings.Theme = theme;
-                ((FrameworkElement)Content).RequestedTheme = theme;
-            }
-
-            // Backdrop
-            if (backdropCombo.SelectedItem is ComboBoxItem sb && sb.Tag is int bv)
-            {
-                _settings.Backdrop = bv;
-                ApplyBackdrop();
-            }
-
-            // Preview
-            _settings.DefaultPreviewText = previewTextBox.Text;
-            _settings.DefaultFontSize = fontSizeSlider.Value;
-            _settings.ShowPreviewControls = previewControlsToggle.IsOn;
-
-            // Display
-            _settings.ShowQuickView = quickViewToggle.IsOn;
-            _settings.ShowWaterfall = waterfallToggle.IsOn;
-            _settings.WaterfallSizesRaw = waterfallSizesBox.Text;
-
-            // Install
-            if (installModeCombo.SelectedItem is ComboBoxItem si && si.Tag is int iv)
-                _settings.InstallMode = iv;
-
-            // Apply to UI
-            if (!_viewModel.HasFont)
-            {
-                PreviewTextBox.Text = _settings.DefaultPreviewText;
-                SetPreviewFontSize(_settings.DefaultFontSize);
-            }
-
-            PreviewSection.Visibility = _settings.ShowPreviewControls
-                ? Visibility.Visible : Visibility.Collapsed;
-
             if (_viewModel.HasFont)
-            {
-                QuickViewSection.Visibility = _settings.ShowQuickView ? Visibility.Visible : Visibility.Collapsed;
-                if (_settings.ShowQuickView) BuildQuickView();
-
-                WaterfallSection.Visibility = _settings.ShowWaterfall ? Visibility.Visible : Visibility.Collapsed;
-                if (_settings.ShowWaterfall) BuildWaterfallView();
-            }
+                UpdateFontDisplay();
+            UpdateInstallButtonPresentation(GetSavedInstallTarget());
+            ApplyInstallElevatedUi();
+        }
+        finally
+        {
+            _suppressSettingsChangedReaction = false;
         }
     }
+
 
     // ── Helpers ─────────────────────────────────────────────────
 
@@ -1099,6 +1119,137 @@ public sealed partial class MainWindow : Window
             XamlRoot = Content.XamlRoot
         };
         await dialog.ShowAsync();
+    }
+
+    private async Task ShowSuccessDialogAsync(string title, string message)
+    {
+        var dialog = new ContentDialog
+        {
+            Title = title,
+            Content = BuildDialogHeroPanel(
+                "\uE73E",
+                ResolveThemeBrush("SystemFillColorSuccessBrush", Microsoft.UI.Colors.ForestGreen),
+                message),
+            CloseButtonText = "OK",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = Content.XamlRoot
+        };
+        await dialog.ShowAsync();
+    }
+
+    /// <summary>
+    /// After a successful font install, shows the success dialog briefly then exits the process.
+    /// The dialog is dismissed programmatically after one second so the user does not need to tap OK.
+    /// </summary>
+    private async Task ShowInstallSuccessThenExitAppAsync(string title, string message)
+    {
+        var dq = DispatcherQueue;
+        var dialog = new ContentDialog
+        {
+            Title = title,
+            Content = BuildDialogHeroPanel(
+                "\uE73E",
+                ResolveThemeBrush("SystemFillColorSuccessBrush", Microsoft.UI.Colors.ForestGreen),
+                message),
+            CloseButtonText = "OK",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = Content.XamlRoot
+        };
+
+        var showTask = dialog.ShowAsync().AsTask();
+        await Task.Delay(TimeSpan.FromMicroseconds(300));
+
+        if (dq.HasThreadAccess)
+        {
+            try { dialog.Hide(); }
+            catch { /* already closed */ }
+        }
+        else
+        {
+            var hideDone = new TaskCompletionSource();
+            dq.TryEnqueue(DispatcherQueuePriority.Normal, () =>
+            {
+                try { dialog.Hide(); }
+                catch { /* already closed */ }
+                hideDone.TrySetResult();
+            });
+            await hideDone.Task;
+        }
+
+        try
+        {
+            await showTask;
+        }
+        catch
+        {
+            // Hide() or user dismiss can complete or fault the operation; exit regardless.
+        }
+
+        if (dq.HasThreadAccess)
+            Application.Current.Exit();
+        else
+            dq.TryEnqueue(() => Application.Current.Exit());
+    }
+
+    private async Task ShowWarningDialogAsync(string title, string message)
+    {
+        var dialog = new ContentDialog
+        {
+            Title = title,
+            Content = BuildDialogHeroPanel(
+                "\uE7BA",
+                ResolveThemeBrush("SystemFillColorCautionBrush", Microsoft.UI.Colors.DarkOrange),
+                message),
+            CloseButtonText = "OK",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = Content.XamlRoot
+        };
+        await dialog.ShowAsync();
+    }
+
+    private async Task ShowErrorDialogAsync(string title, string message)
+    {
+        var dialog = new ContentDialog
+        {
+            Title = title,
+            Content = BuildDialogHeroPanel(
+                "\uE783",
+                ResolveThemeBrush("SystemFillColorCriticalBrush", Microsoft.UI.Colors.Firebrick),
+                message),
+            CloseButtonText = "OK",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = Content.XamlRoot
+        };
+        await dialog.ShowAsync();
+    }
+
+    private static StackPanel BuildDialogHeroPanel(string glyph, Brush iconBrush, string message)
+    {
+        var panel = new StackPanel { Spacing = 16 };
+
+        panel.Children.Add(new FontIcon
+        {
+            Glyph = glyph,
+            FontSize = 44,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Foreground = iconBrush
+        });
+
+        panel.Children.Add(new TextBlock
+        {
+            Text = message,
+            TextWrapping = TextWrapping.Wrap,
+            IsTextSelectionEnabled = true
+        });
+
+        return panel;
+    }
+
+    private static Brush ResolveThemeBrush(string resourceKey, Windows.UI.Color fallback)
+    {
+        if (Application.Current.Resources.TryGetValue(resourceKey, out var o) && o is Brush br)
+            return br;
+        return new SolidColorBrush(fallback);
     }
 
     private static string GetWeightName(int weight) => weight switch

@@ -1,17 +1,26 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text.Json;
 using Microsoft.UI.Xaml;
-using Windows.Storage;
 
 namespace Fontager.Viewer.Services;
 
 /// <summary>
-/// Manages persistent application settings using LocalSettings.
+/// Persists user settings as JSON under <c>%LocalAppData%\Fontager\settings.json</c>.
+///
+/// Why a hand-rolled store instead of <c>Windows.Storage.ApplicationData</c>:
+/// in an unpackaged WinUI 3 build the WinRT Storage APIs depend on the
+/// Windows App SDK identity bridge. It usually works, but the storage path
+/// is keyed off the EXE path (so moving the EXE loses settings), and a small
+/// set of host configurations short-circuits the shim entirely. A plain JSON
+/// file is identical across packaging modes — so if/when we re-enable MSIX
+/// for the Store later (see <c>docs/research/packaging-decision.md</c>) we
+/// don't have to migrate the user's settings.
 /// </summary>
 public sealed class SettingsService
 {
-    private readonly ApplicationDataContainer _localSettings;
-
     private const string ThemeKey = "AppTheme";
     private const string DefaultPreviewTextKey = "DefaultPreviewText";
     private const string DefaultFontSizeKey = "DefaultFontSize";
@@ -22,14 +31,82 @@ public sealed class SettingsService
     private const string ShowQuickViewKey = "ShowQuickView";
     private const string ShowPreviewControlsKey = "ShowPreviewControls";
     private const string InstallModeKey = "InstallMode"; // 0 = current user, 1 = all users (system)
+    private const string ExitAppAfterSuccessfulInstallKey = "ExitAppAfterSuccessfulInstall";
 
     private const string DefaultPreviewTextValue = "The quick brown fox jumps over the lazy dog. 0123456789";
     private const double DefaultFontSizeValue = 32;
     private const string DefaultWaterfallSizesValue = "8,10,12,14,16,18,20,24,28,32,36,40,48,56,64,72";
 
+    private static readonly JsonSerializerOptions s_jsonOptions = new() { WriteIndented = true };
+
+    private readonly string _filePath;
+    private Dictionary<string, JsonElement> _values;
+
     public SettingsService()
     {
-        _localSettings = ApplicationData.Current.LocalSettings;
+        var dir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Fontager");
+        Directory.CreateDirectory(dir);
+        _filePath = Path.Combine(dir, "settings.json");
+        _values = Load();
+    }
+
+    private Dictionary<string, JsonElement> Load()
+    {
+        try
+        {
+            if (!File.Exists(_filePath))
+                return new();
+            var json = File.ReadAllText(_filePath);
+            if (string.IsNullOrWhiteSpace(json))
+                return new();
+            return JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json) ?? new();
+        }
+        catch
+        {
+            // A corrupted settings file should never crash the app; we just
+            // start from defaults next launch.
+            return new();
+        }
+    }
+
+    private void Save()
+    {
+        try
+        {
+            // Atomic write: write to a sibling temp file then move into place
+            // so a mid-write power loss can't leave the JSON corrupted.
+            var temp = _filePath + ".tmp";
+            File.WriteAllText(temp, JsonSerializer.Serialize(_values, s_jsonOptions));
+            File.Move(temp, _filePath, overwrite: true);
+        }
+        catch
+        {
+            // Best-effort. Persistence is a nice-to-have, not a correctness
+            // requirement.
+        }
+    }
+
+    private T? GetValue<T>(string key, T? fallback = default)
+    {
+        if (!_values.TryGetValue(key, out var element))
+            return fallback;
+        try
+        {
+            return element.Deserialize<T>();
+        }
+        catch
+        {
+            return fallback;
+        }
+    }
+
+    private void SetValue<T>(string key, T value)
+    {
+        _values[key] = JsonSerializer.SerializeToElement(value);
+        Save();
+        Changed?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>
@@ -37,69 +114,71 @@ public sealed class SettingsService
     /// </summary>
     public void ResetToDefaults()
     {
-        _localSettings.Values.Clear();
+        _values = new();
+        Save();
+        Changed?.Invoke(this, EventArgs.Empty);
     }
+
+    /// <summary>
+    /// Fired after any setting is persisted. Listeners (typically <c>MainWindow</c>)
+    /// re-apply theme / backdrop / preview state so the user sees the effect
+    /// immediately while still on the Settings page — no Save button required.
+    /// </summary>
+    public event EventHandler? Changed;
 
     public ElementTheme Theme
     {
         get
         {
-            var value = _localSettings.Values[ThemeKey];
-            if (value is int intVal && intVal >= 0 && intVal <= 2)
-                return (ElementTheme)intVal;
-            return ElementTheme.Default;
+            var v = GetValue<int?>(ThemeKey);
+            return v is >= 0 and <= 2 ? (ElementTheme)v.Value : ElementTheme.Default;
         }
-        set => _localSettings.Values[ThemeKey] = (int)value;
+        set => SetValue(ThemeKey, (int)value);
     }
 
     public string DefaultPreviewText
     {
         get
         {
-            var value = _localSettings.Values[DefaultPreviewTextKey];
-            return value is string str && !string.IsNullOrEmpty(str) ? str : DefaultPreviewTextValue;
+            var s = GetValue<string>(DefaultPreviewTextKey);
+            return string.IsNullOrEmpty(s) ? DefaultPreviewTextValue : s;
         }
-        set => _localSettings.Values[DefaultPreviewTextKey] = value;
+        set => SetValue(DefaultPreviewTextKey, value ?? string.Empty);
     }
 
     public double DefaultFontSize
     {
         get
         {
-            var value = _localSettings.Values[DefaultFontSizeKey];
-            return value is double d ? d : DefaultFontSizeValue;
+            var v = GetValue<double?>(DefaultFontSizeKey);
+            return v ?? DefaultFontSizeValue;
         }
-        set => _localSettings.Values[DefaultFontSizeKey] = value;
+        set => SetValue(DefaultFontSizeKey, value);
     }
 
     public string LastOpenDirectory
     {
-        get
-        {
-            var value = _localSettings.Values[LastOpenDirectoryKey];
-            return value is string str ? str : string.Empty;
-        }
-        set => _localSettings.Values[LastOpenDirectoryKey] = value;
+        get => GetValue<string>(LastOpenDirectoryKey) ?? string.Empty;
+        set => SetValue(LastOpenDirectoryKey, value ?? string.Empty);
     }
 
     public int Backdrop
     {
         get
         {
-            var value = _localSettings.Values[BackdropKey];
-            return value is int intVal && intVal >= 0 && intVal <= 1 ? intVal : 0;
+            var v = GetValue<int?>(BackdropKey);
+            if (v is null) return 0;
+            // Legacy tag 4 ("acrylic thin") matched standard acrylic; normalize reads.
+            if (v == 4) return 1;
+            return v is >= 0 and <= 3 ? v.Value : 0;
         }
-        set => _localSettings.Values[BackdropKey] = value;
+        set => SetValue(BackdropKey, value);
     }
 
     public bool ShowWaterfall
     {
-        get
-        {
-            var value = _localSettings.Values[ShowWaterfallKey];
-            return value is not bool b || b; // default true
-        }
-        set => _localSettings.Values[ShowWaterfallKey] = value;
+        get => GetValue<bool?>(ShowWaterfallKey) ?? true;
+        set => SetValue(ShowWaterfallKey, value);
     }
 
     /// <summary>
@@ -107,12 +186,8 @@ public sealed class SettingsService
     /// </summary>
     public bool ShowQuickView
     {
-        get
-        {
-            var value = _localSettings.Values[ShowQuickViewKey];
-            return value is not bool b || b; // default true
-        }
-        set => _localSettings.Values[ShowQuickViewKey] = value;
+        get => GetValue<bool?>(ShowQuickViewKey) ?? true;
+        set => SetValue(ShowQuickViewKey, value);
     }
 
     /// <summary>
@@ -120,12 +195,8 @@ public sealed class SettingsService
     /// </summary>
     public bool ShowPreviewControls
     {
-        get
-        {
-            var value = _localSettings.Values[ShowPreviewControlsKey];
-            return value is not bool b || b; // default true
-        }
-        set => _localSettings.Values[ShowPreviewControlsKey] = value;
+        get => GetValue<bool?>(ShowPreviewControlsKey) ?? true;
+        set => SetValue(ShowPreviewControlsKey, value);
     }
 
     /// <summary>
@@ -135,10 +206,20 @@ public sealed class SettingsService
     {
         get
         {
-            var value = _localSettings.Values[InstallModeKey];
-            return value is int intVal && intVal >= 0 && intVal <= 1 ? intVal : 0;
+            var v = GetValue<int?>(InstallModeKey);
+            return v is >= 0 and <= 1 ? v.Value : 0;
         }
-        set => _localSettings.Values[InstallModeKey] = value;
+        set => SetValue(InstallModeKey, value);
+    }
+
+    /// <summary>
+    /// When true, after a successful font install the success dialog is shown briefly
+    /// and the application exits automatically. When false, the user dismisses the dialog manually.
+    /// </summary>
+    public bool ExitAppAfterSuccessfulInstall
+    {
+        get => GetValue<bool?>(ExitAppAfterSuccessfulInstallKey) ?? false;
+        set => SetValue(ExitAppAfterSuccessfulInstallKey, value);
     }
 
     /// <summary>
@@ -148,10 +229,10 @@ public sealed class SettingsService
     {
         get
         {
-            var value = _localSettings.Values[WaterfallSizesKey];
-            return value is string str && !string.IsNullOrWhiteSpace(str) ? str : DefaultWaterfallSizesValue;
+            var s = GetValue<string>(WaterfallSizesKey);
+            return string.IsNullOrWhiteSpace(s) ? DefaultWaterfallSizesValue : s;
         }
-        set => _localSettings.Values[WaterfallSizesKey] = value;
+        set => SetValue(WaterfallSizesKey, value ?? string.Empty);
     }
 
     /// <summary>
