@@ -1,12 +1,4 @@
-<div align="center">
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/ysfemreAlbyrk/Fontager/refs/heads/main/Fontager.Viewer/Assets/Logo.png" width="120" alt="Fontager Viewer" title="Fontager Viewer" />
-  &nbsp;&nbsp;&nbsp;
-  <img src="https://raw.githubusercontent.com/ysfemreAlbyrk/Fontager/refs/heads/main/Assets/Fontager_Logo.png" width="220" alt="Fontager" title="Fontager" />
-  &nbsp;&nbsp;&nbsp;
-  <img src="https://raw.githubusercontent.com/ysfemreAlbyrk/Fontager/refs/heads/main/Fontager.Manager/Assets/Logo.png" width="120" alt="Fontager Manager" title="Fontager Manager" />
-</p>
+<img width="1400" height="400" alt="wide" src="https://github.com/user-attachments/assets/3001a2c4-6d76-45a2-8898-13bef5ffa473" />
 
 # Fontager
 
@@ -18,9 +10,6 @@
 *A modern, powerful font manager and viewer application for Windows, built with WinUI 3*
 
 Fontager replaces the outdated Windows `fontview.exe` with a fast, beautiful font previewer and aims to provide a full-featured font management suite for designers and developers.
-
-<img width="1280" height="640" alt="Frame 1 (2)" src="https://github.com/user-attachments/assets/5a895e9d-c535-463b-a2f9-4cff208d7087" />
-
 
 [🚀 Download](#building) • [📖 Features](#features) • [🗺️ Roadmap](roadmap.md) • [🛠️ Tech Stack](#tech-stack) • [🤝 Contributing](#contributing)
 
