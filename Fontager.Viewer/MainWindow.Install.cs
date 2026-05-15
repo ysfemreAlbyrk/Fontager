@@ -91,7 +91,7 @@ public sealed partial class MainWindow
     private void UpdateInstallButtonPresentation(InstallTarget target)
     {
         bool isAllUsers = target == InstallTarget.AllUsers;
-        InstallButtonText.Text = isAllUsers ? "Install (All users)" : "Install (Current user)";
+        InstallButtonText.Text = isAllUsers ? "Install (All users)" : "Install";
 
         string tip;
         if (_isProcessElevated)

@@ -243,7 +243,7 @@
                                     <StackPanel Orientation="Horizontal" Spacing="6">
                                         <FontIcon Glyph="&#xE896;" FontSize="13" />
                                         <TextBlock x:Name="InstallButtonText"
-                                                   Text="Install (Current user)"
+                                                   Text="Install"
                                                    Style="{StaticResource CaptionTextBlockStyle}" />
                                     </StackPanel>
                                 </SplitButton.Content>
