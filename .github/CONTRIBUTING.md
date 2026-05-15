@@ -1,105 +1,103 @@
 # Contributing to Fontager
 
-Thank you for your interest in contributing to Fontager! This document provides guidelines and information for contributors.
+Thanks for helping improve Fontager. This guide matches how the repo works today: **WinUI 3**, **Visual Studio–first** workflow, and **no automated test project yet** (see [Testing](#testing) and [roadmap.md](../roadmap.md)).
 
-## Getting Started
+## Before you start
 
-### Prerequisites
+- **Bug or feature?** Open an [issue](https://github.com/ysfemreAlbyrk/Fontager/issues) first for larger changes so we can align on scope.
+- **Roadmap:** Planned work lives in [roadmap.md](../roadmap.md). Shipped work is in [CHANGELOG.md](../CHANGELOG.md).
+- **License:** Contributions are under the [MIT License](../LICENSE).
 
-- Windows 10 (19041+) or Windows 11
-- Visual Studio 2022 (17.8+)
-- .NET 8 SDK
-- Windows App SDK workload for Visual Studio
+## What you need
 
-### Setup
+| Requirement | Notes |
+|-------------|--------|
+| Windows 10 (19041+) or Windows 11 | WinUI 3 target |
+| Visual Studio 2022 (17.8+) | **Recommended** — Windows App SDK workload |
+| .NET 8 SDK | Required for build |
+| Windows App SDK 1.8+ | See [README](../README.md) |
 
-1. Fork the repository
-2. Clone your fork locally
-3. Open `Fontager.sln` in Visual Studio 2022
-4. Set `Fontager.Viewer` as the startup project
-5. Build and run to ensure everything works
+## Getting the code running
 
-## Development Guidelines
+1. Fork and clone the repo.
+2. Open `Fontager.sln` in Visual Studio 2022.
+3. Set **Fontager.Viewer** as the startup project.
+4. Build and run (F5).
 
-### Code Style
+Command-line build is possible (`dotnet build` / `dotnet publish`) but **not the primary dev path** for WinUI — use VS when you can. Details: [README → Building](../README.md#-building).
 
-- Follow C# coding conventions
-- Use meaningful variable and method names
-- Add XML documentation comments for public APIs
-- Keep methods small and focused
-- Use async/await for asynchronous operations
+## Where to make changes
 
-### Project Structure
+| Project | Use for |
+|---------|---------|
+| **Fontager.Core** | Parsing (`FontParser`, `Woff2Decoder`), models, `FontService`, shared logic that Viewer and Manager should share |
+| **Fontager.Viewer** | WinUI UI, `MainWindow`, `SettingsPage`, install UX, file association UI |
+| **Fontager.Manager** | Future management app (scaffold only today) |
+| **docs/** | Research and design notes |
+| **CHANGELOG.md** | User-facing release notes for shipped versions |
+| **roadmap.md** | Completed vs planned features (not a substitute for CHANGELOG) |
 
-```
-Fontager/
-├── Fontager.Core/          # Shared library
-├── Fontager.Viewer/        # Font viewer application
-├── Fontager.Manager/       # Font manager (planned)
-└── docs/                   # Documentation
-```
+Prefer putting reusable logic in **Core** instead of copying it in Viewer or Manager.
 
-### Submitting Changes
+## Coding guidelines
 
-1. Create a new branch for your feature/fix
-2. Make your changes following the coding guidelines
-3. Test your changes thoroughly
-4. Update documentation if needed
-5. Submit a pull request with a clear description
-
-### Pull Request Process
-
-- Use the provided pull request template
-- Ensure all tests pass
-- Update the CHANGELOG.md for significant changes
-- Link any relevant issues in your PR description
+- Follow normal C# conventions and match existing style in the file you edit.
+- Keep public APIs documented with XML comments when you add or change them.
+- Avoid drive-by refactors unrelated to your PR.
+- WinUI / packaging: see [docs/research/packaging-decision.md](../docs/research/packaging-decision.md) for unpackaged vs MSIX context.
 
 ## Testing
 
-### Unit Tests
+**There is no test project in the solution today.** PRs are validated with **manual testing** until we add automated tests (tracked on the roadmap).
 
-- Write unit tests for new functionality
-- Use descriptive test names
-- Test both success and failure scenarios
+### What we expect in every PR
 
-### Manual Testing
+Describe what you ran in the PR template under **Manual verification**. At minimum for Viewer changes:
 
-- Test with various font formats (TTF, OTF, TTC, WOFF2)
-- Test on different Windows versions
-- Test with large font collections
-- Test edge cases (corrupted fonts, very large fonts, etc.)
+- [ ] Build succeeds in Visual Studio (Debug, x64).
+- [ ] App launches and opens a **`.ttf`** and **`.otf`** file.
+- [ ] If you touched parsing / WOFF2 / glyphs: also test **`.ttc`** and **`.woff2`**.
+- [ ] If you touched install / Settings → Fonts: install for **current user**, confirm font appears, then **uninstall** if applicable.
+- [ ] If you touched UI: attach **screenshots** or a short screen recording.
 
-## Bug Reports
+### Good manual checks (when relevant)
 
-When reporting bugs, please:
+| Area | Suggestions |
+|------|-------------|
+| **Glyphs** | Large font (CJK/emoji), search by character and `U+XXXX`, block sidebar, copy glyph |
+| **Install** | Standard user vs elevated run; success / warning / error dialogs |
+| **Settings** | Save settings, reopen app, backdrop unchanged without flash |
+| **File association** | Toggle registration; double-click opens font (if you changed association code) |
+| **Edge cases** | Corrupt or tiny font file; empty path; cancel file picker |
 
-1. Use the bug report issue template
-2. Provide detailed reproduction steps
-3. Include environment information
-4. Attach relevant font files if applicable
-5. Add screenshots for UI issues
+### Automated tests (future)
 
-## Feature Requests
+We plan a **Fontager.Core** test project (xUnit), golden/fixture fonts for `FontParser` / `Woff2Decoder`, and CI — see [roadmap.md → Testing](../roadmap.md#testing). If you want to start that infrastructure in a PR, discuss it in an issue first.
 
-When requesting features:
+## Pull requests
 
-1. Use the feature request issue template
-2. Describe the problem you're trying to solve
-3. Explain why this feature would be valuable
-4. Consider implementation complexity
+1. Branch from `dev` (or the branch the maintainer specifies for your change).
+2. Keep commits focused; write clear messages.
+3. Fill out [.github/pull_request_template.md](pull_request_template.md) completely.
+4. Update **CHANGELOG.md** under `[Unreleased]` (or the appropriate version) for **user-visible** fixes and features.
+5. Link issues: `Fixes #123` / `Relates to #456`.
 
-## Code of Conduct
+Maintainers may ask for changes or manual re-test before merge.
 
-Please be respectful and professional in all interactions. We want to maintain a welcoming environment for all contributors.
+## Issues
 
-## Getting Help
+| Type | Template |
+|------|----------|
+| Bug | [bug_report.md](ISSUE_TEMPLATE/bug_report.md) — steps, Windows version, font format, screenshots |
+| Feature | [feature_request.md](ISSUE_TEMPLATE/feature_request.md) — problem, proposed solution |
+| Question | [question.md](ISSUE_TEMPLATE/question.md) |
 
-If you need help:
+Do **not** attach proprietary fonts unless you have rights to share them; describe the font or use a freely licensed sample.
 
-- Check existing issues and discussions
-- Create a question issue using the template
-- Join our community discussions
+## Conduct
 
-## License
+Be respectful and constructive. Disagree on technical merits, not people.
 
-By contributing to Fontager, you agree that your contributions will be licensed under the same license as the project (MIT License).
+## Questions
+
+Open a [Question issue](https://github.com/ysfemreAlbyrk/Fontager/issues/new/choose) or comment on an existing discussion.

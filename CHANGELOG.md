@@ -1,33 +1,61 @@
 # Changelog
 
-## [Unreleased]
+## [1.1.0] - 2026-05-15
+
+Unpackaged WinUI 3 distribution, a redesigned full-screen **Settings** experience, a rebuilt **font parsing and glyph** stack, WOFF2 end-to-end support, and stronger font installation management.
+
+### ➕ Added
+
+- **Font parsing and glyph system rebuilt end-to-end.** `FontParser` and the Glyphs UI were reworked together so coverage, metadata, and browsing stay in sync:
+  - **`cmap`-aware coverage** — subtable formats 0, 4, 6, and 12; `FontMetadata.SupportedCodePoints` reflects what the font actually contains (CJK, icon fonts, symbol fonts no longer show an empty Latin-only grid).
+  - **Unicode blocks and categories** — sidebar of blocks the font covers (with counts), chip filters (All, Uppercase, Lowercase, Numbers, Punctuation, Symbols, Accented, Other), and search by character, hex (`U+00A0` / `0x00A0` / `00A0`), or decimal code point.
+  - **Glyph detail** — block and category on the detail card; copy glyph to clipboard; default to **Basic Latin** when present (`GlyphBlockEntry` and related helpers).
+  - **WOFF2 on the same pipeline** — `Woff2Decoder` decompresses to SFNT; extended **name**, **OS/2**, and **head** metadata for a fuller property surface in the viewer.
+- **`FontService`** WOFF2-aware metadata and collection counts; cache paths respect **packaged vs unpackaged** (`IsWindowsPackaged`); **`ms-appx` / relative** URIs for reliable preview loading.
+- **Settings as a dedicated page (`SettingsPage`), not a dialog.** The old modal settings `ContentDialog` was removed. Settings now open as a full in-app page with a redesigned layout: grouped sections (appearance, fonts, file association, about), clearer navigation, and room for richer controls (backdrop, preview debouncing, install behavior, and more).
+- **Installation hardening:** `RemoveFontResource` / `RemoveFontResourceEx`, **`InstallFontFileReplacingAsync`** (replace existing install with proper unload + refresh), **staging** for copies, and **`BroadcastFontChange`** so session and other apps pick up additions/removals consistently.
+- **Post-install UX:** dedicated **success / warning / error** dialogs for font installation (instead of generic info dialogs).
+- **Settings → after successful install:** optional **automatic exit** and a **brief success dialog** before quit (user-toggleable).
+- **AssemblyTitle / Product** (and related) on **Viewer and Manager** project files for clearer build and shell identity.
 
 ### 🔄 Changed
+
 - **Distribution switched to unpackaged WinUI 3** with the Windows App SDK runtime bundled self-contained. The MSIX manifest (`Package.appxmanifest`) stays in the repository so Store distribution can be re-enabled later as a single-property change. Rationale and tradeoffs are documented in `docs/research/packaging-decision.md`.
 - Settings storage moved off `Windows.Storage.ApplicationData` and onto a plain JSON file at `%LocalAppData%\Fontager\settings.json`. The file is written atomically (temp + rename) so a mid-write power loss can't corrupt it. The new path is identical across packaging modes, so re-enabling MSIX later won't require a settings migration.
-- `FileAssociationService` now registers the four supported font formats (`.ttf`, `.otf`, `.ttc`, `.woff2`) under one unified ProgID. The Settings dialog exposes a single "Register Fontager for font files (current user)" toggle covering all four. Legacy single-extension entries from older installs are cleaned up automatically.
+- `FileAssociationService` now registers the four supported font formats (`.ttf`, `.otf`, `.ttc`, `.woff2`) under one unified ProgID. **Settings →** file association exposes a single "Register Fontager for font files (current user)" toggle covering all four. Legacy single-extension entries from older installs are cleaned up automatically.
+- **MainWindow layout** streamlined (title bar and chrome organization) for clearer structure and responsiveness.
+- **Version sources:** version text uses package/manifest when available and **falls back to assembly informational version** so unpackaged and hybrid scenarios stay accurate (MainWindow and Settings).
+- **FileAssociationService** packaging detection refactored to avoid spurious exceptions during version/probing checks.
+- **Backdrop:** more backdrop options and **sync with persisted settings** across sessions (see Performance for backdrop apply optimizations).
+- **Font installation UI** (Viewer and Manager): clearer command labels, **tooltips that reflect elevation** (per-user vs all-users), and settings copy that explains **when admin rights are required** for machine-wide installs.
+- **Preview text in Settings** uses **debounced** updates with a tuned interval so the UI stays responsive while editing.
+- **README** and **Fontager.Viewer.csproj** metadata updated for the unpackaged story: clearer install guidance (installer recommended), assembly **name/description** aligned with the product, and **font caching** paths/logic kept consistent with unpackaged layout.
+- **FileAssociationService** handles **legacy application registrations** more aggressively so registry cleanup during (re)association is reliable.
+
+### 🐛 Fixed
+
+- **Settings → Fonts: uninstall fonts you installed with Fontager.** After installing a font (current user or all users), you can remove it from **Settings → Fonts** with a real **Uninstall** action — not just hide it from the list. Registry and session font resources are cleaned up as part of removal.
+- "Install for current user" now actually shows up in Settings → Fonts without a logoff. After copying the font to `%LocalAppData%\Microsoft\Windows\Fonts` and writing `HKCU`, the app calls `AddFontResource` to register it in the current session and broadcasts `WM_FONTCHANGE` so the shell and the Font Cache service refresh immediately. The registry write is verified post-write and the user is told explicitly when the write is virtualized away by packaged identity.
+- **Settings → Fonts uninstall** only became reliable after moving off MSIX: packaged runs virtualized our HKCU font entries, so Windows treated them as system-managed and Fontager could not truly remove them (only "Hide" in the UI). Unpackaged distribution plus correct registry value names (`" (TrueType)"` / `" (OpenType)"`) fixes both removal and Font Cache acceptance.
+- Registry value names now use the `" (TrueType)"` / `" (OpenType)"` suffix Windows expects, so the Font Cache service stops silently rejecting the entry.
+- Drag-and-drop and the "Open" file picker now work when Fontager is launched with "Run as administrator". `WM_DROPFILES`, `WM_COPYDATA`, and `WM_COPYGLOBALDATA` are whitelisted via `ChangeWindowMessageFilterEx` so lower-integrity Explorer can talk to the elevated window, and the WinRT `FileOpenPicker` (which fails under elevation) is replaced by a Win32 `IFileOpenDialog` in that case.
+- Window now shows the Fontager logo in Alt+Tab, the taskbar thumbnail, and the title bar instead of the default WinUI 3 icon. Multi-resolution `Logo.ico` is bundled and applied via `AppWindow.SetIcon` plus `WM_SETICON` for the Alt+Tab thumbnail.
+- **WOFF2 installation restrictions** communicated in-product where applicable so users aren’t left without context when an action isn’t supported for that format.
 
 ### ⚡️ Performance
+
 - Glyphs tab no longer freezes on CJK or emoji fonts with 10k+ glyphs. The root cause was UI virtualization being disabled — the `GridView` was nested inside a `ScrollViewer > StackPanel`, which handed it infinite height and forced every cell to materialize up-front. The GridView now owns its own scrolling and `ItemsWrapGrid` virtualizes off-screen rows.
 - `GlyphItem` now precomputes its `Block` and `Category` once at construction so per-keystroke filtering no longer calls `GlyphCategoryClassifier.Classify(...)` thousands of times.
 - Glyph search input is debounced to 150 ms so a fast typist doesn't rebuild the filtered grid on every keystroke.
 - `FontFamily` is set once on the `GridView` (and inherits to per-cell `TextBlock`s) instead of being assigned per realized container as the user scrolls.
 - `FontViewerViewModel.GlyphItems` is now a plain `List<T>` rather than `ObservableCollection<T>`: it's only ever read in bulk by code-driven filtering, so the change-notification machinery was pure overhead on every font load.
-
-### ➕ Added
-- Glyphs tab is now categorized. The grid is filtered along three orthogonal axes: a Unicode-block sidebar (only blocks the font actually covers, with per-block glyph counts), a functional category chip row (All, Uppercase, Lowercase, Numbers, Punctuation, Symbols, Accented, Other), and a search box that accepts a literal character, hex (`U+00A0`/`0x00A0`/`00A0`), or decimal code point. The glyph detail card now also shows the matching block and category.
-- `FontParser` now reads the `cmap` table (subtable formats 0, 4, 6, 12) and exposes the actual supported Unicode code points via `FontMetadata.SupportedCodePoints`. Icon fonts, CJK fonts, and symbol fonts now show their real glyph coverage instead of an empty Latin grid.
-
-### 🐛 Fixed
-- "Install for current user" now actually shows up in Settings → Fonts without a logoff. After copying the font to `%LocalAppData%\Microsoft\Windows\Fonts` and writing `HKCU`, the app calls `AddFontResource` to register it in the current session and broadcasts `WM_FONTCHANGE` so the shell and the Font Cache service refresh immediately. The registry write is verified post-write and the user is told explicitly when the write is virtualized away by packaged identity.
-- Settings → Fonts now offers an actual "Uninstall" button for fonts installed by Fontager (previously only "Hide" was available). Unblocked by the move off MSIX — under packaged identity our HKCU writes were virtualized into the package container and Windows treated the font as system-managed.
-- Registry value names now use the `" (TrueType)"` / `" (OpenType)"` suffix Windows expects, so the Font Cache service stops silently rejecting the entry.
-- Drag-and-drop and the "Open" file picker now work when Fontager is launched with "Run as administrator". `WM_DROPFILES`, `WM_COPYDATA`, and `WM_COPYGLOBALDATA` are whitelisted via `ChangeWindowMessageFilterEx` so lower-integrity Explorer can talk to the elevated window, and the WinRT `FileOpenPicker` (which fails under elevation) is replaced by a Win32 `IFileOpenDialog` in that case.
-- Window now shows the Fontager logo in Alt+Tab, the taskbar thumbnail, and the title bar instead of the default WinUI 3 icon. Multi-resolution `Logo.ico` is bundled and applied via `AppWindow.SetIcon` plus `WM_SETICON` for the Alt+Tab thumbnail.
+- **Window backdrop no longer recreated on every settings save.** `SystemBackdrop` was removed from static XAML and is applied only from `ApplyBackdrop()`. `_appliedBackdropKind` remembers the last mode (Mica, Acrylic, Mica Alt, or solid); when the user saves settings without changing the backdrop, we skip allocating a new `MicaBackdrop` / `DesktopAcrylicBackdrop` instance. Previously each save replaced the backdrop and caused visible Mica/Acrylic flashes plus unnecessary compositor work.
 
 ### 📚 Docs
+
 - Added `docs/research/font-parsing.md` — comparison of `SixLabors.Fonts`, `HarfBuzzSharp`/`SkiaSharp`, `Typography`, `Win2D` + DirectWrite, and `SharpFont` for fixing WOFF2 metadata and cmap-aware glyph enumeration; includes a TTF file-association appendix.
 - Added `docs/research/packaging-decision.md` — the unpackaged-vs-MSIX comparison applied feature-by-feature to Fontager, the HKCU virtualization and `.ttf` association deep-dives, what we lose / gain, and the recipe for switching back to MSIX when/if we list on the Microsoft Store later.
+- **Revised research docs for 1.1.0 clarity:** `font-metadata.md`, `font-parsing.md`, `font-properties.md` (index-style property mapping), and `packaging-decision.md` refreshed to match the unpackaged Viewer and current parsing pipeline.
 
 ---
 
@@ -36,9 +64,11 @@
 🎉 First Release
 
 ### ➕ Added
+
 - About section in settings — version, product info, author, GitHub link at the bottom
 
 ### 🔄 Changed
+
 - Version now read from `Package.appxmanifest` instead of assembly
 - New app icon — custom Logo.png (F + magnifying glass) in title bar and empty state
 - Widened settings dialog (ContentDialogMaxWidth 640)
@@ -48,9 +78,11 @@
 ## [0.0.5-alpha]
 
 ### ➕ Added
+
 - Enhanced version retrieval in MainWindow.xaml.cs to prioritize package version
 
 ### 🔄 Changed
+
 - Modified app.manifest to remove assembly identity
 - Changed GenerateAppInstallerFile to False in Fontager.Viewer.csproj
 - Enhanced file associations and UI consistency
@@ -63,6 +95,7 @@
 ## [0.0.3-alpha]
 
 ### ➕ Added
+
 - File activation support — double-clicking .ttc/.otf/.woff2 opens the file when Fontager is set as default
 - Quick View feature for character set overview in font header
 - Toggle in settings to show/hide Quick View
@@ -73,6 +106,7 @@
 - Enhanced README.md with build instructions
 
 ### 🔄 Changed
+
 - Added AppPackages and *.pfx to .gitignore
 - Refactored font installation UI - moved install button to header
 - Updated preview area to use single editable TextBox
@@ -82,6 +116,7 @@
 - Improved project properties for better packaging
 
 ### 🐛 Fixed
+
 - Multi-font support implementation
 - Font family name resolution for better XAML integration
 
@@ -90,6 +125,7 @@
 ## [0.0.1-alpha] - 2025-02-12
 
 ### ➕ Added
+
 - Initial project setup and core architecture
 - Modern WinUI 3 interface with Fluent Design
 - Support for TTF, OTF, TTC, and WOFF2 font formats
@@ -104,6 +140,7 @@
 - File association for font formats
 
 ### 🔧 Technical
+
 - Custom binary font parser (no external dependencies)
 - MVVM architecture with CommunityToolkit.Mvvm
 - Dependency injection with Microsoft.Extensions.DependencyInjection
@@ -111,27 +148,8 @@
 - MSIX packaging for Windows Store deployment
 
 ### ⚠️ Known Issues
+
 - Some exotic font formats may not be fully supported
 - Performance with very large font collections needs optimization
 - Font Manager module is still in development
 
----
-
-## [Future Plans]
-
-### 🚀 Planned Features
-
-#### **Fontager.Viewer**
-- Font compare
-- Copying glyphs
-- Dark and Light background preview
-- Recent Files (for blank screen)
-
-#### **Fontager.Manager**
-- Professional font management suite
-- Google Fonts integration
-- Font collections and tagging
-- Temporary font activation
-- Font library organization
-- Font comparison tools
-- Export font catalogs

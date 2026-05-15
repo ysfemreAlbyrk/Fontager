@@ -1,29 +1,64 @@
-## Description
-Please provide a brief description of your changes.
+## Summary
 
-## Type of Change
-- [ ] Bug fix (non-breaking change which fixes an issue)
-- [ ] New feature (non-breaking change which adds functionality)
-- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
-- [ ] Documentation update
-- [ ] Code style update (formatting, local variables)
-- [ ] Refactoring (no functional changes)
-- [ ] Build related changes
-- [ ] Other (please describe):
+<!-- What does this PR do, and why? 1–3 sentences. -->
 
-## Testing
-- [ ] I have tested the changes locally
-- [ ] I have added unit tests for the new functionality
-- [ ] All existing tests pass
+## Related issues
+
+<!-- e.g. Fixes #42, Relates to #17. Use "Fixes" only when this PR fully closes the issue. -->
+
+## Type of change
+
+- [ ] Bug fix
+- [ ] New feature
+- [ ] Refactor (no intended behavior change)
+- [ ] Documentation only
+- [ ] Build / tooling / CI
+- [ ] Other: <!-- describe -->
+
+## Areas touched
+
+- [ ] Fontager.Core
+- [ ] Fontager.Viewer
+- [ ] Fontager.Manager
+- [ ] Docs / CHANGELOG / roadmap
+- [ ] Other: <!-- describe -->
+
+## Manual verification
+
+<!-- Fontager has no automated test suite yet. Describe what you actually ran. -->
+
+**Environment:** Windows <!-- version --> · VS <!-- version if relevant --> · Configuration <!-- Debug/Release, x64 -->
+
+- [ ] Built successfully (`Fontager.Viewer`, x64)
+- [ ] Ran the app locally
+
+**Scenarios tested** (check what applies):
+
+- [ ] Open `.ttf` / `.otf`
+- [ ] Open `.ttc` / `.woff2`
+- [ ] Glyphs tab (search, blocks, large font)
+- [ ] Install / uninstall (Settings → Fonts)
+- [ ] Settings save & reload (backdrop, preview, file association)
+- [ ] Run as administrator (only if PR touches install, drag-drop, or file picker)
+- [ ] Not applicable — explain below
+
+**Notes:**
+
+<!-- Reproduction steps, fonts used, known limitations. -->
+
+## UI changes
+
+- [ ] No UI changes
+- [ ] UI changes — screenshots or recording attached below
+
+## Changelog
+
+- [ ] Updated [CHANGELOG.md](../CHANGELOG.md) (user-visible change)
+- [ ] Not needed — internal / docs-only / no user impact
 
 ## Checklist
-- [ ] My code follows the project's coding standards
-- [ ] I have performed a self-review of my own code
-- [ ] I have commented my code, particularly in hard-to-understand areas
-- [ ] I have made corresponding changes to the documentation
-- [ ] My changes generate no new warnings
-- [ ] I have added tests that prove my fix is effective or that my feature works
-- [ ] New and existing unit tests pass locally with my changes
 
-## Additional Notes
-Add any other context or screenshots about the pull request here.
+- [ ] Self-reviewed the diff
+- [ ] No unrelated drive-by changes
+- [ ] Public APIs documented if added or changed
+- [ ] Follows [CONTRIBUTING.md](CONTRIBUTING.md)

@@ -20,13 +20,13 @@ Fontager replaces the outdated Windows `fontview.exe` with a fast, beautiful fon
 
 <img width="1920" height="1080" alt="img-1" src="https://github.com/user-attachments/assets/62713c1d-c14f-4a51-a8f1-a7b231b8f95c" />
 
-[🚀 Download](#building) • [📖 Features](#features) • [🛠️ Tech Stack](#tech-stack) • [🤝 Contributing](#contributing)
+[🚀 Download](#building) • [📖 Features](#features) • [🗺️ Roadmap](roadmap.md) • [🛠️ Tech Stack](#tech-stack) • [🤝 Contributing](#contributing)
 
 </div>
 
 ## 📖 Features
 
-### 🎯 Fontager Viewer
+### Fontager Viewer
 
 A lightweight font previewer that can be set as the default handler for font files.
 
@@ -47,11 +47,11 @@ A lightweight font previewer that can be set as the default handler for font fil
 <img width="1920" height="1080" alt="img-2" src="https://github.com/user-attachments/assets/dd25198e-7339-4e79-a679-adad2ab8d116" />
 <img width="1920" height="1080" alt="img-3" src="https://github.com/user-attachments/assets/217856aa-6c5b-448b-ba8d-ae7a273e8c3c" />
 
-### 🚧 Fontager Manager *(planned)*
+### Fontager Manager *(planned)*
 
 A professional-grade font management suite with library organization, temporary activation, collections, and Google Fonts integration.
 
-### 🔧 Fontager.Core
+### Fontager.Core
 
 Shared library containing models, services, and helpers used by both applications:
 
@@ -151,21 +151,9 @@ Run `Fontager Viewer.exe` from there directly, or copy the folder anywhere.
 | 📦 **Font Loading** | Win32 GDI (`AddFontResourceEx`) + XAML `ms-appdata` URI caching | Native font handling |
 | 📐 **Packaging** | Unpackaged WinUI 3, self-contained WinAppSDK | See [packaging-decision](docs/research/packaging-decision.md) |
 
-## 🔗 File Association
+## 🗺️ Roadmap
 
-Because the build is unpackaged, file associations are opt-in: open
-**Settings → Install → "Register Fontager for font files (current user)"**.
-That single toggle adds Fontager to the Explorer *Open with...* submenu for
-**`.ttf`, `.otf`, `.ttc`, and `.woff2`** by writing per-user entries under
-`HKCU\Software\Classes`. No admin needed, and the same toggle reverses it.
-
-You can also right-click any font file → *Open with* → *Choose another app*
-→ pick Fontager Viewer and tick *Always use this app*. That works even
-without flipping the Settings toggle.
-
-A deeper write-up of why `.ttf` is the awkward one (Windows reserves it and
-the MSIX manifest schema bans it) lives in
-[`docs/research/font-parsing.md`](docs/research/font-parsing.md#6-ttf-file-association-limitation-on-windows-appendix).
+Completed and planned work (Core, Viewer, Manager) is tracked in **[roadmap.md](roadmap.md)** — separate from release history in [CHANGELOG.md](CHANGELOG.md).
 
 ## 📄 License
 
