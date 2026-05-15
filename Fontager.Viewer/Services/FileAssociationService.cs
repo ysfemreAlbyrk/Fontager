@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
-using Windows.ApplicationModel;
 
 namespace Fontager.Viewer.Services;
 
@@ -38,6 +37,11 @@ namespace Fontager.Viewer.Services;
 /// </summary>
 internal static class FileAssociationService
 {
+    /// <summary>Win32: buffer too small — means the process has a package identity.</summary>
+    private const int ErrorInsufficientBuffer = 122;
+
+    private static readonly Lazy<bool> s_isRunningPackaged = new(ComputeIsRunningPackaged);
+
     /// <summary>Unified ProgID covering all four font extensions.</summary>
     private const string ProgId = "Fontager.Viewer.font";
 
@@ -58,21 +62,21 @@ internal static class FileAssociationService
     /// no effect on Explorer, so we surface the feature as disabled. With
     /// the unpackaged build this is normally <c>false</c>.
     /// </summary>
-    public static bool IsRunningPackaged
+    /// <remarks>
+    /// Uses <c>GetCurrentPackageFullName</c> instead of <c>Package.Current</c>
+    /// so unpackaged runs do not throw <see cref="InvalidOperationException"/>
+    /// (debugger first-chance noise and slower startup).
+    /// </remarks>
+    public static bool IsRunningPackaged => s_isRunningPackaged.Value;
+
+    private static bool ComputeIsRunningPackaged()
     {
-        get
-        {
-            try
-            {
-                _ = Package.Current.Id.FamilyName;
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
-        }
+        uint length = 0;
+        return GetCurrentPackageFullName(ref length, IntPtr.Zero) == ErrorInsufficientBuffer;
     }
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+    private static extern int GetCurrentPackageFullName(ref uint packageFullNameLength, IntPtr packageFullName);
 
     /// <summary>
     /// True when the Fontager ProgID is currently advertised under at least

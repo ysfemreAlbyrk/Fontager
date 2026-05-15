@@ -99,12 +99,20 @@ public sealed partial class SettingsPage : Page
 
         // About
         string version;
-        try
+        if (FileAssociationService.IsRunningPackaged)
         {
-            var ver = Windows.ApplicationModel.Package.Current.Id.Version;
-            version = $"{ver.Major}.{ver.Minor}.{ver.Build}.{ver.Revision}";
+            try
+            {
+                var ver = Windows.ApplicationModel.Package.Current.Id.Version;
+                version = $"{ver.Major}.{ver.Minor}.{ver.Build}.{ver.Revision}";
+            }
+            catch
+            {
+                var asm = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+                version = asm?.ToString() ?? "0.0.0.0";
+            }
         }
-        catch
+        else
         {
             var asm = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
             version = asm?.ToString() ?? "0.0.0.0";
@@ -242,7 +250,7 @@ public sealed partial class SettingsPage : Page
         {
             _previewTextDebouncer = DispatcherQueue.CreateTimer();
             _previewTextDebouncer.IsRepeating = false;
-            _previewTextDebouncer.Interval = TimeSpan.FromMilliseconds(280);
+            _previewTextDebouncer.Interval = TimeSpan.FromSeconds(1);
             _previewTextDebouncer.Tick += (_, _) =>
             {
                 _previewTextDebouncer!.Stop();

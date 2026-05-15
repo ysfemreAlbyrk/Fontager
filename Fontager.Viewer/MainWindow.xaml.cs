@@ -346,15 +346,18 @@ public sealed partial class MainWindow : Window
 
     private static string ResolveAssetPath(string relativePath)
     {
-        try
+        if (FileAssociationService.IsRunningPackaged)
         {
-            var packagePath = Package.Current.InstalledLocation.Path;
-            var packaged = Path.Combine(packagePath, relativePath);
-            if (File.Exists(packaged)) return packaged;
-        }
-        catch
-        {
-            // Not running packaged.
+            try
+            {
+                var packagePath = Package.Current.InstalledLocation.Path;
+                var packaged = Path.Combine(packagePath, relativePath);
+                if (File.Exists(packaged)) return packaged;
+            }
+            catch
+            {
+                // Rare: packaged but Storage API unavailable — fall through.
+            }
         }
 
         var baseDir = AppContext.BaseDirectory;
@@ -364,19 +367,31 @@ public sealed partial class MainWindow : Window
     private void SetAppVersion()
     {
         string versionStr;
-        try
+        if (FileAssociationService.IsRunningPackaged)
         {
-            var version = Package.Current.Id.Version;
-            versionStr = $"v{version.Major}.{version.Minor}.{version.Build}";
+            try
+            {
+                var version = Package.Current.Id.Version;
+                versionStr = $"v{version.Major}.{version.Minor}.{version.Build}";
+            }
+            catch
+            {
+                versionStr = AssemblyVersionFallback();
+            }
         }
-        catch
+        else
         {
-            var asm = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
-            versionStr = asm != null ? $"v{asm.Major}.{asm.Minor}.{asm.Build}" : "v0.0.0";
+            versionStr = AssemblyVersionFallback();
         }
         TitleBarVersion.Text = versionStr;
         if (EmptyStateVersion != null)
             EmptyStateVersion.Text = versionStr;
+    }
+
+    private static string AssemblyVersionFallback()
+    {
+        var asm = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+        return asm != null ? $"v{asm.Major}.{asm.Minor}.{asm.Build}" : "v0.0.0";
     }
 
     private async void EmptyStateGitHub_Click(object sender, RoutedEventArgs e)
@@ -751,17 +766,7 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// True when the process has a package identity (MSIX / sparse package).
     /// </summary>
-    private static bool IsWindowsPackaged()
-    {
-        try
-        {
-            return Package.Current.Id != null;
-        }
-        catch
-        {
-            return false;
-        }
-    }
+    private static bool IsWindowsPackaged() => FileAssociationService.IsRunningPackaged;
 
     private void DeactivateCurrentFont()
     {
@@ -780,9 +785,7 @@ public sealed partial class MainWindow : Window
         if (font is null) return;
         var meta = font.Metadata;
 
-        // Title bar
-        TitleBarFontName.Text = font.DisplayName;
-        TitleBarFontName.Opacity = 1;
+        // Title bar (font name is in the main header; window title still shows file identity)
         AppWindow.Title = $"Fontager \u2014 {font.DisplayName}";
 
         // Header
@@ -988,11 +991,7 @@ public sealed partial class MainWindow : Window
         InstallSplitButton.IsEnabled = canInstall;
 
         if (error)
-        {
-            TitleBarFontName.Text = string.Empty;
-            TitleBarFontName.Opacity = 0;
             AppWindow.Title = "Fontager";
-        }
     }
 
     // ── Settings ────────────────────────────────────────────────
