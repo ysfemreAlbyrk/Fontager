@@ -1,6 +1,11 @@
 <div align="center">
+
 <p align="center">
-  <img width="15%" src="https://raw.githubusercontent.com/ysfemreAlbyrk/Fontager/refs/heads/main/Fontager.Viewer/Assets/Logo.png">
+  <img src="https://raw.githubusercontent.com/ysfemreAlbyrk/Fontager/refs/heads/main/Fontager.Viewer/Assets/Logo.png" width="120" alt="Fontager Viewer" title="Fontager Viewer" />
+  &nbsp;&nbsp;&nbsp;
+  <img src="https://raw.githubusercontent.com/ysfemreAlbyrk/Fontager/refs/heads/main/Assets/fontager_icon.png" width="220" alt="Fontager" title="Fontager" />
+  &nbsp;&nbsp;&nbsp;
+  <img src="https://raw.githubusercontent.com/ysfemreAlbyrk/Fontager/refs/heads/main/Fontager.Manager/Assets/Logo.png" width="120" alt="Fontager Manager" title="Fontager Manager" />
 </p>
 
 # Fontager
