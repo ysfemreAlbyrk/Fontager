@@ -1,9 +1,11 @@
 using System;
+using System.IO;
 using Fontager.Viewer.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Navigation;
 
 namespace Fontager.Viewer.Views;
@@ -117,12 +119,49 @@ public sealed partial class SettingsPage : Page
             var asm = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
             version = asm?.ToString() ?? "0.0.0.0";
         }
-        AboutVersionText.Text = $"Fontager Viewer  v{version}";
+
+        AboutVersionText.Text = $"Version {version}";
+        ApplyAboutLogo();
+        // AboutBuildKindText.Text = FileAssociationService.IsRunningPackaged
+        //     ? "Packaged (MSIX) build — Windows manages identity and updates."
+        //     : "📦 Desktop app — wrap the published folder with an installer for Start menu & uninstall (recommended). Settings: %LocalAppData%\\Fontager\\settings.json";
 
         _initialized = true;
 
         DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low,
             () => ApplyTwoPaneLayout(TwoPaneRoot.ActualWidth > 1 ? TwoPaneRoot.ActualWidth : ActualWidth));
+    }
+
+    /// <summary>
+    /// WinUI often fails to resolve <c>Assets/Logo.png</c> from XAML on unpackaged runs;
+    /// loading from <see cref="AppContext.BaseDirectory"/> matches how files land next to the exe.
+    /// </summary>
+    private void ApplyAboutLogo()
+    {
+        try
+        {
+            string diskPath = Path.Combine(AppContext.BaseDirectory, "Assets", "Logo.png");
+            if (File.Exists(diskPath))
+            {
+                AboutLogoImage.Source = new BitmapImage
+                {
+                    UriSource = FileUriFromLocalPath(diskPath)
+                };
+                return;
+            }
+
+            AboutLogoImage.Source = new BitmapImage(new Uri("ms-appx:///Assets/Logo.png"));
+        }
+        catch
+        {
+            AboutLogoImage.Source = null;
+        }
+    }
+
+    private static Uri FileUriFromLocalPath(string path)
+    {
+        path = Path.GetFullPath(path);
+        return new Uri("file:///" + path.Replace("\\", "/", StringComparison.Ordinal));
     }
 
     /// <summary>Selects backdrop row by persisted <see cref="SettingsService.Backdrop"/> tag (not list index).</summary>
@@ -143,7 +182,7 @@ public sealed partial class SettingsPage : Page
         BackdropCombo.SelectedIndex = 0;
     }
 
-    private void TwoPaneRoot_SizeChanged(object sender, SizeChangedEventArgs e)
+    private void TwoPaneRoot_SizeChanged(object _, SizeChangedEventArgs e)
     {
         ApplyTwoPaneLayout(e.NewSize.Width);
     }
@@ -218,7 +257,7 @@ public sealed partial class SettingsPage : Page
 
     // ── Appearance ────────────────────────────────────────────────
 
-    private void ThemeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void ThemeCombo_SelectionChanged(object _, SelectionChangedEventArgs _1)
     {
         if (!_initialized) return;
         if (ThemeCombo.SelectedItem is ComboBoxItem item
@@ -229,7 +268,7 @@ public sealed partial class SettingsPage : Page
         }
     }
 
-    private void BackdropCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void BackdropCombo_SelectionChanged(object _, SelectionChangedEventArgs _1)
     {
         if (!_initialized) return;
         if (BackdropCombo.SelectedItem is ComboBoxItem item
@@ -242,7 +281,7 @@ public sealed partial class SettingsPage : Page
 
     // ── Preview ───────────────────────────────────────────────────
 
-    private void PreviewTextBox_TextChanged(object sender, TextChangedEventArgs e)
+    private void PreviewTextBox_TextChanged(object _, TextChangedEventArgs _1)
     {
         if (!_initialized) return;
 
@@ -262,21 +301,21 @@ public sealed partial class SettingsPage : Page
         _previewTextDebouncer.Start();
     }
 
-    private void PreviewTextBox_LostFocus(object sender, RoutedEventArgs e)
+    private void PreviewTextBox_LostFocus(object _, RoutedEventArgs _1)
     {
         if (!_initialized) return;
         _previewTextDebouncer?.Stop();
         _settings.DefaultPreviewText = PreviewTextBox.Text;
     }
 
-    private void FontSizeSlider_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
+    private void FontSizeSlider_ValueChanged(object _, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
     {
         FontSizeSliderHeaderText.Text = $"Default font size ({(int)e.NewValue}px)";
         if (!_initialized) return;
         _settings.DefaultFontSize = e.NewValue;
     }
 
-    private void PreviewControlsToggle_Toggled(object sender, RoutedEventArgs e)
+    private void PreviewControlsToggle_Toggled(object _, RoutedEventArgs _1)
     {
         if (!_initialized) return;
         _settings.ShowPreviewControls = PreviewControlsToggle.IsOn;
@@ -284,19 +323,19 @@ public sealed partial class SettingsPage : Page
 
     // ── Display ───────────────────────────────────────────────────
 
-    private void QuickViewToggle_Toggled(object sender, RoutedEventArgs e)
+    private void QuickViewToggle_Toggled(object _, RoutedEventArgs _1)
     {
         if (!_initialized) return;
         _settings.ShowQuickView = QuickViewToggle.IsOn;
     }
 
-    private void WaterfallToggle_Toggled(object sender, RoutedEventArgs e)
+    private void WaterfallToggle_Toggled(object _, RoutedEventArgs _1)
     {
         if (!_initialized) return;
         _settings.ShowWaterfall = WaterfallToggle.IsOn;
     }
 
-    private void WaterfallSizesBox_LostFocus(object sender, RoutedEventArgs e)
+    private void WaterfallSizesBox_LostFocus(object _, RoutedEventArgs _1)
     {
         if (!_initialized) return;
         _settings.WaterfallSizesRaw = WaterfallSizesBox.Text;
@@ -304,13 +343,13 @@ public sealed partial class SettingsPage : Page
 
     // ── Install ───────────────────────────────────────────────────
 
-    private void ExitAfterInstallToggle_Toggled(object sender, RoutedEventArgs e)
+    private void ExitAfterInstallToggle_Toggled(object _, RoutedEventArgs _1)
     {
         if (!_initialized) return;
         _settings.ExitAppAfterSuccessfulInstall = ExitAfterInstallToggle.IsOn;
     }
 
-    private void InstallModeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void InstallModeCombo_SelectionChanged(object _, SelectionChangedEventArgs _1)
     {
         if (!_initialized) return;
         if (!_isProcessElevated)
@@ -329,7 +368,7 @@ public sealed partial class SettingsPage : Page
         }
     }
 
-    private void FontAssocToggle_Toggled(object sender, RoutedEventArgs e)
+    private void FontAssocToggle_Toggled(object _, RoutedEventArgs _1)
     {
         if (!_initialized) return;
         if (FileAssociationService.IsRunningPackaged) return;
@@ -342,7 +381,7 @@ public sealed partial class SettingsPage : Page
 
     // ── Reset ─────────────────────────────────────────────────────
 
-    private async void ResetButton_Click(object sender, RoutedEventArgs e)
+    private async void ResetButton_Click(object _, RoutedEventArgs _1)
     {
         var xamlRoot = this.XamlRoot ?? (Content as FrameworkElement)?.XamlRoot;
         if (xamlRoot is null)

@@ -605,17 +605,17 @@ public sealed partial class MainWindow : Window
             //
             // For .woff2 the cache path runs Woff2Decoder so the on-disk bytes
             // are SFNT — required for AddFontResourceEx and for DirectWrite.
-            var cached = await CacheFontForXamlAsync(filePath);
+            var (diskPath, msAppDataRelativePath, msAppxRelativePath) = await CacheFontForXamlAsync(filePath);
 
             // GDI session-private registration on the *cached* SFNT path:
             // AddFontResourceEx cannot consume WOFF2, so we register the
             // decoded copy. Required for any non-XAML preview surfaces
             // (Win32 controls, third-party hooks) to see the family name.
-            AddFontResourceEx(cached.DiskPath, FR_PRIVATE, IntPtr.Zero);
-            _activeFontPath = cached.DiskPath;
+            _ = AddFontResourceEx(diskPath, FR_PRIVATE, IntPtr.Zero);
+            _activeFontPath = diskPath;
 
             _loadedFontFamily = CreateLoadedFontFamily(
-                familyName, cached.DiskPath, cached.MsAppDataRelativePath, cached.MsAppxRelativePath);
+                familyName, diskPath, msAppDataRelativePath, msAppxRelativePath);
 
             // Glyph grid: see BuildGlyphGrid — GridView item templates do not
             // inherit FontFamily from the parent; ContainerContentChanging sets

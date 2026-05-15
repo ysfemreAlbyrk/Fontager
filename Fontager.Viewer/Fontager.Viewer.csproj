@@ -5,9 +5,14 @@
     <NoWarn>$(NoWarn);MVVMTK0045</NoWarn>
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <RootNamespace>Fontager.Viewer</RootNamespace>
-    <!-- UAC / shell: Win32 FileDescription (defaults to project name if unset). -->
+    <!-- Output binary name + Explorer "Details" pane (Product / Company). -->
+    <AssemblyName>Fontager Viewer</AssemblyName>
     <AssemblyTitle>Fontager Viewer</AssemblyTitle>
-    <Product>Fontager</Product>
+    <Product>Fontager Viewer</Product>
+    <Company>Fontager</Company>
+    <AssemblyDescription>Font preview and install helper for Windows.</AssemblyDescription>
+    <!-- WinUI cannot run as a true single-file bundle; VS publish sometimes enables it. -->
+    <PublishSingleFile>false</PublishSingleFile>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\Logo.ico</ApplicationIcon>
     <Platforms>x86;x64;ARM64</Platforms>
@@ -15,7 +20,8 @@
     <UseWinUI>true</UseWinUI>
     <WinUISDKReferences>false</WinUISDKReferences>
     <Nullable>enable</Nullable>
-
+    <!-- CsWinRT: generic collections crossing ABI need unsafe stubs when trimming/AOT analyzers run. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <!--
       Distribution: UNPACKAGED (no MSIX / Store identity).
 

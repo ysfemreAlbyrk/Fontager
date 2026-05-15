@@ -104,9 +104,9 @@ While you can build the project using the **dotnet CLI**, **Visual Studio 2022 i
 
 ### 📦 Installation
 
-Fontager ships as an **unpackaged WinUI 3 app**: a regular folder containing
-`Fontager.Viewer.exe` and the self-contained Windows App SDK / .NET runtime.
-No MSIX, no Store, no separate runtime install on the target machine.
+Fontager ships as an **unpackaged WinUI 3 app**: the runtime payload is a folder containing
+`Fontager Viewer.exe` and the self-contained Windows App SDK / .NET runtime — typically delivered inside an **installer** (shortcuts + uninstall) rather than as a loose zip.
+No MSIX/Store identity on that path, so no separate runtime install on the target machine.
 
 The rationale (and the path to switch back to MSIX/Store later) is documented
 in [`docs/research/packaging-decision.md`](docs/research/packaging-decision.md).
@@ -114,24 +114,25 @@ in [`docs/research/packaging-decision.md`](docs/research/packaging-decision.md).
 **Visual Studio:**
 1. Set configuration to **Release** and platform to **x64**
 2. Right-click `Fontager.Viewer` → **Publish** → **Folder**
-3. Pick a target folder, accept the defaults (self-contained, win-x64)
-4. The publish folder is what you ship — zip it or run an installer over it.
+3. Accept **self-contained** + **win-x64** (see `Properties/PublishProfiles/FolderProfile.pubxml`).
+4. Ship the folder **`bin\x64\Release\net8.0-windows10.0.19041.0\win-x64\publish\`** — same output as `dotnet publish`.
+
+Do **not** rely on **`bin\Release\Publish`**. That was an old default `PublishDir` outside the normal SDK folder layout; publishes there often missed native / WinAppSDK files while **`bin\x64\Release\net8.0-windows10.0.19041.0\`** looked fine after a normal **Build** because MSBuild copies the full dependency set during compile.
 
 **Command line:**
 ```sh
 dotnet publish Fontager.Viewer -c Release -r win-x64 --self-contained
 ```
-Output lands in `Fontager.Viewer\bin\Release\net8.0-windows10.0.19041.0\win-x64\publish\`.
-Run `Fontager.Viewer.exe` from there directly, or copy the folder anywhere.
+Output lands in `Fontager.Viewer\bin\x64\Release\net8.0-windows10.0.19041.0\win-x64\publish\` when publishing with platform **x64**.
+Run `Fontager Viewer.exe` from there directly, or copy the folder anywhere.
+
+**Note:** Always ship the **entire** publish folder — not only the `.exe`. Also unzip fully before running (running from inside the zip often fails).
 
 **Download from GitHub Releases:**
 1. Go to the [latest release page](https://github.com/ysfemreAlbyrk/Fontager/releases/latest) and download.
-2. Extract the zip and run `Fontager.Viewer.exe`.
+2. Extract the zip and run `Fontager Viewer.exe`.
 
-> **Microsoft Store / MSIX:** not pursued at this stage. The MSIX manifest
-> (`Package.appxmanifest`) is kept in the repository so Store distribution
-> remains a single-property change away — see the packaging-decision doc
-> for the checklist.
+> **Microsoft Store / MSIX:** not pursued at this stage.
 
 ## 🛠️ Tech Stack
 

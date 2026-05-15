@@ -48,7 +48,14 @@ internal static class FileAssociationService
     /// <summary>Legacy ProgID from the .ttf-only era; cleaned up on register/unregister.</summary>
     private const string LegacyTtfProgId = "Fontager.Viewer.ttf";
 
-    private const string AppExeName = "Fontager.Viewer.exe";
+    /// <summary>Previous shipped host name — registry cleanup when renaming the executable.</summary>
+    private const string LegacyApplicationExeName = "Fontager.Viewer.exe";
+
+    /// <summary>Actual process image file name (e.g. <c>Fontager Viewer.exe</c>).</summary>
+    private static string AppExeFileName =>
+        string.IsNullOrEmpty(Environment.ProcessPath)
+            ? "Fontager Viewer.exe"
+            : Path.GetFileName(Environment.ProcessPath);
 
     /// <summary>
     /// All file extensions Fontager wants to be a candidate for in the
@@ -119,6 +126,7 @@ internal static class FileAssociationService
         // sitting in the registry from a previous Fontager install — we
         // don't want two ProgIDs both claiming the same EXE.
         RemoveLegacyTtfProgId();
+        RemoveLegacyApplicationRegistration();
 
         // 1. ProgID definition: HKCU\Software\Classes\Fontager.Viewer.font
         using (var progIdKey = Registry.CurrentUser.CreateSubKey($@"Software\Classes\{ProgId}", true))
@@ -130,12 +138,12 @@ internal static class FileAssociationService
             cmdKey?.SetValue(string.Empty, openCommand);
         }
 
-        // 2. Application registration: HKCU\Software\Classes\Applications\Fontager.Viewer.exe
+        // 2. Application registration: HKCU\Software\Classes\Applications\<exe name>
         //    Tells Windows which file types Fontager understands, so it shows
         //    up in "Open with → Choose another app" lists even before the
         //    user has explicitly associated anything.
         using (var appKey = Registry.CurrentUser.CreateSubKey(
-            $@"Software\Classes\Applications\{AppExeName}", true))
+            $@"Software\Classes\Applications\{AppExeFileName}", true))
         {
             appKey?.SetValue("FriendlyAppName", "Fontager Viewer");
             using var cmdKey = appKey?.CreateSubKey(@"shell\open\command", true);
@@ -180,7 +188,9 @@ internal static class FileAssociationService
             Registry.CurrentUser.DeleteSubKeyTree(
                 $@"Software\Classes\{ProgId}", throwOnMissingSubKey: false);
             Registry.CurrentUser.DeleteSubKeyTree(
-                $@"Software\Classes\Applications\{AppExeName}", throwOnMissingSubKey: false);
+                $@"Software\Classes\Applications\{AppExeFileName}", throwOnMissingSubKey: false);
+            Registry.CurrentUser.DeleteSubKeyTree(
+                $@"Software\Classes\Applications\{LegacyApplicationExeName}", throwOnMissingSubKey: false);
 
             RemoveLegacyTtfProgId();
 
@@ -221,7 +231,25 @@ internal static class FileAssociationService
         var module = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
         if (!string.IsNullOrEmpty(module) && File.Exists(module)) return module;
 
-        return Path.Combine(AppContext.BaseDirectory, AppExeName);
+        return Path.Combine(AppContext.BaseDirectory, AppExeFileName);
+    }
+
+    /// <summary>
+    /// Removes <c>Applications\Fontager.Viewer.exe</c> left from builds before the host was renamed.
+    /// </summary>
+    private static void RemoveLegacyApplicationRegistration()
+    {
+        try
+        {
+            if (string.Equals(AppExeFileName, LegacyApplicationExeName, StringComparison.OrdinalIgnoreCase))
+                return;
+            Registry.CurrentUser.DeleteSubKeyTree(
+                $@"Software\Classes\Applications\{LegacyApplicationExeName}", throwOnMissingSubKey: false);
+        }
+        catch
+        {
+            // Best-effort
+        }
     }
 
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)]

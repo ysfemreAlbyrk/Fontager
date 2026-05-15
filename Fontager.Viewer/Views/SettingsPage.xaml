@@ -419,7 +419,6 @@
                             </Grid.ColumnDefinitions>
                             <FontIcon Grid.Column="0"
                                       Glyph="&#xE823;"
-                                 
                                       FontSize="20"
                                       VerticalAlignment="Top"
                                       Margin="0,2,0,0"
@@ -511,24 +510,67 @@
                         BorderThickness="1"
                         CornerRadius="8"
                         Padding="20,18">
-                    <StackPanel Spacing="10">
-                        <TextBlock Text="About this app"
-                                   Style="{StaticResource SubtitleTextBlockStyle}" />
-                        <TextBlock x:Name="AboutVersionText"
-                                   FontWeight="SemiBold"
-                                   Style="{StaticResource BodyTextBlockStyle}" />
-                        <TextBlock Text="A modern font viewer for Windows, built with WinUI 3."
-                                   Style="{StaticResource CaptionTextBlockStyle}"
+                    <StackPanel Spacing="14">
+                    <!-- <TextBlock Text="About this app"
+                                   Style="{StaticResource SubtitleTextBlockStyle}" /> -->
+ 
+                        <!-- <Border Height="1"
+                                Margin="0,6,0,6">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                    <GradientStop Color="White" Offset="0.5" />
+                                    <GradientStop Color="Transparent" Offset="0" />
+                                    <GradientStop Color="Transparent" Offset="1" />
+                                </LinearGradientBrush>
+                            </Border.Background>
+                        </Border> -->
+                   
+                        <StackPanel Orientation="Vertical" Spacing="14">
+                                <Image x:Name="AboutLogoImage"
+                                       Width="44"
+                                       Height="44"
+                                       Stretch="Uniform"
+                                       HorizontalAlignment="Left"
+                                       VerticalAlignment="Center" />
+                            <StackPanel VerticalAlignment="Center" Spacing="4">
+                                <TextBlock Text="Fontager Viewer"
+                                           Style="{StaticResource SubtitleTextBlockStyle}" />
+                                <TextBlock x:Name="AboutVersionText"
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           FontWeight="SemiBold"
+                                           Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                <!-- <TextBlock x:Name="AboutBuildKindText"
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           TextWrapping="WrapWholeWords" /> -->
+                            </StackPanel>
+                        </StackPanel>
+
+                        <TextBlock Style="{StaticResource CaptionTextBlockStyle}"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                   TextWrapping="WrapWholeWords" />
-                        <TextBlock Text="Made by Yusuf Emre Albayrak"
-                                   Style="{StaticResource CaptionTextBlockStyle}"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                        <HyperlinkButton Content="GitHub — ysfemreAlbyrk/Fontager"
-                                         NavigateUri="https://github.com/ysfemreAlbyrk/Fontager"
-                                         Padding="0"
-                                         Margin="0,4,0,0"
-                                         HorizontalAlignment="Left" />
+                                   TextWrapping="WrapWholeWords"
+                                   LineHeight="20"
+                                   Text="A modern, powerful font viewer application for Windows, built with WinUI 3" />
+
+                        <TextBlock Style="{StaticResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   TextWrapping="WrapWholeWords"
+                                   Text="MIT License · Made by Yusuf Emre Albayrak ©2026" />
+
+                        <StackPanel Spacing="4">
+                            <HyperlinkButton Content="Repository on GitHub (ysfemreAlbyrk/Fontager)"
+                                             NavigateUri="https://github.com/ysfemreAlbyrk/Fontager"
+                                             Padding="0"
+                                             HorizontalAlignment="Left" />
+                            <HyperlinkButton Content="Report an issue"
+                                             NavigateUri="https://github.com/ysfemreAlbyrk/Fontager/issues"
+                                             Padding="0"
+                                             HorizontalAlignment="Left" />
+                            <HyperlinkButton Content="Releases &amp; downloads"
+                                             NavigateUri="https://github.com/ysfemreAlbyrk/Fontager/releases"
+                                             Padding="0"
+                                             HorizontalAlignment="Left" />
+                        </StackPanel>
                     </StackPanel>
                 </Border>
             </Grid>
