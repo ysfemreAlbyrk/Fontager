@@ -29,6 +29,9 @@ public partial class App : Application
 
     public App()
     {
+        if (ElevatedInstallCommandLine.TryExecuteAndExit(Environment.GetCommandLineArgs()))
+            return;
+
         InitializeComponent();
 
         if (!FileAssociationService.IsRunningPackaged)

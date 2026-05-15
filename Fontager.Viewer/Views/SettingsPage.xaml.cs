@@ -81,17 +81,11 @@ public sealed partial class SettingsPage : Page
 
         // Install
         InstallModeCombo.SelectedIndex = _settings.InstallMode;
+        ElevateForAllUsersInstallToggle.IsOn = _settings.ElevateForAllUsersInstall;
         RunAsAdminToggle.IsOn = _settings.RunAsAdministrator;
-        SyncRunAsAdminDescription();
+        SyncInstallAdminDescriptions();
         ExitAfterInstallToggle.IsOn = _settings.ExitAppAfterSuccessfulInstall;
-        if (InstallModeCombo.Items.Count > 1
-            && InstallModeCombo.Items[1] is ComboBoxItem allUsersOption)
-        {
-            allUsersOption.IsEnabled = _isProcessElevated;
-        }
-        InstallTargetDescription.Text = _isProcessElevated
-            ? "Select the default target used by the main Install button. All-users install copies to Windows\\Fonts and requires administrator privileges."
-            : "Without administrator elevation, only the current user can be selected. Start Fontager with Run as administrator to enable the 'All users' option in this list and in the Install menu.";
+        SyncInstallModeComboEnabled();
 
         // File association
         bool fontAssocPackaged = FileAssociationService.IsRunningPackaged;
@@ -345,11 +339,57 @@ public sealed partial class SettingsPage : Page
 
     // ── Install ───────────────────────────────────────────────────
 
-    private void SyncRunAsAdminDescription()
+    private bool CanSelectAllUsersInstallTarget =>
+        _isProcessElevated || _settings.ElevateForAllUsersInstall;
+
+    private void SyncInstallModeComboEnabled()
     {
-        RunAsAdminDescription.Text = _isProcessElevated
-            ? "Fontager is running with administrator privileges. Turning this off restarts the app without elevation (drag-and-drop from File Explorer works better)."
-            : "Restarts Fontager with administrator privileges (Windows may show UAC). Useful when Fontager is the default app for font files or when installing fonts for all users.";
+        if (InstallModeCombo.Items.Count > 1
+            && InstallModeCombo.Items[1] is ComboBoxItem allUsersOption)
+        {
+            allUsersOption.IsEnabled = CanSelectAllUsersInstallTarget;
+        }
+    }
+
+    private void SyncInstallAdminDescriptions()
+    {
+        InstallTargetDescription.Text = CanSelectAllUsersInstallTarget
+            ? "Default target for the Install button. All users copies the font to C:\\Windows\\Fonts."
+            : "Only current-user install is available. Turn on “UAC for all-users install” below, or “Run entire app as administrator”.";
+
+        if (_isProcessElevated)
+        {
+            ElevateForAllUsersInstallDescription.Text =
+                "The app is already running as administrator, so every install uses elevated rights. You can turn this off; installs to C:\\Windows\\Fonts still work.";
+            RunAsAdminDescription.Text =
+                "The entire application is elevated. Turning this off restarts without administrator rights (drag-and-drop from File Explorer works better).";
+            return;
+        }
+
+        ElevateForAllUsersInstallDescription.Text = _settings.ElevateForAllUsersInstall
+            ? "Recommended. Fontager stays normal while you preview fonts. Windows may show UAC only when you install to C:\\Windows\\Fonts for all users."
+            : "When off, all-users install is disabled unless you use “Run entire app as administrator” below.";
+
+        RunAsAdminDescription.Text = _settings.RunAsAdministrator
+            ? "The whole app will restart elevated (UAC). Use this if you always want administrator rights — for example as the default font handler with elevated access. Each new launch may prompt UAC again."
+            : "Restarts the entire app with administrator privileges. Differs from the option above: this elevates everything, not just one install to C:\\Windows\\Fonts.";
+    }
+
+    private void ElevateForAllUsersInstallToggle_Toggled(object _, RoutedEventArgs _1)
+    {
+        if (!_initialized) return;
+
+        _settings.ElevateForAllUsersInstall = ElevateForAllUsersInstallToggle.IsOn;
+        SyncInstallAdminDescriptions();
+        SyncInstallModeComboEnabled();
+
+        if (!CanSelectAllUsersInstallTarget && _settings.InstallMode == 1)
+        {
+            _initialized = false;
+            InstallModeCombo.SelectedIndex = 0;
+            _settings.InstallMode = 0;
+            _initialized = true;
+        }
     }
 
     private async void RunAsAdminToggle_Toggled(object _, RoutedEventArgs _1)
@@ -388,6 +428,7 @@ public sealed partial class SettingsPage : Page
         }
 
         _settings.RunAsAdministrator = wantAdmin;
+        SyncInstallAdminDescriptions();
 
         if (wantAdmin == _isProcessElevated)
             return;
@@ -404,12 +445,8 @@ public sealed partial class SettingsPage : Page
     private void InstallModeCombo_SelectionChanged(object _, SelectionChangedEventArgs _1)
     {
         if (!_initialized) return;
-        if (!_isProcessElevated)
+        if (!CanSelectAllUsersInstallTarget)
         {
-            // The "All users" option is disabled in this case; ignore any
-            // SelectedIndex slip so we don't overwrite the user's saved
-            // preference with a value the unelevated process can't actually
-            // honour.
             return;
         }
         if (InstallModeCombo.SelectedItem is ComboBoxItem item

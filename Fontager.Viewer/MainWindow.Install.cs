@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Threading.Tasks;
 using Fontager.Core.Models;
+using Fontager.Viewer.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
@@ -65,9 +66,12 @@ public sealed partial class MainWindow
         await InstallFontAsync(InstallTarget.AllUsers);
     }
 
+    private bool CanInstallForAllUsers =>
+        _isProcessElevated || _settings.ElevateForAllUsersInstall;
+
     private InstallTarget GetSavedInstallTarget()
     {
-        if (!_isProcessElevated)
+        if (!CanInstallForAllUsers)
             return InstallTarget.CurrentUser;
 
         return _settings.InstallMode == (int)InstallTarget.AllUsers
@@ -77,7 +81,7 @@ public sealed partial class MainWindow
 
     private void SetSavedInstallTarget(InstallTarget target)
     {
-        if (target == InstallTarget.AllUsers && !_isProcessElevated)
+        if (target == InstallTarget.AllUsers && !CanInstallForAllUsers)
             target = InstallTarget.CurrentUser;
 
         _settings.InstallMode = (int)target;
@@ -96,11 +100,15 @@ public sealed partial class MainWindow
                 ? "Install font for all users (Windows\\Fonts, machine-wide)"
                 : "Install font for the current user only";
         }
+        else if (isAllUsers && _settings.ElevateForAllUsersInstall)
+        {
+            tip = "Install to C:\\Windows\\Fonts for all users. Windows may show UAC once for this install only.";
+        }
         else
         {
             tip = isAllUsers
-                ? "Install font for all users (requires administrator)"
-                : "Install font for the current user. Start Fontager with Run as administrator to unlock installing for all users from the menu.";
+                ? "Install font for all users (enable “UAC for all-users install” in Settings, or run the entire app as administrator)"
+                : "Install font for the current user only";
         }
 
         ToolTipService.SetToolTip(InstallSplitButton, tip);
@@ -111,7 +119,7 @@ public sealed partial class MainWindow
     /// </summary>
     private void ApplyInstallElevatedUi()
     {
-        InstallAllUsersMenuFlyoutItem.IsEnabled = _isProcessElevated;
+        InstallAllUsersMenuFlyoutItem.IsEnabled = CanInstallForAllUsers;
     }
 
     private async Task InstallFontAsync(InstallTarget target)
@@ -138,9 +146,49 @@ public sealed partial class MainWindow
 
             if (installSystem && !_isProcessElevated)
             {
-                await ShowInfoDialogAsync(
-                    "Administrator required",
-                    "Installing fonts for all users needs Fontager to be started with Run as administrator (right\u2010click the app or shortcut \u2192 Run as administrator).");
+                if (!_settings.ElevateForAllUsersInstall)
+                {
+                    await ShowInfoDialogAsync(
+                        "Administrator required",
+                        "Installing to C:\\Windows\\Fonts needs either “UAC for all-users install” in Settings (recommended), or “Run entire app as administrator”.");
+                    return;
+                }
+
+                var systemFontsDir = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Fonts");
+                var destPath = Path.Combine(systemFontsDir, fileName);
+                var overwrite = false;
+
+                if (File.Exists(destPath))
+                {
+                    var confirm = await ShowConfirmDialogAsync("Font Already Installed",
+                        "This font is already installed system-wide. Overwrite?");
+                    if (!confirm) return;
+                    overwrite = true;
+                }
+
+                var exitCode = ProcessElevationHelper.TryInstallForAllUsersElevated(
+                    _currentFilePath, fontDisplayName, overwrite);
+
+                if (exitCode == -1)
+                    return;
+
+                if (exitCode == FontInstallerService.ExitAlreadyExists)
+                {
+                    await ShowInfoDialogAsync("Font Already Installed",
+                        "This font is already installed system-wide.");
+                    return;
+                }
+
+                if (exitCode != FontInstallerService.ExitSuccess)
+                {
+                    await ShowErrorDialogAsync("Installation failed",
+                        "Could not install the font for all users. Try again or use Settings → Run entire app as administrator.");
+                    return;
+                }
+
+                await NotifyInstallSuccessAsync("Font installed",
+                    $"'{fontDisplayName}' has been installed for all users (C:\\Windows\\Fonts).");
                 return;
             }
 

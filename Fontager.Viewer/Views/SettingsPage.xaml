@@ -129,7 +129,7 @@
                                         Margin="0,0,12,0">
                                 <TextBlock Text="Backdrop material"
                                            Style="{StaticResource BodyStrongTextBlockStyle}" />
-                                <TextBlock Text="Window backdrop: Mica, Mica Alt, acrylic, or solid theme fill."
+                                <TextBlock Text="Window backdrop: Mica, Mica Alt, Acrylic, or Solid theme fill."
                                            Style="{StaticResource CaptionTextBlockStyle}"
                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                            TextWrapping="WrapWholeWords" />
@@ -404,9 +404,44 @@
                                           MinWidth="220"
                                           SelectionChanged="InstallModeCombo_SelectionChanged">
                                     <ComboBoxItem Content="Current user" Tag="0" />
-                                    <ComboBoxItem Content="All users (requires admin)" Tag="1" />
+                                    <ComboBoxItem Content="All users (Windows\Fonts)" Tag="1" />
                                 </ComboBox>
                             </Grid>
+                        </Grid>
+                    </Border>
+
+                    <Border Style="{StaticResource SettingsCardBorderStyle}">
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="52" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon Grid.Column="0"
+                                      Glyph="&#xE72E;"
+                                      FontSize="20"
+                                      VerticalAlignment="Top"
+                                      Margin="0,2,0,0"
+                                      Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <StackPanel Grid.Column="1"
+                                        VerticalAlignment="Center"
+                                        Spacing="4"
+                                        Margin="0,0,12,0">
+                                <TextBlock Text="UAC for all-users install"
+                                           Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                <TextBlock x:Name="ElevateForAllUsersInstallDescription"
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           TextWrapping="WrapWholeWords" />
+                            </StackPanel>
+                            <ToggleSwitch x:Name="ElevateForAllUsersInstallToggle"
+                                          Grid.Column="2"
+                                          VerticalAlignment="Center"
+                                          HorizontalAlignment="Right"
+                                          MinWidth="0"
+                                          OnContent=""
+                                          OffContent=""
+                                          Toggled="ElevateForAllUsersInstallToggle_Toggled" />
                         </Grid>
                     </Border>
 
@@ -427,7 +462,7 @@
                                         VerticalAlignment="Center"
                                         Spacing="4"
                                         Margin="0,0,12,0">
-                                <TextBlock Text="Run as administrator"
+                                <TextBlock Text="Run entire app as administrator"
                                            Style="{StaticResource BodyStrongTextBlockStyle}" />
                                 <TextBlock x:Name="RunAsAdminDescription"
                                            Style="{StaticResource CaptionTextBlockStyle}"

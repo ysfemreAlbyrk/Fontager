@@ -33,6 +33,7 @@ public sealed class SettingsService
     private const string InstallModeKey = "InstallMode"; // 0 = current user, 1 = all users (system)
     private const string ExitAppAfterSuccessfulInstallKey = "ExitAppAfterSuccessfulInstall";
     private const string RunAsAdministratorKey = "RunAsAdministrator";
+    private const string ElevateForAllUsersInstallKey = "ElevateForAllUsersInstall";
 
     private const string DefaultPreviewTextValue = "The quick brown fox jumps over the lazy dog. 0123456789";
     private const double DefaultFontSizeValue = 32;
@@ -228,6 +229,16 @@ public sealed class SettingsService
     {
         get => GetValue<bool?>(RunAsAdministratorKey) ?? false;
         set => SetValue(RunAsAdministratorKey, value);
+    }
+
+    /// <summary>
+    /// When true, installing for all users from a normal (non-elevated) process shows UAC once
+    /// for that install only. Does not elevate the whole application.
+    /// </summary>
+    public bool ElevateForAllUsersInstall
+    {
+        get => GetValue<bool?>(ElevateForAllUsersInstallKey) ?? true;
+        set => SetValue(ElevateForAllUsersInstallKey, value);
     }
 
     /// <summary>

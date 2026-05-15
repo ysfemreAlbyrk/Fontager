@@ -6,13 +6,16 @@ Minor release: optional always-on administrator mode for default font-file handl
 
 ### ➕ Added
 
-- **Settings → Run as administrator** — toggle to restart Fontager with administrator privileges. When turned **on** or **off**, a **Restart required** dialog explains the change and relaunches the app (UAC when elevating; `explorer.exe` broker when lowering so the new process is not elevated).
-- **`ProcessElevationHelper`** — centralizes elevation checks and restart with preserved command-line / file-activation arguments.
-- **Startup** — if the toggle is on and the process is not elevated, Fontager prompts for UAC and relaunches before showing the main window (cancelled UAC continues non-elevated).
+- **Settings → UAC for all-users install** (recommended, on by default) — Fontager stays non-elevated while previewing fonts; Windows may show UAC **only** when you install to `C:\Windows\Fonts` for all users. Implemented via a short elevated helper process (`--install-all-users`).
+- **Settings → Run entire app as administrator** — separate toggle (with restart dialog) for users who want the **whole** application elevated (e.g. always-on admin as the default font handler). Clearly distinguished from the all-users install option above.
+- **`ProcessElevationHelper`** — elevation checks, full-app restart, and on-demand install elevation.
+- **`FontInstallerService`** — machine-wide install logic shared by the main window and the elevated helper.
+- **Startup** — if “Run entire app as administrator” is on and the process is not elevated, Fontager prompts for UAC before the main window (cancelled UAC continues non-elevated).
 
 ### 🔄 Changed
 
-- Install section copy reflects current elevation state when the settings page loads.
+- Install target combo: **All users (Windows\Fonts)** is available when either UAC-for-install is enabled or the app is already elevated.
+- Install section descriptions explain the difference between per-install UAC and full-app administrator mode.
 
 ## [1.1.2] - 2026-05-15
 

@@ -48,6 +48,35 @@ internal static class ProcessElevationHelper
         }
     }
 
+    /// <summary>
+    /// Runs machine-wide install in a one-shot elevated child. Returns exit code,
+    /// or <c>-1</c> if the user cancelled UAC.
+    /// </summary>
+    public static int TryInstallForAllUsersElevated(string sourcePath, string displayName, bool overwrite)
+    {
+        try
+        {
+            var args = ElevatedInstallCommandLine.BuildArguments(sourcePath, displayName, overwrite);
+            using var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = GetExecutablePath(),
+                Arguments = args,
+                UseShellExecute = true,
+                Verb = "runas",
+            });
+
+            if (process is null)
+                return FontInstallerService.ExitError;
+
+            process.WaitForExit();
+            return process.ExitCode;
+        }
+        catch (Win32Exception ex) when (ex.NativeErrorCode == ErrorCancelled)
+        {
+            return -1;
+        }
+    }
+
     public static void RestartWithElevation(bool wantElevation)
     {
         if (wantElevation)
