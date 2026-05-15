@@ -79,6 +79,7 @@ public sealed partial class SettingsPage : Page
 
         // Install
         InstallModeCombo.SelectedIndex = _settings.InstallMode;
+        ExitAfterInstallToggle.IsOn = _settings.ExitAppAfterSuccessfulInstall;
         if (InstallModeCombo.Items.Count > 1
             && InstallModeCombo.Items[1] is ComboBoxItem allUsersOption)
         {
@@ -294,6 +295,12 @@ public sealed partial class SettingsPage : Page
     }
 
     // ── Install ───────────────────────────────────────────────────
+
+    private void ExitAfterInstallToggle_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (!_initialized) return;
+        _settings.ExitAppAfterSuccessfulInstall = ExitAfterInstallToggle.IsOn;
+    }
 
     private void InstallModeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {

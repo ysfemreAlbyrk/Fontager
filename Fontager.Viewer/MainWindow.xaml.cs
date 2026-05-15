@@ -1138,6 +1138,60 @@ public sealed partial class MainWindow : Window
         await dialog.ShowAsync();
     }
 
+    /// <summary>
+    /// After a successful font install, shows the success dialog briefly then exits the process.
+    /// The dialog is dismissed programmatically after one second so the user does not need to tap OK.
+    /// </summary>
+    private async Task ShowInstallSuccessThenExitAppAsync(string title, string message)
+    {
+        var dq = DispatcherQueue;
+        var dialog = new ContentDialog
+        {
+            Title = title,
+            Content = BuildDialogHeroPanel(
+                "\uE73E",
+                ResolveThemeBrush("SystemFillColorSuccessBrush", Microsoft.UI.Colors.ForestGreen),
+                message),
+            CloseButtonText = "OK",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = Content.XamlRoot
+        };
+
+        var showTask = dialog.ShowAsync().AsTask();
+        await Task.Delay(TimeSpan.FromMicroseconds(300));
+
+        if (dq.HasThreadAccess)
+        {
+            try { dialog.Hide(); }
+            catch { /* already closed */ }
+        }
+        else
+        {
+            var hideDone = new TaskCompletionSource();
+            dq.TryEnqueue(DispatcherQueuePriority.Normal, () =>
+            {
+                try { dialog.Hide(); }
+                catch { /* already closed */ }
+                hideDone.TrySetResult();
+            });
+            await hideDone.Task;
+        }
+
+        try
+        {
+            await showTask;
+        }
+        catch
+        {
+            // Hide() or user dismiss can complete or fault the operation; exit regardless.
+        }
+
+        if (dq.HasThreadAccess)
+            Application.Current.Exit();
+        else
+            dq.TryEnqueue(() => Application.Current.Exit());
+    }
+
     private async Task ShowWarningDialogAsync(string title, string message)
     {
         var dialog = new ContentDialog

@@ -31,6 +31,7 @@ public sealed class SettingsService
     private const string ShowQuickViewKey = "ShowQuickView";
     private const string ShowPreviewControlsKey = "ShowPreviewControls";
     private const string InstallModeKey = "InstallMode"; // 0 = current user, 1 = all users (system)
+    private const string ExitAppAfterSuccessfulInstallKey = "ExitAppAfterSuccessfulInstall";
 
     private const string DefaultPreviewTextValue = "The quick brown fox jumps over the lazy dog. 0123456789";
     private const double DefaultFontSizeValue = 32;
@@ -209,6 +210,16 @@ public sealed class SettingsService
             return v is >= 0 and <= 1 ? v.Value : 0;
         }
         set => SetValue(InstallModeKey, value);
+    }
+
+    /// <summary>
+    /// When true, after a successful font install the success dialog is shown briefly
+    /// and the application exits automatically. When false, the user dismisses the dialog manually.
+    /// </summary>
+    public bool ExitAppAfterSuccessfulInstall
+    {
+        get => GetValue<bool?>(ExitAppAfterSuccessfulInstallKey) ?? false;
+        set => SetValue(ExitAppAfterSuccessfulInstallKey, value);
     }
 
     /// <summary>

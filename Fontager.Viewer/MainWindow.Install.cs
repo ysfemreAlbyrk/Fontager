@@ -43,6 +43,11 @@ public sealed partial class MainWindow
 {
     // ── Install ────────────────────────────────────────────────
 
+    private Task NotifyInstallSuccessAsync(string title, string message) =>
+        _settings.ExitAppAfterSuccessfulInstall
+            ? ShowInstallSuccessThenExitAppAsync(title, message)
+            : ShowSuccessDialogAsync(title, message);
+
     private async void InstallSplitButton_Click(SplitButton sender, SplitButtonClickEventArgs args)
     {
         await InstallFontAsync(GetSavedInstallTarget());
@@ -161,7 +166,7 @@ public sealed partial class MainWindow
 
                 NotifyFontInstalled(destPath);
 
-                await ShowSuccessDialogAsync("Font installed", $"'{fontDisplayName}' has been installed for all users.");
+                await NotifyInstallSuccessAsync("Font installed", $"'{fontDisplayName}' has been installed for all users.");
             }
             else
             {
@@ -206,7 +211,7 @@ public sealed partial class MainWindow
 
                 NotifyFontInstalled(destPath);
 
-                await ShowSuccessDialogAsync("Font installed", $"'{fontDisplayName}' has been installed for the current user and is now visible in Settings → Fonts.");
+                await NotifyInstallSuccessAsync("Font installed", $"'{fontDisplayName}' has been installed for the current user and is now visible in Settings → Fonts.");
             }
         }
         catch (UnauthorizedAccessException)

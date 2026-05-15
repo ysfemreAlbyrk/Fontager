@@ -418,6 +418,42 @@
                                 <ColumnDefinition Width="52" />
                             </Grid.ColumnDefinitions>
                             <FontIcon Grid.Column="0"
+                                      Glyph="&#xE823;"
+                                 
+                                      FontSize="20"
+                                      VerticalAlignment="Top"
+                                      Margin="0,2,0,0"
+                                      Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <StackPanel Grid.Column="1"
+                                        VerticalAlignment="Center"
+                                        Spacing="4"
+                                        Margin="0,0,12,0">
+                                <TextBlock Text="Exit after successful install"
+                                           Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                <TextBlock Text="When on, the success message appears for one second, then Fontager closes. When off, tap OK to continue."
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           TextWrapping="WrapWholeWords" />
+                            </StackPanel>
+                            <ToggleSwitch x:Name="ExitAfterInstallToggle"
+                                          Grid.Column="2"
+                                          VerticalAlignment="Center"
+                                          HorizontalAlignment="Right"
+                                          MinWidth="0"
+                                          OnContent=""
+                                          OffContent=""
+                                          Toggled="ExitAfterInstallToggle_Toggled" />
+                        </Grid>
+                    </Border>
+
+                    <Border Style="{StaticResource SettingsCardBorderStyle}">
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="52" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon Grid.Column="0"
                                       Glyph="&#xE71B;"
                                       FontSize="20"
                                       VerticalAlignment="Top"
