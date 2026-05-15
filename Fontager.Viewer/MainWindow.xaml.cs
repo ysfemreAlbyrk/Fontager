@@ -596,12 +596,9 @@ public sealed partial class MainWindow : Window
             var meta = _viewModel.CurrentFont.Metadata;
             var familyName = PickDirectWriteFamilyName(meta, filePath);
 
-            // WinUI 3 resolves FontFamily through the XAML resource manager,
-            // which accepts ms-appx / ms-appdata / ms-resource only — not file:/// .
-            // For unpackaged apps (this project), ms-appdata URIs do not bind
-            // private fonts; fonts must live under the executable directory and
-            // be referenced as ms-appx:///FontCache/… (see CacheFontForXamlAsync).
-            // Packaged builds still use ApplicationData + ms-appdata:///local/… .
+            // WinUI 3 preview fonts: ms-appx under the install dir (FontCache junction when
+            // installed to Program Files) or ms-appdata when packaged; else family name after
+            // AddFontResourceEx (see CacheFontForXamlAsync / CreateLoadedFontFamily).
             //
             // For .woff2 the cache path runs Woff2Decoder so the on-disk bytes
             // are SFNT — required for AddFontResourceEx and for DirectWrite.
@@ -657,9 +654,9 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// Builds a <see cref="FontFamily"/> WinUI can resolve for a cached font.
-    /// Unpackaged: <c>ms-appx:///FontCache/…</c> (executable-relative). Packaged:
-    /// <c>ms-appdata:///local/FontCache/…</c>. Last resort <c>file:///</c> (often
-    /// ignored by WinUI; kept for diagnostics / future runtime changes).
+    /// Unpackaged: <c>ms-appx:///FontCache/…</c> when the cache file is under the install
+    /// directory (direct or junction). Otherwise the family name after private GDI load.
+    /// Packaged: <c>ms-appdata:///local/FontCache/…</c>.
     /// </summary>
     private static FontFamily CreateLoadedFontFamily(
         string familyName,
@@ -680,17 +677,15 @@ public sealed partial class MainWindow : Window
             return new FontFamily($"ms-appdata:///local/{rel}#{family}");
         }
 
-        var uri = new Uri(Path.GetFullPath(diskPath), UriKind.Absolute);
-        return new FontFamily($"{uri.AbsoluteUri}#{family}");
+        // Cached outside ms-appx reach; AddFontResourceEx already registered this process.
+        return new FontFamily(family);
     }
 
     /// <summary>
     /// Stages the font for XAML preview: packaged apps use
     /// <see cref="ApplicationData.Current"/>/<c>FontCache</c> with
     /// <c>ms-appdata:///local/…</c>; unpackaged apps use
-    /// <see cref="AppContext.BaseDirectory"/>/<c>FontCache</c> with
-    /// <c>ms-appx:///…</c> (required because WinUI does not load private fonts
-    /// from <c>file:///</c> or unpackaged <c>ms-appdata</c> URIs).
+    /// <see cref="FontCacheSetup"/> (install-relative <c>FontCache</c>, junction when needed).
     /// For <c>.woff2</c>, decompresses to SFNT via <see cref="Woff2Decoder"/>.
     /// </summary>
     private async Task<(string DiskPath, string? MsAppDataRelativePath, string? MsAppxRelativePath)> CacheFontForXamlAsync(string sourceFilePath)
@@ -710,15 +705,13 @@ public sealed partial class MainWindow : Window
             }
             catch
             {
-                cacheDir = Path.Combine(AppContext.BaseDirectory, FontCacheFolderName);
-                Directory.CreateDirectory(cacheDir);
+                cacheDir = FontCacheSetup.EnsureWritableCacheDirectory();
                 useMsAppData = false;
             }
         }
         else
         {
-            cacheDir = Path.Combine(AppContext.BaseDirectory, FontCacheFolderName);
-            Directory.CreateDirectory(cacheDir);
+            cacheDir = FontCacheSetup.EnsureWritableCacheDirectory();
             useMsAppData = false;
         }
 
@@ -755,12 +748,15 @@ public sealed partial class MainWindow : Window
 
         _cachedFontDiskPath = destPath;
 
-        var fileName = Path.GetFileName(destPath);
-        var relative = $"{FontCacheFolderName}/{fileName}".Replace('\\', '/');
+        var relative = $"{FontCacheFolderName}/{Path.GetFileName(destPath)}".Replace('\\', '/');
 
         if (useMsAppData)
             return (destPath, relative, null);
-        return (destPath, null, relative);
+
+        if (FontCacheSetup.IsUnderInstallDirectory(destPath))
+            return (destPath, null, relative);
+
+        return (destPath, null, null);
     }
 
     /// <summary>

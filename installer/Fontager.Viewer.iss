@@ -2,10 +2,10 @@
 ; 1) Visual Studio: Release + x64 → Publish (FolderProfile) → win-x64\publish
 ; 2) Install Inno Setup 6: https://jrsoftware.org/isinfo.php
 ; 3) Open this file in Inno Setup Compiler → Build → Compile
-; Output: installer\output\Fontager.Viewer-1.1.0-win-x64-setup.exe
+; Output: installer\output\Fontager.Viewer-1.1.2-win-x64-setup.exe
 
 #define MyAppName "Fontager Viewer"
-#define MyAppVersion "1.1.0"
+#define MyAppVersion "1.1.2"
 #define MyAppPublisher "Fontager"
 #define MyAppURL "https://github.com/ysfemreAlbyrk/Fontager"
 #define MyAppExeName "Fontager Viewer.exe"
@@ -54,3 +54,43 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+const
+  FontCacheLink = '{app}\FontCache';
+  FontCacheTarget = '{commonappdata}\Fontager\FontCache';
+
+procedure EnsureFontCacheJunction();
+var
+  ResultCode: Integer;
+  AppCache, TargetCache: String;
+begin
+  AppCache := ExpandConstant(FontCacheLink);
+  TargetCache := ExpandConstant(FontCacheTarget);
+  if not ForceDirectories(TargetCache) then
+    Exit;
+  if DirExists(AppCache) then
+    Exit;
+  Exec('cmd.exe', '/c mklink /J "' + AppCache + '" "' + TargetCache + '"',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then
+    EnsureFontCacheJunction();
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  ResultCode: Integer;
+  AppCache: String;
+begin
+  if CurUninstallStep = usPostUninstall then
+  begin
+    AppCache := ExpandConstant(FontCacheLink);
+    if DirExists(AppCache) then
+      Exec('cmd.exe', '/c rmdir "' + AppCache + '"',
+        '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  end;
+end;

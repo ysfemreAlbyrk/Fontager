@@ -44,9 +44,7 @@ public sealed class SettingsService
 
     public SettingsService()
     {
-        var dir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Fontager");
+        var dir = FontagerPaths.LocalAppDataRoot;
         Directory.CreateDirectory(dir);
         _filePath = Path.Combine(dir, "settings.json");
         _values = Load();

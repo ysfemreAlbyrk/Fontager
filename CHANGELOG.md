@@ -1,5 +1,45 @@
 # Changelog
 
+## [1.1.2] - 2026-05-15
+
+Patch release: reliable font preview after reinstall and across app restarts when installed under Program Files.
+
+### ➕ Added
+
+- **`FontCacheSetup`** — ensures a writable `FontCache` folder for WinUI `ms-appx:///FontCache/…` preview URIs when the install directory is read-only.
+- **Inno Setup post-install** — creates a directory junction `{app}\FontCache` → `%ProgramData%\Fontager\FontCache` (removed on uninstall). Default install path remains `C:\Program Files\Fontager\Viewer\`.
+
+### 🔄 Changed
+
+- **Font preview cache** again resolves through the install-relative `FontCache` path (for `ms-appx`), not `%LocalAppData%` with `file:///`. Settings stay under `%LocalAppData%\Fontager\settings.json` via `FontagerPaths`.
+- **Startup** — unpackaged builds call `FontCacheSetup.EnsureWritableCacheDirectory()` before opening fonts.
+
+### 🐛 Fixed
+
+- **System font shown instead of the opened font** on the second and later app launches (and intermittently on first launch) after 1.1.1’s `file:///` cache path — WinUI does not reliably load preview fonts via `file:///`.
+- **Junction fallback** when the installer did not create the link: app attempts `mklink /J` or falls back to GDI private registration by family name.
+
+## [1.1.1] - 2026-05-15
+
+Installer-first distribution fix for Program Files installs: font preview cache and publish pipeline.
+
+### ➕ Added
+
+- **MIT `LICENSE`** at the repository root (referenced by README and CONTRIBUTING).
+- **Inno Setup installer** — `installer/Fontager.Viewer.iss` builds `Fontager.Viewer-1.1.1-win-x64-setup.exe` (English/Turkish wizard, optional desktop shortcut, license step). Default install path: `C:\Program Files\Fontager\Viewer\`.
+- **`FontagerPaths`** — shared `%LocalAppData%\Fontager` root for writable app data (settings + font preview cache).
+
+### 🔄 Changed
+
+- **Font preview cache** moved from the install directory to `%LocalAppData%\Fontager\FontCache`. Unpackaged builds load cached fonts via `file:///` so preview works when the app is installed under Program Files.
+- **Publish pipeline:** MSBuild target copies WinUI `.xbf` and app `.pri` into the publish folder after `dotnet publish` / VS Publish (fixes empty UI when running from `win-x64\publish`).
+- **`.gitignore`** — ignores Inno output (`installer/output/`), release zips, and `*-setup.exe`; tracks shared `*.pubxml` profiles, ignores `*.pubxml.user` only.
+
+### 🐛 Fixed
+
+- **“Access to the path …\FontCache is denied”** when opening font files after installing to Program Files and setting Fontager as the default handler.
+- **Publish folder** missing compiled XAML (`.xbf`) and `Fontager Viewer.pri`, which prevented the app from starting when launched from `publish\` only.
+
 ## [1.1.0] - 2026-05-15
 
 Unpackaged WinUI 3 distribution, a redesigned full-screen **Settings** experience, a rebuilt **font parsing and glyph** stack, WOFF2 end-to-end support, and stronger font installation management.

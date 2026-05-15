@@ -31,6 +31,9 @@ public partial class App : Application
     {
         InitializeComponent();
 
+        if (!FileAssociationService.IsRunningPackaged)
+            FontCacheSetup.EnsureWritableCacheDirectory();
+
         // Configure DI
         var serviceCollection = new ServiceCollection();
         ConfigureServices(serviceCollection);
