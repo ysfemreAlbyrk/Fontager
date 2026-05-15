@@ -4,11 +4,15 @@ using System.Linq;
 using Fontager.Core.Helpers;
 using Fontager.Core.Models;
 using Fontager.Viewer.ViewModels;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using Windows.ApplicationModel.DataTransfer;
 
 namespace Fontager.Viewer;
+
+internal sealed record GlyphBlockEntry(string Name, int Count, UnicodeBlocks.UnicodeBlock? Block);
 
 /// <summary>
 /// Glyph-tab logic for <see cref="MainWindow"/>. Split out of
@@ -37,6 +41,8 @@ namespace Fontager.Viewer;
 /// </summary>
 public sealed partial class MainWindow
 {
+    private DispatcherQueueTimer? _glyphDetailCopyFeedbackTimer;
+
     // ── Glyph Grid ─────────────────────────────────────────────
 
     /// <summary>
@@ -67,7 +73,10 @@ public sealed partial class MainWindow
 
     private void GlyphGrid_ContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
     {
-        if (args.Phase != 0 || _loadedFontFamily is null)
+        if (args.Phase != 0)
+            return;
+
+        if (_loadedFontFamily is null)
             return;
 
         args.RegisterUpdateCallback(GlyphGrid_ApplyFontToItemContainer);
@@ -78,7 +87,9 @@ public sealed partial class MainWindow
         if (_loadedFontFamily is null)
             return;
 
-        if (args.ItemContainer?.ContentTemplateRoot is StackPanel panel
+        if (args.ItemContainer?.ContentTemplateRoot is Grid grid
+            && grid.Children.Count > 0
+            && grid.Children[0] is StackPanel panel
             && panel.Children.Count > 0
             && panel.Children[0] is TextBlock charBlock)
         {
@@ -196,6 +207,49 @@ public sealed partial class MainWindow
         GlyphGrid.ItemsSource = filtered;
         GlyphCountText.Text = filtered.Count.ToString();
         GlyphDetailPanel.Visibility = Visibility.Collapsed;
+        GlyphGrid.SelectedItem = null;
+    }
+
+    private void GlyphDetailCopy_Click(object sender, RoutedEventArgs e)
+    {
+        if (GlyphGrid.SelectedItem is not GlyphItem glyph)
+            return;
+
+        try
+        {
+            var package = new DataPackage();
+            package.SetText(glyph.Character);
+            Clipboard.SetContent(package);
+        }
+        catch
+        {
+            return;
+        }
+
+        GlyphDetailCopiedNotice.Visibility = Visibility.Visible;
+
+        if (_glyphDetailCopyFeedbackTimer is null)
+        {
+            _glyphDetailCopyFeedbackTimer = DispatcherQueue.CreateTimer();
+            _glyphDetailCopyFeedbackTimer.IsRepeating = false;
+            _glyphDetailCopyFeedbackTimer.Interval = TimeSpan.FromMilliseconds(1400);
+            _glyphDetailCopyFeedbackTimer.Tick += (_, _) =>
+            {
+                _glyphDetailCopyFeedbackTimer!.Stop();
+                GlyphDetailCopiedNotice.Visibility = Visibility.Collapsed;
+            };
+        }
+
+        _glyphDetailCopyFeedbackTimer.Stop();
+        _glyphDetailCopyFeedbackTimer.Start();
+    }
+
+    /// <summary>
+    /// Clears grid selection so <see cref="GlyphGrid_SelectionChanged"/> hides the detail strip.
+    /// </summary>
+    private void GlyphDetailClose_Click(object sender, RoutedEventArgs e)
+    {
+        GlyphGrid.SelectedItem = null;
     }
 
     /// <summary>
@@ -246,6 +300,7 @@ public sealed partial class MainWindow
     {
         if (GlyphGrid.SelectedItem is GlyphItem glyph)
         {
+            GlyphDetailCopiedNotice.Visibility = Visibility.Collapsed;
             GlyphDetailPanel.Visibility = Visibility.Visible;
             SelectedGlyphChar.Text = glyph.Character;
             SelectedGlyphUnicode.Text = glyph.UnicodeLabel;
@@ -318,7 +373,4 @@ public sealed partial class MainWindow
         _glyphSearchDebounceTimer.Stop();
         _glyphSearchDebounceTimer.Start();
     }
-
-    /// <summary>Sidebar row model.</summary>
-    private sealed record GlyphBlockEntry(string Name, int Count, UnicodeBlocks.UnicodeBlock? Block);
 }

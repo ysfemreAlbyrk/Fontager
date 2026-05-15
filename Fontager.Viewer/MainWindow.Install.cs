@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Threading.Tasks;
+using Fontager.Core.Models;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
@@ -111,6 +112,14 @@ public sealed partial class MainWindow
     private async Task InstallFontAsync(InstallTarget target)
     {
         if (_currentFilePath == null) return;
+
+        if (_viewModel.CurrentFont?.Format == FontFormat.WebOpenFont)
+        {
+            await ShowInfoDialogAsync(
+                "Installation not supported",
+                "Windows cannot install WOFF2 fonts. Convert to TrueType (.ttf) or OpenType (.otf) to install the font.");
+            return;
+        }
 
         bool installSystem = target == InstallTarget.AllUsers;
         const string FontsRegPath = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts";

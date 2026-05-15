@@ -4,6 +4,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:Fontager.Viewer"
+    xmlns:animatedvisuals="using:Microsoft.UI.Xaml.Controls.AnimatedVisuals"
     xmlns:converters="using:Fontager.Viewer.Converters"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -26,65 +27,103 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Custom Title Bar
-             The BackButton lives here and is shown only when we're inside the
-             Settings frame; clicking it closes the frame and returns to the
-             font viewer. We use the WinUI 3 NavigationBackButtonNormalStyle so
-             the chrome matches what users see in Settings / Mail / Edge. -->
-        <Grid x:Name="AppTitleBar" Grid.Row="0" Padding="0,0,0,0">
+        <!-- Custom drag caption (SetTitleBar): caption-button insets + compact layout.
+             Interactive regions are registered as passthrough via code-behind so clicks
+             hit buttons instead of starting a drag loop — updates are coalesced per frame.
+             Back uses Fluent AnimatedBackVisualSource with explicit PointerOver/Normal states. -->
+        <Grid x:Name="AppTitleBar" Grid.Row="0" Height="48" VerticalAlignment="Top" Padding="6,0,0,0">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition x:Name="TitleBarLeftInsetColumn" Width="0" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="188" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition x:Name="TitleBarRightInsetColumn" Width="0" />
             </Grid.ColumnDefinitions>
 
-            <Button x:Name="BackButton" Grid.Column="0"
-                    Style="{StaticResource NavigationBackButtonNormalStyle}"
+            <Button x:Name="BackButton"
+                    Grid.Column="1"
+                    Style="{StaticResource SubtleButtonStyle}"
                     VerticalAlignment="Center"
-                    Margin="6,0,4,0"
-                    ToolTipService.ToolTip="Back"
+                    Margin="0,0,0,0"
+                    Padding="8,5"
+                    MinHeight="36"
+                    MinWidth="40"
                     Visibility="Collapsed"
-                    Click="BackButton_Click" />
+                    ToolTipService.ToolTip="Back"
+                    Click="CustomTitleBarBack_Click"
+                    PointerEntered="BackButton_PointerEntered"
+                    PointerExited="BackButton_PointerExited">
+                <AnimatedIcon x:Name="BackAnimatedIcon" Width="16" Height="16">
+                    <AnimatedIcon.Source>
+                        <animatedvisuals:AnimatedBackVisualSource />
+                    </AnimatedIcon.Source>
+                    <AnimatedIcon.FallbackIconSource>
+                        <SymbolIconSource Symbol="Back" />
+                    </AnimatedIcon.FallbackIconSource>
+                </AnimatedIcon>
+            </Button>
 
-            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"
-                        VerticalAlignment="Center" Margin="16,0,0,0">
-                <Image Source="Assets/Logo.png" Width="16" Height="16" />
-                <TextBlock Text="Fontager Viewer" Style="{StaticResource CaptionTextBlockStyle}"
-                           FontWeight="SemiBold" VerticalAlignment="Center" />
-                <TextBlock x:Name="TitleBarVersion" Style="{StaticResource CaptionTextBlockStyle}"
-                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                           VerticalAlignment="Center" Opacity="0.6" />
+            <StackPanel Grid.Column="2"
+                        Orientation="Horizontal"
+                        Spacing="8"
+                        VerticalAlignment="Center"
+                        Margin="12,0,14,0">
+                <Image Source="Assets/Logo.png"
+                       Width="16"
+                       Height="16"
+                       VerticalAlignment="Center" />
+                <StackPanel Orientation="Horizontal"
+                            Spacing="8"
+                            VerticalAlignment="Center">
+                    <TextBlock Text="Fontager Viewer"
+                               Style="{StaticResource CaptionTextBlockStyle}"
+                               VerticalAlignment="Center" />
+                    <TextBlock x:Name="TitleBarVersion"
+                               Style="{StaticResource CaptionTextBlockStyle}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               FontSize="11"
+                               VerticalAlignment="Center"
+                               Opacity="0.85" />
+                </StackPanel>
             </StackPanel>
 
-            <StackPanel x:Name="OpenButtonPanel" Grid.Column="2"
-                        Orientation="Horizontal" Spacing="2" Margin="16,0,0,0">
-                <Button x:Name="OpenFileButton"
-                        Click="OpenFileButton_Click"
+            <StackPanel Grid.Column="3"
+                        Orientation="Horizontal"
+                        Spacing="6"
+                        VerticalAlignment="Center"
+                        Margin="0,0,10,0">
+                <StackPanel x:Name="OpenButtonPanel" Orientation="Horizontal" Spacing="2">
+                    <Button x:Name="OpenFileButton"
+                            Click="OpenFileButton_Click"
+                            VerticalAlignment="Center"
+                            Style="{StaticResource SubtleButtonStyle}"
+                            ToolTipService.ToolTip="Open font file (Ctrl+O)">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon Glyph="&#xE8E5;" FontSize="14" />
+                            <TextBlock Text="Open" Style="{StaticResource CaptionTextBlockStyle}" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+                <Button x:Name="SettingsButton"
+                        Click="SettingsButton_Click"
                         VerticalAlignment="Center"
                         Style="{StaticResource SubtleButtonStyle}"
-                        ToolTipService.ToolTip="Open font file (Ctrl+O)">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <FontIcon Glyph="&#xE8E5;" FontSize="14" />
-                        <TextBlock Text="Open" Style="{StaticResource CaptionTextBlockStyle}" />
-                    </StackPanel>
+                        ToolTipService.ToolTip="Settings">
+                    <FontIcon Glyph="&#xE713;" FontSize="14" />
                 </Button>
             </StackPanel>
 
-            <Button x:Name="SettingsButton" Grid.Column="3"
-                    Click="SettingsButton_Click"
-                    VerticalAlignment="Center"
-                    Margin="4,0,0,0"
-                    Style="{StaticResource SubtleButtonStyle}"
-                    ToolTipService.ToolTip="Settings">
-                <FontIcon Glyph="&#xE713;" FontSize="14" />
-            </Button>
-
-            <TextBlock x:Name="TitleBarFontName" Grid.Column="4"
+            <TextBlock x:Name="TitleBarFontName"
+                       Grid.Column="5"
                        Style="{StaticResource CaptionTextBlockStyle}"
-                       VerticalAlignment="Center" HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       HorizontalAlignment="Center"
+                       TextTrimming="CharacterEllipsis"
+                       MaxLines="1"
+                       MaxWidth="520"
                        Opacity="0" />
         </Grid>
 
@@ -231,6 +270,15 @@
                                     </MenuFlyout>
                                 </SplitButton.Flyout>
                             </SplitButton>
+
+                            <TextBlock x:Name="InstallNotSupportedMessage"
+                                       Visibility="Collapsed"
+                                       VerticalAlignment="Center"
+                                       MaxWidth="280"
+                                       TextWrapping="WrapWholeWords"
+                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       Text="Installation isn&apos;t supported for WOFF2. Windows expects TrueType (.ttf), OpenType (.otf), or a collection (.ttc). Convert the file to install it." />
                         </StackPanel>
                     </Grid>
 
@@ -443,17 +491,22 @@
                                         </GridView.ItemsPanel>
                                         <GridView.ItemTemplate>
                                             <DataTemplate>
-                                                <StackPanel HorizontalAlignment="Center" Spacing="2" Padding="4">
-                                                    <TextBlock Text="{Binding Character}"
-                                                               FontSize="28"
-                                                               HorizontalAlignment="Center"
-                                                               TextAlignment="Center" />
-                                                    <TextBlock Text="{Binding UnicodeLabel}"
-                                                               Style="{StaticResource CaptionTextBlockStyle}"
-                                                               Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                                                               HorizontalAlignment="Center"
-                                                               FontSize="10" />
-                                                </StackPanel>
+                                                <Grid Width="72" Height="88" Padding="2"
+                                                      Background="Transparent">
+                                                    <StackPanel VerticalAlignment="Center"
+                                                                HorizontalAlignment="Center"
+                                                                Spacing="2">
+                                                        <TextBlock Text="{Binding Character}"
+                                                                   FontSize="28"
+                                                                   HorizontalAlignment="Center"
+                                                                   TextAlignment="Center" />
+                                                        <TextBlock Text="{Binding UnicodeLabel}"
+                                                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                                                   HorizontalAlignment="Center"
+                                                                   FontSize="10" />
+                                                    </StackPanel>
+                                                </Grid>
                                             </DataTemplate>
                                         </GridView.ItemTemplate>
                                     </GridView>
@@ -464,20 +517,65 @@
                                             BorderThickness="1" CornerRadius="8"
                                             Padding="24" Margin="0,8,0,0">
                                         <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="*" />
-                                            </Grid.ColumnDefinitions>
-                                            <TextBlock x:Name="SelectedGlyphChar"
-                                                       FontSize="72" VerticalAlignment="Center"
-                                                       Margin="0,0,24,0" />
-                                            <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
-                                                <TextBlock x:Name="SelectedGlyphUnicode"
-                                                           Style="{StaticResource BodyStrongTextBlockStyle}" />
-                                                <TextBlock x:Name="SelectedGlyphName"
-                                                           Style="{StaticResource CaptionTextBlockStyle}"
-                                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                            </StackPanel>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="*" />
+                                            </Grid.RowDefinitions>
+                                            <Button Grid.Row="0"
+                                                    HorizontalAlignment="Right"
+                                                    VerticalAlignment="Top"
+                                                    Margin="0,-8,-8,-8"
+                                                    Style="{StaticResource SubtleButtonStyle}"
+                                                    ToolTipService.ToolTip="Close"
+                                                    AutomationProperties.Name="Close glyph details"
+                                                    Click="GlyphDetailClose_Click">
+                                                <FontIcon Glyph="&#xE711;" FontSize="12" />
+                                            </Button>
+                                            <Grid Grid.Row="1">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock x:Name="SelectedGlyphChar"
+                                                           Grid.Column="0"
+                                                           FontSize="72"
+                                                           VerticalAlignment="Center"
+                                                           Margin="0,0,24,0" />
+                                                <StackPanel Grid.Column="1"
+                                                            Spacing="10"
+                                                            VerticalAlignment="Center"
+                                                            Margin="0,0,16,0">
+                                                    <TextBlock x:Name="SelectedGlyphUnicode"
+                                                               Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                                    <TextBlock x:Name="SelectedGlyphName"
+                                                               Style="{StaticResource CaptionTextBlockStyle}"
+                                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                               TextWrapping="WrapWholeWords" />
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="2"
+                                                            VerticalAlignment="Center"
+                                                            HorizontalAlignment="Right"
+                                                            Spacing="6">
+                                                    <Button Style="{StaticResource SubtleButtonStyle}"
+                                                            HorizontalAlignment="Right"
+                                                            Click="GlyphDetailCopy_Click"
+                                                            ToolTipService.ToolTip="Copy character to clipboard">
+                                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                                            <FontIcon Glyph="&#xE8C8;" FontSize="14" />
+                                                            <TextBlock Text="Copy character"
+                                                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                                                       VerticalAlignment="Center" />
+                                                        </StackPanel>
+                                                    </Button>
+                                                    <TextBlock x:Name="GlyphDetailCopiedNotice"
+                                                               Text="Copied"
+                                                               Style="{StaticResource CaptionTextBlockStyle}"
+                                                               Foreground="{ThemeResource SystemFillColorSuccessBrush}"
+                                                               HorizontalAlignment="Right"
+                                                               Visibility="Collapsed" />
+                                                </StackPanel>
+                                            </Grid>
                                         </Grid>
                                     </Border>
                                 </Grid>
@@ -497,10 +595,10 @@
             </Grid>
 
             <!-- Settings overlay
-                 Hidden by default. Filled by SettingsButton_Click which calls
-                 SettingsFrame.Navigate(typeof(SettingsPage), …). The back
-                 button in the title bar collapses this back and clears the
-                 frame. -->
+                 Hidden by default. Settings opens via SettingsButton_Click:
+                 SettingsFrame navigates to SettingsPage on the next dispatcher
+                 tick after the frame becomes visible. CustomTitleBarBack_Click
+                 closes the overlay (Fluent AnimatedBackVisualSource back affordance). -->
             <Frame x:Name="SettingsFrame" Visibility="Collapsed" />
         </Grid>
     </Grid>

@@ -9,155 +9,483 @@
     Background="Transparent">
 
     <!--
-        Settings live on a real Page (not a ContentDialog) so they cover the
-        full window — the back button up in the title bar (see MainWindow.xaml)
-        is what gets users out. There is no Save/Cancel pair anymore: each
-        control writes through to SettingsService immediately, and
-        SettingsService.Changed fires so MainWindow re-applies the relevant
-        UI (theme, backdrop, font display) in real time.
+        Windows 11 inbox-app pattern (Notepad / Snipping Tool): ~2:1 horizontal split,
+        settings cards fill the LEFT column (star-sized), About sits in the RIGHT column.
+        Each setting is a rounded card: glyph + title/description + control on the right.
     -->
 
-    <ScrollViewer Padding="32,16,32,32" VerticalScrollBarVisibility="Auto">
-        <Grid HorizontalAlignment="Stretch">
-            <StackPanel x:Name="ContentRoot" Spacing="24" MaxWidth="780" HorizontalAlignment="Stretch">
+    <Page.Resources>
+        <Style x:Key="SettingsCardBorderStyle" TargetType="Border">
+            <Setter Property="Background" Value="{ThemeResource LayerFillColorDefaultBrush}" />
+            <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="16,14" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+        </Style>
+        <Style x:Key="SettingsSectionHeaderStyle" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+            <Setter Property="Margin" Value="0,20,0,10" />
+        </Style>
+    </Page.Resources>
 
-                <TextBlock Text="Settings" Style="{StaticResource TitleTextBlockStyle}" />
+    <Grid Background="Transparent">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
 
-                <!-- ── Appearance ────────────────────────────────────────── -->
-                <StackPanel Spacing="12">
-                    <TextBlock Text="Appearance" Style="{StaticResource SubtitleTextBlockStyle}" />
+        <TextBlock Grid.Row="0"
+                   Text="Settings"
+                   Style="{StaticResource TitleTextBlockStyle}"
+                   Margin="56,16,56,8" />
 
-                    <ComboBox x:Name="ThemeCombo"
-                              Header="Theme"
-                              HorizontalAlignment="Stretch"
-                              SelectionChanged="ThemeCombo_SelectionChanged">
-                        <ComboBoxItem Content="System default" Tag="0" />
-                        <ComboBoxItem Content="Light" Tag="1" />
-                        <ComboBoxItem Content="Dark" Tag="2" />
-                    </ComboBox>
+        <!-- Two-pane body: left column grows with window (Star), right ~half width (Star) — matches inbox apps -->
+        <ScrollViewer Grid.Row="1"
+                      Padding="0,0,0,0"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled">
+            <Grid x:Name="TwoPaneRoot"
+                  Padding="56,0,56,40"
+                  SizeChanged="TwoPaneRoot_SizeChanged">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition x:Name="SettingsColumnDef"
+                                      Width="2*"
+                                      MinWidth="280" />
+                    <ColumnDefinition x:Name="GapColumnDef" Width="32" />
+                    <ColumnDefinition x:Name="AboutColumnDef"
+                                      Width="*"
+                                      MinWidth="240" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
 
-                    <ComboBox x:Name="BackdropCombo"
-                              Header="Backdrop material"
-                              HorizontalAlignment="Stretch"
-                              SelectionChanged="BackdropCombo_SelectionChanged">
-                        <ComboBoxItem Content="Mica" Tag="0" />
-                        <ComboBoxItem Content="Acrylic" Tag="1" />
-                    </ComboBox>
+                <!-- LEFT: settings fill full width of this column (anchored to window left via padding) -->
+                <StackPanel x:Name="SettingsSectionsPanel"
+                            Grid.Row="0"
+                            Grid.Column="0"
+                            HorizontalAlignment="Stretch"
+                            Spacing="0">
+
+                    <TextBlock Text="Appearance"
+                               Style="{StaticResource SettingsSectionHeaderStyle}"
+                               Margin="0,0,0,10" />
+
+                    <Border Style="{StaticResource SettingsCardBorderStyle}">
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon Grid.Column="0"
+                                      Glyph="&#xE771;"
+                                      FontSize="20"
+                                      VerticalAlignment="Top"
+                                      Margin="0,2,0,0"
+                                      Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <StackPanel Grid.Column="1"
+                                        VerticalAlignment="Center"
+                                        Spacing="4"
+                                        Margin="0,0,12,0">
+                                <TextBlock Text="Theme"
+                                           Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                <TextBlock Text="Use light, dark, or match Windows."
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           TextWrapping="WrapWholeWords" />
+                            </StackPanel>
+                            <ComboBox x:Name="ThemeCombo"
+                                      Grid.Column="2"
+                                      VerticalAlignment="Center"
+                                      MinWidth="200"
+                                      SelectionChanged="ThemeCombo_SelectionChanged">
+                                <ComboBoxItem Content="System default" Tag="0" />
+                                <ComboBoxItem Content="Light" Tag="1" />
+                                <ComboBoxItem Content="Dark" Tag="2" />
+                            </ComboBox>
+                        </Grid>
+                    </Border>
+
+                    <Border Style="{StaticResource SettingsCardBorderStyle}">
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon Grid.Column="0"
+                                      Glyph="&#xE81E;"
+                                      FontSize="20"
+                                      VerticalAlignment="Top"
+                                      Margin="0,2,0,0"
+                                      Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <StackPanel Grid.Column="1"
+                                        VerticalAlignment="Center"
+                                        Spacing="4"
+                                        Margin="0,0,12,0">
+                                <TextBlock Text="Backdrop material"
+                                           Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                <TextBlock Text="Mica or acrylic behind window content."
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           TextWrapping="WrapWholeWords" />
+                            </StackPanel>
+                            <ComboBox x:Name="BackdropCombo"
+                                      Grid.Column="2"
+                                      VerticalAlignment="Center"
+                                      MinWidth="200"
+                                      SelectionChanged="BackdropCombo_SelectionChanged">
+                                <ComboBoxItem Content="Mica" Tag="0" />
+                                <ComboBoxItem Content="Acrylic" Tag="1" />
+                            </ComboBox>
+                        </Grid>
+                    </Border>
+
+                    <TextBlock Text="Preview"
+                               Style="{StaticResource SettingsSectionHeaderStyle}" />
+
+                    <Border Style="{StaticResource SettingsCardBorderStyle}">
+                        <Grid RowSpacing="12">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Grid Grid.Row="0" ColumnSpacing="16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <FontIcon Grid.Column="0"
+                                          Glyph="&#xE8D2;"
+                                          FontSize="20"
+                                          VerticalAlignment="Top"
+                                          Margin="0,2,0,0"
+                                          Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <StackPanel Grid.Column="1" Spacing="4">
+                                    <TextBlock Text="Default preview text"
+                                               Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                    <TextBlock Text="Shown in the preview area and waterfall when you open a font."
+                                               Style="{StaticResource CaptionTextBlockStyle}"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                               TextWrapping="WrapWholeWords" />
+                                </StackPanel>
+                            </Grid>
+                            <TextBox x:Name="PreviewTextBox"
+                                     Grid.Row="1"
+                                     PlaceholderText="Enter default preview text..."
+                                     TextWrapping="Wrap"
+                                     AcceptsReturn="False"
+                                     MaxLength="500"
+                                     TextChanged="PreviewTextBox_TextChanged"
+                                     LostFocus="PreviewTextBox_LostFocus" />
+                        </Grid>
+                    </Border>
+
+                    <Border Style="{StaticResource SettingsCardBorderStyle}">
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon Grid.Column="0"
+                                      Glyph="&#xE8E9;"
+                                      FontSize="20"
+                                      VerticalAlignment="Top"
+                                      Margin="0,2,0,0"
+                                      Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <StackPanel Grid.Column="1"
+                                        VerticalAlignment="Center"
+                                        Spacing="4"
+                                        Margin="0,0,12,0">
+                                <TextBlock x:Name="FontSizeSliderHeaderText"
+                                           Style="{StaticResource BodyStrongTextBlockStyle}"
+                                           Text="Default font size" />
+                                <TextBlock Text="Default point size for the editable preview box."
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           TextWrapping="WrapWholeWords" />
+                            </StackPanel>
+                            <Slider x:Name="FontSizeSlider"
+                                    Grid.Column="2"
+                                    VerticalAlignment="Center"
+                                    Width="220"
+                                    Minimum="8"
+                                    Maximum="120"
+                                    StepFrequency="1"
+                                    ValueChanged="FontSizeSlider_ValueChanged" />
+                        </Grid>
+                    </Border>
+
+                    <Border Style="{StaticResource SettingsCardBorderStyle}">
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon Grid.Column="0"
+                                      Glyph="&#xE70F;"
+                                      FontSize="20"
+                                      VerticalAlignment="Top"
+                                      Margin="0,2,0,0"
+                                      Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <StackPanel Grid.Column="1"
+                                        VerticalAlignment="Center"
+                                        Spacing="4"
+                                        Margin="0,0,12,0">
+                                <TextBlock Text="Editable preview"
+                                           Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                <TextBlock Text="Show the text preview area with size controls. When off, only the waterfall is shown."
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           TextWrapping="WrapWholeWords" />
+                            </StackPanel>
+                            <ToggleSwitch x:Name="PreviewControlsToggle"
+                                          Grid.Column="2"
+                                          VerticalAlignment="Center"
+                                          OnContent=""
+                                          OffContent=""
+                                          Toggled="PreviewControlsToggle_Toggled" />
+                        </Grid>
+                    </Border>
+
+                    <TextBlock Text="Display"
+                               Style="{StaticResource SettingsSectionHeaderStyle}" />
+
+                    <Border Style="{StaticResource SettingsCardBorderStyle}">
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon Grid.Column="0"
+                                      Glyph="&#xE8FF;"
+                                      FontSize="20"
+                                      VerticalAlignment="Top"
+                                      Margin="0,2,0,0"
+                                      Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <StackPanel Grid.Column="1"
+                                        VerticalAlignment="Center"
+                                        Spacing="4"
+                                        Margin="0,0,12,0">
+                                <TextBlock Text="Quick view"
+                                           Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                <TextBlock Text="Character overview under the font header. Automatically appears in small windows."
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           TextWrapping="WrapWholeWords" />
+                            </StackPanel>
+                            <ToggleSwitch x:Name="QuickViewToggle"
+                                          Grid.Column="2"
+                                          VerticalAlignment="Center"
+                                          OnContent=""
+                                          OffContent=""
+                                          Toggled="QuickViewToggle_Toggled" />
+                        </Grid>
+                    </Border>
+
+                    <Border Style="{StaticResource SettingsCardBorderStyle}">
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon Grid.Column="0"
+                                      Glyph="&#xE81E;"
+                                      FontSize="20"
+                                      VerticalAlignment="Top"
+                                      Margin="0,2,0,0"
+                                      Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <StackPanel Grid.Column="1"
+                                        VerticalAlignment="Center"
+                                        Spacing="4"
+                                        Margin="0,0,12,0">
+                                <TextBlock Text="Waterfall"
+                                           Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                <TextBlock Text="Show multiple sample sizes at once."
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           TextWrapping="WrapWholeWords" />
+                            </StackPanel>
+                            <ToggleSwitch x:Name="WaterfallToggle"
+                                          Grid.Column="2"
+                                          VerticalAlignment="Center"
+                                          OnContent=""
+                                          OffContent=""
+                                          Toggled="WaterfallToggle_Toggled" />
+                        </Grid>
+                    </Border>
+
+                    <Border Style="{StaticResource SettingsCardBorderStyle}">
+                        <Grid RowSpacing="12">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Grid Grid.Row="0" ColumnSpacing="16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <FontIcon Grid.Column="0"
+                                          Glyph="&#xE149;"
+                                          FontSize="20"
+                                          VerticalAlignment="Top"
+                                          Margin="0,2,0,0"
+                                          Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <StackPanel Grid.Column="1" Spacing="4">
+                                    <TextBlock Text="Waterfall sizes"
+                                               Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                    <TextBlock Text="Comma-separated pixel sizes (e.g. 8, 12, 16, 24)."
+                                               Style="{StaticResource CaptionTextBlockStyle}"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                               TextWrapping="WrapWholeWords" />
+                                </StackPanel>
+                            </Grid>
+                            <TextBox x:Name="WaterfallSizesBox"
+                                     Grid.Row="1"
+                                     PlaceholderText="8,12,16,24,32,48,72"
+                                     AcceptsReturn="False"
+                                     MaxLength="200"
+                                     LostFocus="WaterfallSizesBox_LostFocus" />
+                        </Grid>
+                    </Border>
+
+                    <TextBlock Text="Install"
+                               Style="{StaticResource SettingsSectionHeaderStyle}" />
+
+                    <Border Style="{StaticResource SettingsCardBorderStyle}">
+                        <Grid RowSpacing="10">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Grid Grid.Row="0" ColumnSpacing="16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <FontIcon Grid.Column="0"
+                                          Glyph="&#xE7B8;"
+                                          FontSize="20"
+                                          VerticalAlignment="Top"
+                                          Margin="0,2,0,0"
+                                          Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <StackPanel Grid.Column="1"
+                                            VerticalAlignment="Center"
+                                            Spacing="4"
+                                            Margin="0,0,12,0">
+                                    <TextBlock Text="Install target"
+                                               Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                    <TextBlock x:Name="InstallTargetDescription"
+                                               Style="{StaticResource CaptionTextBlockStyle}"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                               TextWrapping="WrapWholeWords" />
+                                </StackPanel>
+                                <ComboBox x:Name="InstallModeCombo"
+                                          Grid.Column="2"
+                                          VerticalAlignment="Center"
+                                          MinWidth="220"
+                                          SelectionChanged="InstallModeCombo_SelectionChanged">
+                                    <ComboBoxItem Content="Current user" Tag="0" />
+                                    <ComboBoxItem Content="All users (requires admin)" Tag="1" />
+                                </ComboBox>
+                            </Grid>
+                        </Grid>
+                    </Border>
+
+                    <Border Style="{StaticResource SettingsCardBorderStyle}">
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon Grid.Column="0"
+                                      Glyph="&#xE71B;"
+                                      FontSize="20"
+                                      VerticalAlignment="Top"
+                                      Margin="0,2,0,0"
+                                      Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <StackPanel Grid.Column="1"
+                                        VerticalAlignment="Center"
+                                        Spacing="4"
+                                        Margin="0,0,12,0">
+                                <TextBlock Text="Register for font files"
+                                           Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                <TextBlock x:Name="FontAssocDescription"
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           TextWrapping="WrapWholeWords" />
+                            </StackPanel>
+                            <ToggleSwitch x:Name="FontAssocToggle"
+                                          Grid.Column="2"
+                                          VerticalAlignment="Center"
+                                          OnContent=""
+                                          OffContent=""
+                                          Toggled="FontAssocToggle_Toggled" />
+                        </Grid>
+                    </Border>
+
+                    <TextBlock Text="Reset"
+                               Style="{StaticResource SettingsSectionHeaderStyle}" />
+
+                    <Border Style="{StaticResource SettingsCardBorderStyle}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Restore defaults"
+                                       Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <TextBlock Text="Clear saved preferences and return to built-in defaults."
+                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       TextWrapping="WrapWholeWords" />
+                            <Button Content="Reset all settings to defaults"
+                                    Click="ResetButton_Click"
+                                    HorizontalAlignment="Left"
+                                    Margin="0,4,0,0" />
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
 
-                <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
-
-                <!-- ── Preview ───────────────────────────────────────────── -->
-                <StackPanel Spacing="12">
-                    <TextBlock Text="Preview" Style="{StaticResource SubtitleTextBlockStyle}" />
-
-                    <TextBox x:Name="PreviewTextBox"
-                             Header="Default preview text"
-                             PlaceholderText="Enter default preview text..."
-                             TextWrapping="Wrap"
-                             AcceptsReturn="False"
-                             MaxLength="500"
-                             LostFocus="PreviewTextBox_LostFocus" />
-
-                    <Slider x:Name="FontSizeSlider"
-                            Minimum="8" Maximum="120" StepFrequency="1"
-                            ValueChanged="FontSizeSlider_ValueChanged" />
-
-                    <ToggleSwitch x:Name="PreviewControlsToggle"
-                                  Header="Editable preview"
-                                  Toggled="PreviewControlsToggle_Toggled" />
-                    <TextBlock Text="Show the editable text preview area with size slider. When off, only the waterfall is shown."
-                               Style="{StaticResource CaptionTextBlockStyle}"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                               TextWrapping="WrapWholeWords"
-                               Margin="0,-8,0,0" />
-                </StackPanel>
-
-                <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
-
-                <!-- ── Display ───────────────────────────────────────────── -->
-                <StackPanel Spacing="12">
-                    <TextBlock Text="Display" Style="{StaticResource SubtitleTextBlockStyle}" />
-
-                    <ToggleSwitch x:Name="QuickViewToggle"
-                                  Header="Quick view"
-                                  Toggled="QuickViewToggle_Toggled" />
-                    <TextBlock Text="Character set overview below the font header. Auto-shows when the window is small."
-                               Style="{StaticResource CaptionTextBlockStyle}"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                               TextWrapping="WrapWholeWords"
-                               Margin="0,-8,0,0" />
-
-                    <ToggleSwitch x:Name="WaterfallToggle"
-                                  Header="Waterfall"
-                                  Toggled="WaterfallToggle_Toggled" />
-
-                    <TextBox x:Name="WaterfallSizesBox"
-                             Header="Waterfall sizes (comma-separated)"
-                             PlaceholderText="8,12,16,24,32,48,72"
-                             AcceptsReturn="False"
-                             MaxLength="200"
-                             LostFocus="WaterfallSizesBox_LostFocus" />
-                </StackPanel>
-
-                <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
-
-                <!-- ── Install ───────────────────────────────────────────── -->
-                <StackPanel Spacing="12">
-                    <TextBlock Text="Install" Style="{StaticResource SubtitleTextBlockStyle}" />
-
-                    <ComboBox x:Name="InstallModeCombo"
-                              Header="Install target"
-                              HorizontalAlignment="Stretch"
-                              SelectionChanged="InstallModeCombo_SelectionChanged">
-                        <ComboBoxItem Content="Current user" Tag="0" />
-                        <ComboBoxItem Content="All users (requires admin)" Tag="1" />
-                    </ComboBox>
-
-                    <TextBlock x:Name="InstallTargetDescription"
-                               Style="{StaticResource CaptionTextBlockStyle}"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                               TextWrapping="WrapWholeWords"
-                               Margin="0,-8,0,0" />
-
-                    <ToggleSwitch x:Name="FontAssocToggle"
-                                  Header="Register Fontager for font files (current user)"
-                                  Toggled="FontAssocToggle_Toggled" />
-                    <TextBlock x:Name="FontAssocDescription"
-                               Style="{StaticResource CaptionTextBlockStyle}"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                               TextWrapping="WrapWholeWords"
-                               Margin="0,-8,0,0" />
-                </StackPanel>
-
-                <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
-
-                <!-- ── Reset ─────────────────────────────────────────────── -->
-                <StackPanel Spacing="6">
-                    <Button Content="Reset all settings to defaults"
-                            Click="ResetButton_Click" />
-                </StackPanel>
-
-                <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
-
-                <!-- ── About ─────────────────────────────────────────────── -->
-                <StackPanel Spacing="4">
-                    <TextBlock Text="About" Style="{StaticResource SubtitleTextBlockStyle}" />
-                    <TextBlock x:Name="AboutVersionText"
-                               FontWeight="SemiBold"
-                               Style="{StaticResource BodyTextBlockStyle}"
-                               Margin="0,8,0,0" />
-                    <TextBlock Text="A modern font viewer for Windows, built with WinUI 3."
-                               Style="{StaticResource CaptionTextBlockStyle}"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    <TextBlock Text="Made by Yusuf Emre Albayrak"
-                               Style="{StaticResource CaptionTextBlockStyle}"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    <HyperlinkButton Content="GitHub — ysfemreAlbyrk/Fontager"
-                                     NavigateUri="https://github.com/ysfemreAlbyrk/Fontager"
-                                     Padding="0" Margin="0,2,0,0" />
-                </StackPanel>
-            </StackPanel>
-        </Grid>
-    </ScrollViewer>
+                <!-- RIGHT: About column (top-aligned with first settings section inside scroll) -->
+                <Border x:Name="AboutCard"
+                        Grid.Row="0"
+                        Grid.Column="2"
+                        VerticalAlignment="Top"
+                        HorizontalAlignment="Stretch"
+                        Background="{ThemeResource LayerFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="20,18">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="About this app"
+                                   Style="{StaticResource SubtitleTextBlockStyle}" />
+                        <TextBlock x:Name="AboutVersionText"
+                                   FontWeight="SemiBold"
+                                   Style="{StaticResource BodyTextBlockStyle}" />
+                        <TextBlock Text="A modern font viewer for Windows, built with WinUI 3."
+                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   TextWrapping="WrapWholeWords" />
+                        <TextBlock Text="Made by Yusuf Emre Albayrak"
+                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <HyperlinkButton Content="GitHub — ysfemreAlbyrk/Fontager"
+                                         NavigateUri="https://github.com/ysfemreAlbyrk/Fontager"
+                                         Padding="0"
+                                         Margin="0,4,0,0"
+                                         HorizontalAlignment="Left" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </ScrollViewer>
+    </Grid>
 </Page>

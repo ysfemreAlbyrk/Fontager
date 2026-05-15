@@ -1,6 +1,7 @@
 using System;
 using Fontager.Viewer.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
@@ -39,6 +40,7 @@ public sealed partial class SettingsPage : Page
     private readonly SettingsService _settings;
     private bool _initialized;
     private bool _isProcessElevated;
+    private DispatcherQueueTimer? _previewTextDebouncer;
 
     public SettingsPage()
     {
@@ -67,7 +69,7 @@ public sealed partial class SettingsPage : Page
         // Preview
         PreviewTextBox.Text = _settings.DefaultPreviewText;
         FontSizeSlider.Value = _settings.DefaultFontSize;
-        FontSizeSlider.Header = $"Default font size ({(int)_settings.DefaultFontSize}px)";
+        FontSizeSliderHeaderText.Text = $"Default font size ({(int)_settings.DefaultFontSize}px)";
         PreviewControlsToggle.IsOn = _settings.ShowPreviewControls;
 
         // Display
@@ -109,6 +111,57 @@ public sealed partial class SettingsPage : Page
         AboutVersionText.Text = $"Fontager Viewer  v{version}";
 
         _initialized = true;
+
+        DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low,
+            () => ApplyTwoPaneLayout(TwoPaneRoot.ActualWidth > 1 ? TwoPaneRoot.ActualWidth : ActualWidth));
+    }
+
+    private void TwoPaneRoot_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        ApplyTwoPaneLayout(e.NewSize.Width);
+    }
+
+    /// <summary>
+    /// Wide: settings column + gap + fixed About card (Windows 11 Settings-style).
+    /// Narrow: single column; About follows settings.
+    /// </summary>
+    private void ApplyTwoPaneLayout(double width)
+    {
+        const double wideBreakpoint = 920;
+        bool wide = width >= wideBreakpoint;
+
+        if (wide)
+        {
+            SettingsColumnDef.Width = new GridLength(2, GridUnitType.Star);
+            SettingsColumnDef.MinWidth = 280;
+            GapColumnDef.Width = new GridLength(32);
+            AboutColumnDef.Width = new GridLength(1, GridUnitType.Star);
+            AboutColumnDef.MinWidth = 240;
+            Grid.SetRow(SettingsSectionsPanel, 0);
+            Grid.SetColumn(SettingsSectionsPanel, 0);
+            Grid.SetColumnSpan(SettingsSectionsPanel, 1);
+            Grid.SetRow(AboutCard, 0);
+            Grid.SetColumn(AboutCard, 2);
+            Grid.SetColumnSpan(AboutCard, 1);
+            AboutCard.Margin = new Thickness(0);
+            AboutCard.HorizontalAlignment = HorizontalAlignment.Stretch;
+        }
+        else
+        {
+            SettingsColumnDef.Width = new GridLength(1, GridUnitType.Star);
+            SettingsColumnDef.MinWidth = 0;
+            GapColumnDef.Width = new GridLength(0);
+            AboutColumnDef.Width = new GridLength(0);
+            AboutColumnDef.MinWidth = 0;
+            Grid.SetRow(SettingsSectionsPanel, 0);
+            Grid.SetColumn(SettingsSectionsPanel, 0);
+            Grid.SetColumnSpan(SettingsSectionsPanel, 3);
+            Grid.SetRow(AboutCard, 1);
+            Grid.SetColumn(AboutCard, 0);
+            Grid.SetColumnSpan(AboutCard, 3);
+            AboutCard.Margin = new Thickness(0, 24, 0, 0);
+            AboutCard.HorizontalAlignment = HorizontalAlignment.Stretch;
+        }
     }
 
     /// <summary>
@@ -162,15 +215,36 @@ public sealed partial class SettingsPage : Page
 
     // ── Preview ───────────────────────────────────────────────────
 
+    private void PreviewTextBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (!_initialized) return;
+
+        if (_previewTextDebouncer is null)
+        {
+            _previewTextDebouncer = DispatcherQueue.CreateTimer();
+            _previewTextDebouncer.IsRepeating = false;
+            _previewTextDebouncer.Interval = TimeSpan.FromMilliseconds(280);
+            _previewTextDebouncer.Tick += (_, _) =>
+            {
+                _previewTextDebouncer!.Stop();
+                _settings.DefaultPreviewText = PreviewTextBox.Text;
+            };
+        }
+
+        _previewTextDebouncer.Stop();
+        _previewTextDebouncer.Start();
+    }
+
     private void PreviewTextBox_LostFocus(object sender, RoutedEventArgs e)
     {
         if (!_initialized) return;
+        _previewTextDebouncer?.Stop();
         _settings.DefaultPreviewText = PreviewTextBox.Text;
     }
 
     private void FontSizeSlider_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
     {
-        FontSizeSlider.Header = $"Default font size ({(int)e.NewValue}px)";
+        FontSizeSliderHeaderText.Text = $"Default font size ({(int)e.NewValue}px)";
         if (!_initialized) return;
         _settings.DefaultFontSize = e.NewValue;
     }

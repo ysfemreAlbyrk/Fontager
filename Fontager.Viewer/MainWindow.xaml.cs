@@ -17,11 +17,15 @@ using Microsoft.UI;
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Text;
 using Microsoft.UI.Windowing;
+using Microsoft.UI.Dispatching;
+using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Windows.ApplicationModel;
+using Windows.Graphics;
 using Windows.Storage;
 using Windows.Storage.Pickers;
 using WinRT.Interop;
@@ -66,6 +70,9 @@ public sealed partial class MainWindow : Window
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _glyphSearchDebounceTimer;
     private const int GlyphSearchDebounceMs = 150;
 
+    /// <summary>Coalesces custom title-bar passthrough recomputation (avoid resize storms).</summary>
+    private bool _titleBarPassthroughScheduled;
+
     /// <summary>
     /// True when this process is running with an elevated administrator token
     /// (e.g. "Run as administrator"). Per-machine font install requires this.
@@ -98,6 +105,10 @@ public sealed partial class MainWindow : Window
 
         // Auto-show/hide Quick View based on window size
         this.SizeChanged += OnWindowSizeChanged;
+        this.SizeChanged += (_, _) => ScheduleTitleBarPassthroughUpdate();
+
+        AppTitleBar.Loaded += (_, _) => ScheduleTitleBarPassthroughUpdate();
+        AppTitleBar.SizeChanged += (_, _) => ScheduleTitleBarPassthroughUpdate();
 
         if (!string.IsNullOrEmpty(App.FontFilePath))
             _ = LoadFontFromPathAsync(App.FontFilePath, 0);
@@ -127,7 +138,13 @@ public sealed partial class MainWindow : Window
             UpdateInstallButtonPresentation(GetSavedInstallTarget());
             ApplyInstallElevatedUi();
 
-            // If a font is loaded, mirror the section toggles immediately.
+            // Keep the main preview strip in sync with persisted defaults whenever
+            // Settings changes (including while a font is loaded — previously only
+            // the empty-state path refreshed DefaultPreviewText / DefaultFontSize).
+            PreviewTextBox.Text = _settings.DefaultPreviewText;
+            _viewModel.PreviewText = _settings.DefaultPreviewText;
+            SetPreviewFontSize(_settings.DefaultFontSize);
+
             if (_viewModel.HasFont)
             {
                 PreviewSection.Visibility = _settings.ShowPreviewControls
@@ -136,13 +153,7 @@ public sealed partial class MainWindow : Window
                     ? Visibility.Visible : Visibility.Collapsed;
                 WaterfallSection.Visibility = _settings.ShowWaterfall
                     ? Visibility.Visible : Visibility.Collapsed;
-            }
-            else
-            {
-                // No font loaded → make sure the empty-state preview reflects
-                // the new default text and size.
-                PreviewTextBox.Text = _settings.DefaultPreviewText;
-                SetPreviewFontSize(_settings.DefaultFontSize);
+                BuildWaterfallView();
             }
         }
         catch
@@ -187,6 +198,75 @@ public sealed partial class MainWindow : Window
 
         ApplyWindowIcon();
         AllowDragDropFromLowerIntegrity();
+    }
+
+    /// <summary>
+    /// One passthrough update per UI frame — avoids O(n) WinRT work on every
+    /// intermediate resize pixel when the user drags the window edge.
+    /// </summary>
+    private void ScheduleTitleBarPassthroughUpdate()
+    {
+        if (_titleBarPassthroughScheduled)
+            return;
+        _titleBarPassthroughScheduled = true;
+        DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () =>
+        {
+            _titleBarPassthroughScheduled = false;
+            UpdateCustomTitleBarPassthroughRects();
+        });
+    }
+
+    /// <summary>
+    /// Marks caption-button safe zones and forwards hits for interactive title-bar
+    /// controls per <see href="https://learn.microsoft.com/windows/apps/develop/title-bar">title-bar guidance</see>.
+    /// </summary>
+    private void UpdateCustomTitleBarPassthroughRects()
+    {
+        if (!ExtendsContentIntoTitleBar || AppTitleBar.XamlRoot is null)
+            return;
+
+        try
+        {
+            var scale = AppTitleBar.XamlRoot.RasterizationScale;
+            var chrome = AppWindow.TitleBar;
+            TitleBarLeftInsetColumn.Width = new GridLength(chrome.LeftInset / scale);
+            TitleBarRightInsetColumn.Width = new GridLength(chrome.RightInset / scale);
+
+            var rects = new List<RectInt32>();
+
+            void AddIfInteractive(FrameworkElement? el)
+            {
+                if (el is null || el.Visibility != Visibility.Visible)
+                    return;
+                if (el.ActualWidth <= 1 || el.ActualHeight <= 1)
+                    return;
+                rects.Add(ToPhysicalPassthroughRect(el, scale));
+            }
+
+            AddIfInteractive(BackButton);
+            AddIfInteractive(OpenButtonPanel);
+            AddIfInteractive(SettingsButton);
+
+            var src = InputNonClientPointerSource.GetForWindowId(AppWindow.Id);
+            src.ClearRegionRects(NonClientRegionKind.Passthrough);
+            if (rects.Count > 0)
+                src.SetRegionRects(NonClientRegionKind.Passthrough, rects.ToArray());
+        }
+        catch
+        {
+            // Shells without full InputNonClientPointerSource support: skip silently.
+        }
+    }
+
+    private static RectInt32 ToPhysicalPassthroughRect(FrameworkElement el, double scale)
+    {
+        var gt = el.TransformToVisual(null);
+        var b = gt.TransformBounds(new Windows.Foundation.Rect(0, 0, el.ActualWidth, el.ActualHeight));
+        return new RectInt32(
+            (int)Math.Round(b.X * scale),
+            (int)Math.Round(b.Y * scale),
+            (int)Math.Round(b.Width * scale),
+            (int)Math.Round(b.Height * scale));
     }
 
     /// <summary>
@@ -641,6 +721,7 @@ public sealed partial class MainWindow : Window
 
         // Title bar
         TitleBarFontName.Text = font.DisplayName;
+        TitleBarFontName.Opacity = 1;
         AppWindow.Title = $"Fontager \u2014 {font.DisplayName}";
 
         // Header
@@ -663,6 +744,11 @@ public sealed partial class MainWindow : Window
         {
             FontNavPanel.Visibility = Visibility.Collapsed;
         }
+
+        // Install: Windows font setup does not accept WOFF2; only preview here.
+        bool isWoff2 = font.Format == FontFormat.WebOpenFont;
+        InstallSplitButton.Visibility = isWoff2 ? Visibility.Collapsed : Visibility.Visible;
+        InstallNotSupportedMessage.Visibility = isWoff2 ? Visibility.Visible : Visibility.Collapsed;
 
         // Apply font to preview
         ApplyFontToElement(PreviewTextBox, meta);
@@ -835,7 +921,17 @@ public sealed partial class MainWindow : Window
         LoadingState.Visibility = loading ? Visibility.Visible : Visibility.Collapsed;
         ErrorState.Visibility = error ? Visibility.Visible : Visibility.Collapsed;
         FontContent.Visibility = content ? Visibility.Visible : Visibility.Collapsed;
-        InstallSplitButton.IsEnabled = content && !string.IsNullOrWhiteSpace(_currentFilePath);
+        bool canInstall = content
+                          && !string.IsNullOrWhiteSpace(_currentFilePath)
+                          && _viewModel.CurrentFont?.Format != FontFormat.WebOpenFont;
+        InstallSplitButton.IsEnabled = canInstall;
+
+        if (error)
+        {
+            TitleBarFontName.Text = string.Empty;
+            TitleBarFontName.Opacity = 0;
+            AppWindow.Title = "Fontager";
+        }
     }
 
     // ── Settings ────────────────────────────────────────────────
@@ -866,24 +962,44 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
-        // Disable the Settings button while the page is up so a stray double
-        // click can't re-navigate over itself.
-        SettingsButton.IsEnabled = false;
+        SettingsButton.Visibility = Visibility.Collapsed;
 
         MainContentArea.Visibility = Visibility.Collapsed;
         SettingsFrame.Visibility = Visibility.Visible;
         BackButton.Visibility = Visibility.Visible;
-        OpenButtonPanel.Visibility = Visibility.Collapsed;
+        ScheduleTitleBarPassthroughUpdate();
 
         // Ensure the overlay Frame shares the window XamlRoot so navigated
         // pages and dialogs never see a null XamlRoot (WinRT throws).
         if (RootGrid.XamlRoot is not null)
             SettingsFrame.XamlRoot = RootGrid.XamlRoot;
 
-        // Parameter carries the elevation state so the install-target combo
-        // can be disabled appropriately. The page reads this in
-        // OnNavigatedTo.
-        SettingsFrame.Navigate(typeof(SettingsPage), _isProcessElevated);
+        // Defer navigation one tick so the Frame is visible and laid out;
+        // navigating while the subtree was Collapsed contributed to first-click
+        // failures and WinRT InvalidOperationException noise.
+        var elevated = _isProcessElevated;
+        DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Normal,
+            () => SettingsFrame.Navigate(typeof(SettingsPage), elevated));
+    }
+
+    /// <summary>
+    /// Custom chrome back — <see cref="AnimatedIcon"/> over <c>AnimatedBackVisualSource</c>.
+    /// </summary>
+    private void CustomTitleBarBack_Click(object sender, RoutedEventArgs e)
+    {
+        if (SettingsFrame.Visibility != Visibility.Visible)
+            return;
+        CloseSettingsOverlay();
+    }
+
+    private void BackButton_PointerEntered(object sender, PointerRoutedEventArgs e)
+    {
+        AnimatedIcon.SetState(BackAnimatedIcon, "PointerOver");
+    }
+
+    private void BackButton_PointerExited(object sender, PointerRoutedEventArgs e)
+    {
+        AnimatedIcon.SetState(BackAnimatedIcon, "Normal");
     }
 
     /// <summary>
@@ -891,27 +1007,22 @@ public sealed partial class MainWindow : Window
     /// the heavier "post-settings" refresh (font display + glyph grid + nav
     /// state) that the per-change SettingsChanged handler intentionally skips.
     /// </summary>
-    private void BackButton_Click(object sender, RoutedEventArgs e)
+    private void CloseSettingsOverlay()
     {
         SettingsFrame.Visibility = Visibility.Collapsed;
-        SettingsFrame.Content = null; // free the page
+        SettingsFrame.Content = null;
 
         BackButton.Visibility = Visibility.Collapsed;
-        OpenButtonPanel.Visibility = Visibility.Visible;
-        SettingsButton.IsEnabled = true;
+        AnimatedIcon.SetState(BackAnimatedIcon, "Normal");
+        SettingsButton.Visibility = Visibility.Visible;
+        ScheduleTitleBarPassthroughUpdate();
         MainContentArea.Visibility = Visibility.Visible;
 
-        // Suppress the cascade of SettingsChanged events that would fire
-        // during a heavy rebuild — we want one batch refresh, not N.
         _suppressSettingsChangedReaction = true;
         try
         {
             if (_viewModel.HasFont)
-            {
-                // Rebuilds preview, quick view, waterfall, glyph grid, and
-                // metadata against any new settings.
                 UpdateFontDisplay();
-            }
             UpdateInstallButtonPresentation(GetSavedInstallTarget());
             ApplyInstallElevatedUi();
         }
