@@ -1,179 +1,114 @@
-# Packaging Decision — Unpackaged WinUI 3
+# Packaging decision — why Fontager viewer is unpackaged
 
-> **Decision:** Fontager.Viewer ships as an **unpackaged** WinUI 3 application
-> with a **self-contained Windows App SDK runtime**. The MSIX manifest and
-> tooling are kept dormant in the repository so the Store distribution channel
-> can be re-enabled later as a one-property change.
+**Where we landed:** Fontager.Viewer ships as an **unpackaged** WinUI 3 app with a **self-contained Windows App SDK runtime** (`WindowsPackageType=None`, `WindowsAppSDKSelfContained=true` in the csproj). MSIX manifest and tooling stay in the repo but flipped off so flipping back is mostly property changes — I didn’t want to burn bridges with the Store.
 
-## 1. The two options, distilled
+**Why I’m writing this:** Packaging sounds like a boring build detail until it isn’t. For a font tool, the difference between “real HKCU” and “virtualised HKCU” is literally whether Windows Settings shows **Uninstall** for a font you just installed. That one UX glitch pushed me hard toward unpackaged for day-to-day builds.
 
-WinUI 3 apps can be built in two distribution shapes:
+---
+
+## 1. The two shapes, in plain language
 
 | | **Packaged (MSIX)** | **Unpackaged** |
 |---|---|---|
-| Identity | Strong package identity (`Publisher` + `Name` + `Version`) | None — just an EXE on disk |
-| Install path | `C:\Program Files\WindowsApps\<package family>\…` | Anywhere the user puts the folder |
-| File-system access | Sandboxed-ish via `runFullTrust` capability | Full Win32 |
-| HKCU registry writes | **Virtualized into the package container** | Real HKCU |
-| HKLM registry writes | Requires admin, real HKLM | Requires admin, real HKLM |
-| File-type associations | Declared in `Package.appxmanifest` | Declared via HKCU registry writes at runtime |
-| `.ttf` association | **Forbidden by manifest schema** (reserved by Windows) | Allowed for the current user |
-| `Windows.Storage.ApplicationData.Current` | Works natively | Works via the WinAppSDK identity bridge |
-| `Microsoft.Windows.Storage.ApplicationData` | Works | Works (designed for unpackaged) |
-| Mica / Acrylic backdrop | Works | Works |
-| Drag-drop / file-picker under admin | Same UIPI rules either way | Same |
-| Install/uninstall UX | Settings → Apps → uninstall | Manual (or installer-provided) |
-| Store distribution | Yes | No |
-| Auto-update | Store / App Installer | Roll your own (Squirrel/Velopack/etc.) |
-| Distribution size | `.msix` ~15-25 MB (excluding runtime) | Folder ~50-100 MB (with self-contained runtime) |
-| Code signing | Required for sideloading; cert managed by VS | Optional but recommended (SmartScreen) |
+| Identity | Strong package identity (`Publisher` + `Name` + `Version`) | None — it’s just an exe in a folder |
+| Install path | Under `WindowsApps\…` | Wherever you unzip or your installer puts it |
+| File-system access | Sandboxed unless `runFullTrust` | Normal Win32 |
+| HKCU writes | **Redirected into the package container** | **The real user hive** |
+| HKLM writes | Admin, real HKLM | Same |
+| File associations | Declared in manifest | Our code writes HKCU at runtime (where allowed) |
+| `.ttf` in manifest | **Blocked by schema** (reserved) | We can still offer “Open with…” via HKCU |
+| `Package.Current` | Works | Throws unless caught — we guard icon/version/packaged checks |
+| Mica / Acrylic | Works | Works |
+| Store listing | Possible | Not with this shape alone |
+| Download size | Smaller package | Larger folder (runtime bundled) |
 
-## 2. What the user gets from each path, applied to Fontager
+---
 
-These are the user-visible features of Fontager.Viewer and how each path
-serves them.
+## 2. Fontager-specific: what actually matters
 
-| User-facing feature | Packaged | Unpackaged | Notes |
+| User-facing thing | Packaged | Unpackaged | Notes |
 |---|---|---|---|
-| Open `.otf`/`.ttc`/`.woff2` from Explorer | ✅ (manifest) | ✅ (HKCU writes) | Both work cleanly. |
-| Open `.ttf` from Explorer | ❌ (schema blocks `.ttf`) | ✅ (HKCU "Open with…") | Single biggest gap of the packaged path. |
-| Install for current user | ✅ (file copied) | ✅ | |
-| **Uninstall from Windows Settings → Fonts** | ❌ (shows "Hide" only) | ✅ ("Uninstall" appears) | Caused by HKCU virtualisation under MSIX. |
-| Install for all users (admin) | ✅ | ✅ | Identical (writes to HKLM either way). |
-| Drag-drop / picker under admin | ✅ (with our UIPI fix) | ✅ (with our UIPI fix) | Same fix applies to both. |
-| Settings persistence | ✅ (`Windows.Storage.ApplicationData`) | ✅ (JSON file in `%LocalAppData%\Fontager`) | We switched to JSON so the path is identical across modes. |
-| Font preview rendering (`FontFamily` URI) | ✅ (`ms-appdata://`) | ✅ (via WinAppSDK identity bridge) | Works either way for our use case. |
-| Alt+Tab / taskbar icon | ✅ | ✅ | |
-| Auto-update | ✅ if listed on Store | ❌ unless we add Squirrel/Velopack | Not used today. |
-| Clean uninstall via Settings → Apps | ✅ | ❌ (drop the folder) | Packaged wins here, but installer-based unpackaged can match it. |
+| Open `.otf` / `.ttc` / `.woff2` from Explorer | ✅ | ✅ | Both fine. |
+| Open `.ttf` from Explorer | ❌ reserved in manifest | ✅ HKCU “Open with…” | Big practical win for unpackaged. |
+| Install font for current user | File lands correctly either way | Same | |
+| **Uninstall in Settings → Fonts** | ❌ often **Hide** only | ✅ **Uninstall** works | HKCU virtualisation breaks the link packaged-side. |
+| Install for all users | ✅ needs admin | ✅ needs admin | Same mechanics. |
+| Drag-drop / elevated picker | Same UIPI story | Same | We fixed the awkward bits in code either way. |
+| Settings file | Would lean on WinRT storage bridges | `%LocalAppData%\Fontager\settings.json` | I chose JSON on disk so moving the exe doesn’t scatter behaviour across bridges — see `SettingsService`. |
+| Font preview URI (`FontFamily`) | Works | Works via WinAppSDK identity helpers | |
+| Clean uninstall from Settings → Apps | ✅ | ❌ unless we ship an installer | Trade-off I accept for now. |
 
-Six of the eight features that actually matter for a font viewer either
-favour unpackaged or are a tie. The two that favour packaged are
-auto-update (we don't use it) and clean uninstall (cosmetic).
+Rough takeaway: **six** important behaviours lean unpackaged or neutral; **two** lean packaged (Store polish, Apps uninstall). We weren’t chasing Store yet, so unpackaged won.
 
-## 3. The HKCU virtualisation issue in detail
+---
 
-This is the strongest argument against MSIX for Fontager specifically.
+## 3. The HKCU virtualisation trap (the detail)
 
-When an MSIX-packaged app writes to `HKCU\Software\…`, the registry write is
-redirected by the package runtime into a per-package private hive
-(`Reg.dat`) inside the package's state folder. Windows Settings reads from
-the *real* user hive when populating Settings → Fonts. The result:
+Under MSIX, writes you think go to `HKCU\Software\…` can land in a **private package hive**. Settings → Fonts builds its list from the **real** user registry plus the font folder.
 
-- Our `HKCU\…\CurrentVersion\Fonts\<FamilyName (TrueType)>` write lands in
-  the package's private hive.
-- Settings → Fonts scans `%LocalAppData%\Microsoft\Windows\Fonts` and finds
-  the file we copied there.
-- Settings cross-references against the real HKCU and finds *no* matching
-  entry.
-- It treats the font as system-managed and offers only the **Hide** button.
-  **Uninstall** is suppressed.
+What went wrong in practice:
 
-There is no app-side fix while we stay packaged. The only paths out are:
+- Font file appeared under `%LocalAppData%\Microsoft\Windows\Fonts`.
+- Registry entry for that install lived in the **virtual** hive.
+- Settings decided the font wasn’t really “user-owned” and only offered **Hide**, not **Uninstall**.
 
-1. Ship our own "Uninstall font" command in Fontager (works but adds a
-   per-app UI to do something Windows already does).
-2. Stop being packaged.
+There isn’t an elegant in-package fix — either we ship our own uninstall UX for every font, or we stop pretending HKCU is shared. I picked the second for the default build.
 
-We took option 2.
+---
 
-## 4. The `.ttf` association issue in detail
+## 4. The `.ttf` manifest wall
 
-`Package.appxmanifest`'s `<uap:FileTypeAssociation>` extension lists each
-extension our app claims. The packaging tools reject `.ttf` at manifest
-validation time because it appears on Windows' list of reserved file
-extensions (alongside `.exe`, `.dll`, `.lnk`, and the OS-bundled Font
-Viewer's claim on `.ttf`). This is enforced by the AppxManifest schema
-itself, not by MSIX runtime — there is no flag we can flip.
+`Package.appxmanifest` file-type associations **cannot** claim `.ttf` — Windows reserves it for the bundled font viewer story. Validation fails if you try.
 
-For an unpackaged build the registration is a per-user HKCU write:
+Unpackaged builds sidestep that: we register **ProgIDs** under HKCU so Fontager shows up under **Open with…**. We never fight Windows for *default* `.ttf` ownership; we just want to be choosable.
 
-```text
-HKCU\Software\Classes\.ttf\OpenWithProgids\Fontager.Viewer.ttf
-HKCU\Software\Classes\Fontager.Viewer.ttf\…
-HKCU\Software\Classes\Applications\Fontager.Viewer.exe\…
-```
+*(Same HKCU caveat: under MSIX identity those writes don’t help the real shell.)*
 
-Windows never lets a non-system app claim *default* for `.ttf`, but the
-per-user "Open with…" entry shows up in the Explorer context menu and is
-respected if the user picks "Always use this app". This is the same way
-many designer tools (FontBase, RightFont, etc.) handle it.
+---
 
-## 5. What we lose by going unpackaged
+## 5. What we give up (honestly)
 
-These are real, accept them with eyes open:
+1. **No Store pipeline** until we flip tooling back on — fine for now.
+2. **Fatter folder** — self-contained WinAppSDK costs tens of MB. Release builds can use trimming (`PublishTrimmed` when self-contained); **`PublishReadyToRun` stays false** in the csproj today — I valued predictable builds over cold-start micro-optimisations last time I touched it.
+3. **No built-in auto-update** — Velopack/Squirrel territory later.
+4. **No “Uninstall app” from Settings** without an installer — users delete the folder; optional Inno/MSI later.
+5. **`Package.Current` throws** when unpackaged — every caller handles it (version string, icons, “are we packaged?” for file assoc).
 
-1. **No Store distribution.** Acceptable today — we're not listing on the
-   Store yet. The MSIX manifest stays in the repo so re-enabling is
-   cheap.
-2. **Larger zipped download.** Self-contained adds ~40-60 MB of WinAppSDK
-   runtime. Mitigations:
-   - `<PublishTrimmed>true</PublishTrimmed>` for Release.
-   - `<PublishReadyToRun>true</PublishReadyToRun>` for cold start, at the
-     cost of more disk. (We currently keep ReadyToRun off for parity
-     with the previous build.)
-3. **No auto-update.** Acceptable until v1.x. Adding
-   [Velopack](https://github.com/velopack/velopack) or Squirrel later
-   takes a small amount of work and integrates cleanly with an
-   unpackaged build.
-4. **No "Uninstall" button in Settings → Apps.** Users delete the folder
-   and (optionally) hit the in-app "Unregister .ttf" toggle. An
-   installer (Inno Setup, MSI) is the standard way to fix this; we can
-   add one later.
-5. **`Package.Current` throws.** Caught everywhere we access it (icon
-   resolution, version string, `FileAssociationService.IsRunningPackaged`).
+---
 
 ## 6. What we gain
 
-1. **Settings → Fonts shows "Uninstall"** for fonts we install.
-2. **`.ttf` "Open with…"** is now possible.
-3. **Standard `%LocalAppData%\Fontager\` settings path** (we wrote our own
-   JSON store specifically to avoid identity-bridge weirdness).
-4. **Simpler CI** — `dotnet publish -c Release -r win-x64 --self-contained` is
-   the whole build instead of `msbuild /t:Package /p:Configuration=Release`.
-5. **Easier debugging** — registry writes are inspectable in `regedit`,
-   files are in `%LocalAppData%\Fontager`. With MSIX both are hidden in
-   the package container.
+1. Settings → Fonts **Uninstall** behaves like users expect for per-user installs.
+2. `.ttf` “Open with…” is achievable.
+3. Settings live in a **predictable JSON path** — same mental model dev vs user machine.
+4. CI / local builds stay **`dotnet publish`** shaped instead of msbuild package choreography.
+5. Debugging — registry and files are where `regedit` and Explorer say they are.
 
-## 7. Switching back to MSIX (when, not if)
+---
 
-If we list on the Store later, here's the recipe:
+## 7. If we go MSIX / Store again
 
-1. In [`Fontager.Viewer/Fontager.Viewer.csproj`](../../Fontager.Viewer/Fontager.Viewer.csproj):
-   - Set `<WindowsPackageType>` to empty (or remove the property).
-   - Set `<EnableMsixTooling>true</EnableMsixTooling>`.
-   - Re-evaluate `<WindowsAppSDKSelfContained>` — Store distribution
-     prefers framework-dependent so multiple apps share the runtime.
-2. In [`Fontager.Viewer/Package.appxmanifest`](../../Fontager.Viewer/Package.appxmanifest):
-   - Bump the `Version` attribute.
-   - Re-confirm `windows.fileTypeAssociation` covers `.otf`, `.ttc`,
-     `.woff2`. `.ttf` stays out — that hasn't changed and won't.
-3. Accept that **the per-user install path will lose the
-   Settings → Fonts "Uninstall" button** under MSIX again. Add our own
-   "Uninstall font" action inside the app to make up for it.
-4. In `SettingsService`, the JSON store keeps working; no migration
-   needed.
-5. In `FileAssociationService`, `IsRunningPackaged` will start returning
-   `true`, the `.ttf` toggle will disable itself (correctly — MSIX
-   schema bans it), and the manifest declarations take over for the
-   other three formats.
+Rough checklist (don’t treat this as gospel without re-reading the csproj):
 
-The intentional design here: nothing in the codebase actively *depends*
-on being unpackaged. We just lose a few features when we re-package.
+1. **`Fontager.Viewer.csproj`** — flip `WindowsPackageType`, enable `EnableMsixTooling`, reconsider `WindowsAppSDKSelfContained` (Store builds often share the framework runtime).
+2. **`Package.appxmanifest`** — bump version; confirm `.otf`/`.ttc`/`.woff2`; accept `.ttf` **still** can’t be declared.
+3. **Own the HKCU gap** — either document “Hide only” again or build **Uninstall font** inside the app.
+4. **`SettingsService`** — JSON store keeps working; no migration drama.
+5. **`FileAssociationService`** — packaged mode disables the `.ttf` toggle and relies on manifest entries for the formats we’re allowed.
 
-## 8. Decision summary
+Nothing in the viewer codebase **requires** unpackaged logic everywhere — we branch where reality differs (`IsRunningPackaged`, install verification, etc.).
 
-For a font viewer / manager that wants:
-- to be the default handler for `.ttf` (yes),
-- to give the user a working "Uninstall" button in Settings → Fonts (yes),
-- to read/write the real HKCU when the user expects it to (yes),
+---
 
-**unpackaged is the right shape**. Re-evaluate when the answers to any of
-those change, or when Store presence becomes a goal.
+## 8. One-line summary
+
+For a font viewer that cares about **honest per-user installs**, **choosable `.ttf` handling**, and **registry you can trust**, **unpackaged is the default that matches user expectations**. Revisit when Store visibility outweighs those wins.
+
+---
 
 ## 9. References
 
-- [Windows App SDK packaging modes](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/) (Microsoft Learn)
-- [MSIX reserved file types](https://learn.microsoft.com/en-us/windows/msix/desktop/desktop-to-uwp-extensions#filetype-associations) (manifest schema reference)
-- [`Microsoft.Windows.Storage.ApplicationData` spec](https://github.com/microsoft/WindowsAppSDK/blob/main/specs/applicationdata/ApplicationData.md) (WinAppSDK repo)
-- The companion [`docs/research/font-parsing.md`](font-parsing.md) appendix on TTF associations.
+- [Windows App SDK packaging modes](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/)
+- [MSIX file-type associations / reserved types](https://learn.microsoft.com/en-us/windows/msix/desktop/desktop-to-uwp-extensions#filetype-associations)
+- [`Microsoft.Windows.Storage.ApplicationData` spec](https://github.com/microsoft/WindowsAppSDK/blob/main/specs/applicationdata/ApplicationData.md)
+- [`font-parsing.md`](./font-parsing.md) — `.ttf` association appendix lines up with this doc.

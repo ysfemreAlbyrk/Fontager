@@ -1,9 +1,10 @@
 # Font metadata: what lives inside a font file
 
-> A reference for the tables Fontager parses (and a roadmap for the
-> tables it does not yet). Per-property documentation lives in
-> [`font-properties.md`](./font-properties.md); this file is organised
-> by **file structure**.
+I keep this doc next to the code when I’m touching [`FontParser`](../../Fontager.Core/Helpers/FontParser.cs) or [`Woff2Decoder`](../../Fontager.Core/Helpers/Woff2Decoder.cs): **which tables exist**, **what we read today**, and **what’s still wishlist**. If you want “what does *x-height* mean for the UI?” use [`font-properties.md`](./font-properties.md) instead — that one follows **properties**, not binary layout.
+
+The tone below is mostly spec-precise on purpose (offsets and tags matter); the *why* is: the viewer’s Info and Glyphs tabs should reflect what’s **actually in the file**, not what we guessed from the filename.
+
+---
 
 OpenType, TrueType, OpenType Collection (`.ttc`), and Web Open Font
 Format 2 (`.woff2`) all share the same logical layout: a **directory of
@@ -95,11 +96,13 @@ compression. The structure is:
 +-----------------------------------+
 ```
 
-Fontager re-implements the WOFF2 decoder in
-[`Fontager.Core/Helpers/Woff2Decoder.cs`](../../Fontager.Core/Helpers/Woff2Decoder.cs)
-because DirectWrite's XAML resolver does not transparently decode WOFF2
-files on disk — without the decoder, WOFF2 previews fall back to the
-system font. The decoder reproduces:
+Fontager ships an in-process WOFF2 → SFNT path in
+[`Fontager.Core/Helpers/Woff2Decoder.cs`](../../Fontager.Core/Helpers/Woff2Decoder.cs).
+Reason it exists: pointing XAML at a `.woff2` on disk doesn’t magically
+inflate tables for us — without SFNT bytes we’d guess names from the path
+and DirectWrite would shrug. So we decompress and reconstruct what the
+WOFF2 spec requires, then reuse the same parser as `.ttf`/`.otf`. The
+decoder covers:
 
 * Header + table-directory parsing (UIntBase128 lengths, the 63-entry
   standard tag table).

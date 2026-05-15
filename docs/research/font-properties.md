@@ -1,15 +1,8 @@
 # Font properties
 
-> Every property Fontager surfaces about a font, what it means, where it
-> comes from in the underlying font file, and how it influences rendering
-> in the viewer.
+This is the **human-facing index**: each field we show (or might show) on the Info tab, where it came from in the binary, and why a regular user might care — line metrics arguments, “why does my icon font family look wrong?”, that sort of thing.
 
-This document complements [`font-metadata.md`](./font-metadata.md). That
-file is organised by **font-file table** ("what does the `OS/2` table
-contain?"); this one is organised by **property of a font** ("what is
-*x-height* and why do we expose it?"). Use this doc when reading
-`Fontager.Core.Models.FontMetadata` and the right-hand Info tab in the
-viewer.
+[`font-metadata.md`](./font-metadata.md) is the companion organised by **tables and offsets**; open that when you’re hex-diving. Open **this** file when you’re staring at `Fontager.Core.Models.FontMetadata` and wondering whether a property is cosmetic or load-bearing.
 
 ---
 
