@@ -418,6 +418,41 @@
                                 <ColumnDefinition Width="52" />
                             </Grid.ColumnDefinitions>
                             <FontIcon Grid.Column="0"
+                                      Glyph="&#xE756;"
+                                      FontSize="20"
+                                      VerticalAlignment="Top"
+                                      Margin="0,2,0,0"
+                                      Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <StackPanel Grid.Column="1"
+                                        VerticalAlignment="Center"
+                                        Spacing="4"
+                                        Margin="0,0,12,0">
+                                <TextBlock Text="Run as administrator"
+                                           Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                <TextBlock x:Name="RunAsAdminDescription"
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           TextWrapping="WrapWholeWords" />
+                            </StackPanel>
+                            <ToggleSwitch x:Name="RunAsAdminToggle"
+                                          Grid.Column="2"
+                                          VerticalAlignment="Center"
+                                          HorizontalAlignment="Right"
+                                          MinWidth="0"
+                                          OnContent=""
+                                          OffContent=""
+                                          Toggled="RunAsAdminToggle_Toggled" />
+                        </Grid>
+                    </Border>
+
+                    <Border Style="{StaticResource SettingsCardBorderStyle}">
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="52" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon Grid.Column="0"
                                       Glyph="&#xE823;"
                                       FontSize="20"
                                       VerticalAlignment="Top"

@@ -81,6 +81,8 @@ public sealed partial class SettingsPage : Page
 
         // Install
         InstallModeCombo.SelectedIndex = _settings.InstallMode;
+        RunAsAdminToggle.IsOn = _settings.RunAsAdministrator;
+        SyncRunAsAdminDescription();
         ExitAfterInstallToggle.IsOn = _settings.ExitAppAfterSuccessfulInstall;
         if (InstallModeCombo.Items.Count > 1
             && InstallModeCombo.Items[1] is ComboBoxItem allUsersOption)
@@ -342,6 +344,56 @@ public sealed partial class SettingsPage : Page
     }
 
     // ── Install ───────────────────────────────────────────────────
+
+    private void SyncRunAsAdminDescription()
+    {
+        RunAsAdminDescription.Text = _isProcessElevated
+            ? "Fontager is running with administrator privileges. Turning this off restarts the app without elevation (drag-and-drop from File Explorer works better)."
+            : "Restarts Fontager with administrator privileges (Windows may show UAC). Useful when Fontager is the default app for font files or when installing fonts for all users.";
+    }
+
+    private async void RunAsAdminToggle_Toggled(object _, RoutedEventArgs _1)
+    {
+        if (!_initialized) return;
+
+        var wantAdmin = RunAsAdminToggle.IsOn;
+        var previous = _settings.RunAsAdministrator;
+        if (wantAdmin == previous)
+            return;
+
+        var xamlRoot = XamlRoot ?? (Content as FrameworkElement)?.XamlRoot;
+        if (xamlRoot is null)
+            return;
+
+        var message = wantAdmin
+            ? "Fontager will close and restart with administrator privileges. Windows may ask you to confirm (UAC)."
+            : "Fontager will close and restart without administrator privileges. Drag-and-drop from File Explorer will work more reliably.";
+
+        var dialog = new ContentDialog
+        {
+            Title = "Restart required",
+            Content = message,
+            PrimaryButtonText = "Restart now",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = xamlRoot,
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+        {
+            _initialized = false;
+            RunAsAdminToggle.IsOn = previous;
+            _initialized = true;
+            return;
+        }
+
+        _settings.RunAsAdministrator = wantAdmin;
+
+        if (wantAdmin == _isProcessElevated)
+            return;
+
+        ProcessElevationHelper.RestartWithElevation(wantAdmin);
+    }
 
     private void ExitAfterInstallToggle_Toggled(object _, RoutedEventArgs _1)
     {

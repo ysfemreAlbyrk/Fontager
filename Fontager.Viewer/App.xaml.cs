@@ -95,7 +95,14 @@ public partial class App : Application
 
     protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
     {
+        var settings = Services.GetRequiredService<SettingsService>();
+        if (ProcessElevationHelper.TryRelaunchElevatedOnStartup(settings))
+            return;
+
         _window = new MainWindow();
         _window.Activate();
     }
+
+    /// <summary>Called before exiting to relaunch with different elevation.</summary>
+    public void ExitOnElevationRestart() => Exit();
 }

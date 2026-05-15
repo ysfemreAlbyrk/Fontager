@@ -32,6 +32,7 @@ public sealed class SettingsService
     private const string ShowPreviewControlsKey = "ShowPreviewControls";
     private const string InstallModeKey = "InstallMode"; // 0 = current user, 1 = all users (system)
     private const string ExitAppAfterSuccessfulInstallKey = "ExitAppAfterSuccessfulInstall";
+    private const string RunAsAdministratorKey = "RunAsAdministrator";
 
     private const string DefaultPreviewTextValue = "The quick brown fox jumps over the lazy dog. 0123456789";
     private const double DefaultFontSizeValue = 32;
@@ -218,6 +219,15 @@ public sealed class SettingsService
     {
         get => GetValue<bool?>(ExitAppAfterSuccessfulInstallKey) ?? false;
         set => SetValue(ExitAppAfterSuccessfulInstallKey, value);
+    }
+
+    /// <summary>
+    /// When true, Fontager restarts with administrator privileges (UAC) on launch and when enabled in Settings.
+    /// </summary>
+    public bool RunAsAdministrator
+    {
+        get => GetValue<bool?>(RunAsAdministratorKey) ?? false;
+        set => SetValue(RunAsAdministratorKey, value);
     }
 
     /// <summary>

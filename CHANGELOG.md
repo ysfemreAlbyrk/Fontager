@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.2.0] - 2026-05-15
+
+Minor release: optional always-on administrator mode for default font-file handling and system-wide installs.
+
+### ➕ Added
+
+- **Settings → Run as administrator** — toggle to restart Fontager with administrator privileges. When turned **on** or **off**, a **Restart required** dialog explains the change and relaunches the app (UAC when elevating; `explorer.exe` broker when lowering so the new process is not elevated).
+- **`ProcessElevationHelper`** — centralizes elevation checks and restart with preserved command-line / file-activation arguments.
+- **Startup** — if the toggle is on and the process is not elevated, Fontager prompts for UAC and relaunches before showing the main window (cancelled UAC continues non-elevated).
+
+### 🔄 Changed
+
+- Install section copy reflects current elevation state when the settings page loads.
+
 ## [1.1.2] - 2026-05-15
 
 Patch release: reliable font preview after reinstall and across app restarts when installed under Program Files.

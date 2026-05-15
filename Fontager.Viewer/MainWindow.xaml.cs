@@ -89,7 +89,7 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        _isProcessElevated = IsRunningElevated();
+        _isProcessElevated = ProcessElevationHelper.IsRunningElevated();
 
         _viewModel = App.Services.GetRequiredService<FontViewerViewModel>();
         _settings = App.Services.GetRequiredService<SettingsService>();
@@ -284,26 +284,12 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void AllowDragDropFromLowerIntegrity()
     {
-        if (!IsRunningElevated()) return;
+        if (!ProcessElevationHelper.IsRunningElevated()) return;
 
         var hwnd = WindowNative.GetWindowHandle(this);
         ChangeWindowMessageFilterEx(hwnd, WM_DROPFILES, MSGFLT_ALLOW, IntPtr.Zero);
         ChangeWindowMessageFilterEx(hwnd, WM_COPYDATA, MSGFLT_ALLOW, IntPtr.Zero);
         ChangeWindowMessageFilterEx(hwnd, WM_COPYGLOBALDATA, MSGFLT_ALLOW, IntPtr.Zero);
-    }
-
-    private static bool IsRunningElevated()
-    {
-        try
-        {
-            using var identity = WindowsIdentity.GetCurrent();
-            var principal = new WindowsPrincipal(identity);
-            return principal.IsInRole(WindowsBuiltInRole.Administrator);
-        }
-        catch
-        {
-            return false;
-        }
     }
 
     /// <summary>
@@ -500,7 +486,7 @@ public sealed partial class MainWindow : Window
         var hwnd = WindowNative.GetWindowHandle(this);
         string[] extensions = [".ttf", ".otf", ".ttc", ".woff2"];
 
-        if (!IsRunningElevated())
+        if (!ProcessElevationHelper.IsRunningElevated())
         {
             try
             {
