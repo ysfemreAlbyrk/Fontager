@@ -110,4 +110,21 @@
     <HoursBetweenUpdateChecks>0</HoursBetweenUpdateChecks>
     <PackageCertificateThumbprint>4C259B69DD051A1E7CDB4C613C58B5366D62A9E5</PackageCertificateThumbprint>
   </PropertyGroup>
+
+  <!-- Unpackaged WinUI: publish omits compiled XAML (.xbf) and the app .pri (WindowsAppSDK #3451). -->
+  <Target Name="CopyWinUIResourcesToPublishDirectory" AfterTargets="Publish" Condition="'$(PublishDir)' != ''">
+    <PropertyGroup>
+      <_WinUIPublishSource>$([MSBuild]::NormalizeDirectory('$(PublishDir)', '..'))</_WinUIPublishSource>
+    </PropertyGroup>
+    <ItemGroup>
+      <_WinUIPublishResource Include="$(_WinUIPublishSource)**\*.xbf" />
+      <_WinUIPublishResource Include="$(_WinUIPublishSource)*.pri" />
+      <_WinUIPublishResource Include="$(_WinUIPublishSource)Assets\**\*" />
+    </ItemGroup>
+    <Copy
+      SourceFiles="@(_WinUIPublishResource)"
+      DestinationFiles="@(_WinUIPublishResource->'$(PublishDir)%(RecursiveDir)%(Filename)%(Extension)')"
+      SkipUnchangedFiles="true"
+      Condition="Exists('$(PublishDir)') and '@(_WinUIPublishResource)' != ''" />
+  </Target>
 </Project>
