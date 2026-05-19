@@ -14,6 +14,9 @@ Fontager replaces the outdated Windows `fontview.exe` with a fast, beautiful fon
 [🚀 Download](#building) • [📖 Features](#features) • [🗺️ Roadmap](roadmap.md) • [🛠️ Tech Stack](#tech-stack) • [🤝 Contributing](#contributing)
 
 </div>
+<p  align="center">
+  <img width="800" alt="img-1" src="https://github.com/ysfemreAlbyrk/Fontager/blob/2bc9b8373e40f728e509be7206471a90f894d8f9/Assets/Latest-1.gif" />
+</p>
 
 ## 📖 Features
 
