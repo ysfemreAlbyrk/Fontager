@@ -385,6 +385,21 @@ public sealed partial class MainWindow : Window
         await Windows.System.Launcher.LaunchUriAsync(new Uri("https://github.com/ysfemreAlbyrk/Fontager"));
     }
 
+    private async void EmptyStateWebsite_Click(object sender, RoutedEventArgs e)
+    {
+        await Windows.System.Launcher.LaunchUriAsync(new Uri("https://ysfemrealbyrk.github.io/Fontager/"));
+    }
+
+    private async void EmptyStateChangelog_Click(object sender, RoutedEventArgs e)
+    {
+        await Windows.System.Launcher.LaunchUriAsync(new Uri("https://github.com/ysfemreAlbyrk/Fontager/blob/main/CHANGELOG.md"));
+    }
+
+    private async void EmptyStateRoadmap_Click(object sender, RoutedEventArgs e)
+    {
+        await Windows.System.Launcher.LaunchUriAsync(new Uri("https://github.com/ysfemreAlbyrk/Fontager/blob/main/roadmap.md"));
+    }
+
     private void SetMinimumWindowSize(int minWidthDip, int minHeightDip)
     {
         var hwnd = WindowNative.GetWindowHandle(this);

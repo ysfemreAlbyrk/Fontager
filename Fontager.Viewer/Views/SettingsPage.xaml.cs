@@ -93,7 +93,7 @@ public sealed partial class SettingsPage : Page
         FontAssocToggle.IsEnabled = !fontAssocPackaged;
         FontAssocDescription.Text = fontAssocPackaged
             ? "Adds Fontager to the Windows 'Open with...' menu for .ttf, .otf, .ttc, and .woff2 files. Disabled while running packaged (MSIX) because the registry writes get virtualised into the package container."
-            : "Adds Fontager to the Windows 'Open with...' menu for .ttf, .otf, .ttc, and .woff2 files for the current user only. Does not change the default handler.";
+            : "Adds Fontager to the Windows 'Open with...' menu for .ttf, .otf, .ttc, and .woff2 files for the current user only. Does not change the default handler. (Note: If upgrading from an older version, toggle this setting off and back on to restore standard right-click 'Install' options.)";
 
         // About
         string version;

@@ -150,9 +150,23 @@
                                    Style="{StaticResource CaptionTextBlockStyle}"
                                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                                    HorizontalAlignment="Center" />
-                        <HyperlinkButton x:Name="EmptyStateGitHub" Content="GitHub"
-                                         Click="EmptyStateGitHub_Click"
-                                         HorizontalAlignment="Center" />
+                        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" Margin="0,4,0,0">
+                            <HyperlinkButton x:Name="EmptyStateGitHub" Content="GitHub"
+                                             Click="EmptyStateGitHub_Click"
+                                             Padding="0" />
+                            <TextBlock Text="•" Foreground="{ThemeResource TextFillColorTertiaryBrush}" VerticalAlignment="Center" />
+                            <HyperlinkButton x:Name="EmptyStateWebsite" Content="Website"
+                                             Click="EmptyStateWebsite_Click"
+                                             Padding="0" />
+                            <TextBlock Text="•" Foreground="{ThemeResource TextFillColorTertiaryBrush}" VerticalAlignment="Center" />
+                            <HyperlinkButton x:Name="EmptyStateChangelog" Content="Changelog"
+                                             Click="EmptyStateChangelog_Click"
+                                             Padding="0" />
+                            <TextBlock Text="•" Foreground="{ThemeResource TextFillColorTertiaryBrush}" VerticalAlignment="Center" />
+                            <HyperlinkButton x:Name="EmptyStateRoadmap" Content="Roadmap"
+                                             Click="EmptyStateRoadmap_Click"
+                                             Padding="0" />
+                        </StackPanel>
                     </StackPanel>
                 </StackPanel>
             </Grid>

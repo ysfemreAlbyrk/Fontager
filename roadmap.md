@@ -35,7 +35,7 @@ Shared models, parsing, and font services used by Viewer and Manager.
 - [ ] **Move glyph browse model to Core** — block sidebar, category chips, search/debounce inputs, filtered glyph lists (UI binds; logic not forked per app)
 - [ ] **Consolidate font load + cache** — one path from file/URI → loaded family + temp cache used by preview and Manager library thumbnails
 - [ ] **Shared settings schema** — keys, defaults, and validation in Core; Viewer/Manager only choose storage location and UI
-- [ ] **Shared file-association helpers** — ProgID registration and cleanup APIs in Core (Settings toggles stay in each app)
+- [ ] **Shared file-association helpers** — ProgID registration and cleanup APIs in Core (Settings toggles stay in each app); includes registering standard shell verbs (e.g. "Install") to restore context menus under our custom ProgID
 - [ ] **Shared diagnostics** — logging, error codes, and parser/install failure messages defined once in Core
 
 ---
@@ -71,6 +71,8 @@ Lightweight font previewer; default handler for font files on Windows.
 - [x] **Glyph performance** — virtualized grid, debounced search/filter, precomputed block/category on `GlyphItem`
 - [ ] **Dark / light preview backgrounds** — toggle preview surface for contrast checks
 - [ ] **Recent files** — quick reopen list on the empty state
+- [x] **Restore context menu "Install" options** — prevent standard Windows right-click "Install" and "Install for all users" from disappearing when Fontager is the default handler
+- [x] **Batch font installation** — support installing multiple selected fonts at once from Explorer
 - [ ] **Internationalization (i18n)** — localized UI strings
 - [ ] **Logging** — structured, opt-in diagnostics (install, load, parser failures)
 - [ ] **Adopt Core font & glyph rendering** — drop Viewer-local render helpers once Core preview/glyph APIs ship

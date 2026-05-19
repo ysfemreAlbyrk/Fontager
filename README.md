@@ -7,11 +7,11 @@
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://www.microsoft.com/windows)
 [![WinUI](https://img.shields.io/badge/UI-WinUI%203-0078D4.svg)](https://learn.microsoft.com/en-us/windows/apps/winui/)
 
-*A modern, powerful font manager and viewer application for Windows, built with WinUI 3*
+*A modern, powerful font manager and viewer application for Windows, built with WinUI 3. Official Website: [ysfemrealbyrk.github.io/Fontager](https://ysfemrealbyrk.github.io/Fontager/)*
 
 Fontager replaces the outdated Windows `fontview.exe` with a fast, beautiful font previewer and aims to provide a full-featured font management suite for designers and developers.
 
-[🚀 Download](#building) • [📖 Features](#features) • [🗺️ Roadmap](roadmap.md) • [🛠️ Tech Stack](#tech-stack) • [🤝 Contributing](#contributing)
+[🌐 Website](https://ysfemrealbyrk.github.io/Fontager/) • [🚀 Download](#building) • [📖 Features](#features) • [🗺️ Roadmap](roadmap.md) • [🛠️ Tech Stack](#tech-stack) • [🤝 Contributing](#contributing)
 
 </div>
 <p  align="center">
@@ -164,6 +164,6 @@ Contributions are welcome! Please open an issue to discuss proposed changes befo
 
 **⭐ Star this repository if it helped you!**
 
-Made with ❤️ by [Yusuf Emre Albayrak](https://github.com/ysfemreAlbyrk)
+Made with ❤️ by [Yusuf Emre Albayrak](https://github.com/ysfemreAlbyrk) • [Official Website](https://ysfemrealbyrk.github.io/Fontager/)
 
 </div>

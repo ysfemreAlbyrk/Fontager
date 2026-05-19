@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.2.1] - 2026-05-20
+
+Patch release: Restores standard Windows context menu right-click "Install" options when Fontager is the default handler, and introduces official links across the UI.
+
+### ➕ Added
+- **Standard Context Menu 'Install' Verbs Restored**: Registers the Windows `InstallFont` context menu shell extension under Fontager's custom ProgID (`Software\Classes\Fontager.Viewer.font\shellex\ContextMenuHandlers\InstallFont`), successfully restoring the localized "Install" and "Install for all users" options for `.ttf`, `.otf`, and `.ttc` files. Standard Windows right-click batch installation of multiple selected fonts is now fully supported.
+
+### 🔄 Changed
+- **Redesigned Welcome Screen Links**: Expanded the Welcome / Empty state screen to display a clean, structured set of official resource links: GitHub, Website, Changelog, and Roadmap.
+
 ## [1.2.0] - 2026-05-15
 
 Minor release: optional always-on administrator mode for default font-file handling and system-wide installs.

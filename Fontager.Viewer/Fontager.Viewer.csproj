@@ -51,9 +51,9 @@
     <!-- Assembly version is what Package.Current.Id.Version used to provide.
          Bump in lockstep with Package.appxmanifest's Version attribute so the
          in-app "About" version stays accurate regardless of distribution mode. -->
-    <Version>1.2.0</Version>
-    <AssemblyVersion>1.2.0.0</AssemblyVersion>
-    <FileVersion>1.2.0.0</FileVersion>
+    <Version>1.2.1</Version>
+    <AssemblyVersion>1.2.1.0</AssemblyVersion>
+    <FileVersion>1.2.1.0</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>

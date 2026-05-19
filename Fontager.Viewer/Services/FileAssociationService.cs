@@ -136,6 +136,10 @@ internal static class FileAssociationService
             iconKey?.SetValue(string.Empty, iconRef);
             using var cmdKey = progIdKey?.CreateSubKey(@"shell\open\command", true);
             cmdKey?.SetValue(string.Empty, openCommand);
+
+            // Restore standard Windows right-click "Install" and "Install for all users" (InstallFont) context menu options
+            using var shellexKey = progIdKey?.CreateSubKey(@"shellex\ContextMenuHandlers\InstallFont", true);
+            shellexKey?.SetValue(string.Empty, "{1a184871-359e-4f67-aad9-5b9905d62232}");
         }
 
         // 2. Application registration: HKCU\Software\Classes\Applications\<exe name>

@@ -628,12 +628,20 @@
                                    Text="MIT License · Made by Yusuf Emre Albayrak ©2026" />
 
                         <StackPanel Spacing="4">
+                            <HyperlinkButton Content="Official Website"
+                                             NavigateUri="https://ysfemrealbyrk.github.io/Fontager/"
+                                             Padding="0"
+                                             HorizontalAlignment="Left" />
                             <HyperlinkButton Content="Repository on GitHub (ysfemreAlbyrk/Fontager)"
                                              NavigateUri="https://github.com/ysfemreAlbyrk/Fontager"
                                              Padding="0"
                                              HorizontalAlignment="Left" />
                             <HyperlinkButton Content="Report an issue"
                                              NavigateUri="https://github.com/ysfemreAlbyrk/Fontager/issues"
+                                             Padding="0"
+                                             HorizontalAlignment="Left" />
+                            <HyperlinkButton Content="Changelog"
+                                             NavigateUri="https://github.com/ysfemreAlbyrk/Fontager/blob/main/CHANGELOG.md"
                                              Padding="0"
                                              HorizontalAlignment="Left" />
                             <HyperlinkButton Content="Releases &amp; downloads"
