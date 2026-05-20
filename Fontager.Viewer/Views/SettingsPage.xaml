@@ -301,6 +301,42 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon Grid.Column="0"
+                                      Glyph="&#xE8E9;"
+                                      FontSize="20"
+                                      VerticalAlignment="Top"
+                                      Margin="0,2,0,0"
+                                      Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <StackPanel Grid.Column="1"
+                                        VerticalAlignment="Center"
+                                        Spacing="4"
+                                        Margin="0,0,12,0">
+                                <TextBlock x:Name="QuickViewFontSizeSliderHeaderText"
+                                           Style="{StaticResource BodyStrongTextBlockStyle}"
+                                           Text="Quick view font size" />
+                                <TextBlock Text="Font size for the characters in the Quick view overview panel."
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           TextWrapping="WrapWholeWords" />
+                            </StackPanel>
+                            <Slider x:Name="QuickViewFontSizeSlider"
+                                    Grid.Column="2"
+                                    VerticalAlignment="Center"
+                                    Width="220"
+                                    Minimum="12"
+                                    Maximum="48"
+                                    StepFrequency="1"
+                                    ValueChanged="QuickViewFontSizeSlider_ValueChanged" />
+                        </Grid>
+                    </Border>
+
+                    <Border Style="{StaticResource SettingsCardBorderStyle}">
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="52" />
                             </Grid.ColumnDefinitions>
                             <FontIcon Grid.Column="0"

@@ -8,6 +8,7 @@ Patch release: DPI-aware default window sizing and window layout persistence (si
 - **DPI-Aware Default Sizing**: Defined the default initial window size in DIPs (`850x600`), which dynamically scales according to the active display's DPI scale factor (e.g. `1275x900` physical pixels on a 150% scaled 2K screen). This resolves the issue where the app's window appeared too large on `1366x768` (100% scaled) displays.
 - **Window Layout & State Persistence**: The application now saves its window size, screen coordinates, and maximized/windowed state to `%LocalAppData%\Fontager\settings.json` on exit, restoring them perfectly on next launch.
 - **Safe Off-Screen Layout Recovery**: Added a robust screen-intersection safety check using WinUI 3's `DisplayArea` API. If coordinates are found to be off-screen (e.g. if a secondary monitor was disconnected), the window safely centers on the primary display.
+- **Adjustable Quick View Font Size**: Added a new slider under Settings -> Display to configure the character preview font size for the Quick View panel (ranging from `12px` to `48px`). The main window's Quick View panel now updates instantly in real-time when the setting is changed.
 
 ## [1.2.1] - 2026-05-20
 

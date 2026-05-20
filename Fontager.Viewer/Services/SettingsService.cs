@@ -39,6 +39,8 @@ public sealed class SettingsService
     private const string WindowXKey = "WindowX";
     private const string WindowYKey = "WindowY";
     private const string WindowMaximizedKey = "WindowMaximized";
+    private const string QuickViewFontSizeKey = "QuickViewFontSize";
+    private const double DefaultQuickViewFontSizeValue = 20;
 
     private const string DefaultPreviewTextValue = "The quick brown fox jumps over the lazy dog. 0123456789";
     private const double DefaultFontSizeValue = 32;
@@ -274,6 +276,16 @@ public sealed class SettingsService
     {
         get => GetValue<bool?>(WindowMaximizedKey) ?? false;
         set => SetValue(WindowMaximizedKey, value);
+    }
+
+    public double QuickViewFontSize
+    {
+        get
+        {
+            var v = GetValue<double?>(QuickViewFontSizeKey);
+            return v ?? DefaultQuickViewFontSizeValue;
+        }
+        set => SetValue(QuickViewFontSizeKey, value);
     }
 
     /// <summary>

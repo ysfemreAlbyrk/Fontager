@@ -76,6 +76,8 @@ public sealed partial class SettingsPage : Page
 
         // Display
         QuickViewToggle.IsOn = _settings.ShowQuickView;
+        QuickViewFontSizeSlider.Value = _settings.QuickViewFontSize;
+        QuickViewFontSizeSliderHeaderText.Text = $"Quick view font size ({(int)_settings.QuickViewFontSize}px)";
         WaterfallToggle.IsOn = _settings.ShowWaterfall;
         WaterfallSizesBox.Text = _settings.WaterfallSizesRaw;
 
@@ -323,6 +325,13 @@ public sealed partial class SettingsPage : Page
     {
         if (!_initialized) return;
         _settings.ShowQuickView = QuickViewToggle.IsOn;
+    }
+
+    private void QuickViewFontSizeSlider_ValueChanged(object _, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
+    {
+        QuickViewFontSizeSliderHeaderText.Text = $"Quick view font size ({(int)e.NewValue}px)";
+        if (!_initialized) return;
+        _settings.QuickViewFontSize = e.NewValue;
     }
 
     private void WaterfallToggle_Toggled(object _, RoutedEventArgs _1)

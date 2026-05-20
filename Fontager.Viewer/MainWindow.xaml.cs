@@ -162,6 +162,7 @@ public sealed partial class MainWindow : Window
                 WaterfallSection.Visibility = _settings.ShowWaterfall
                     ? Visibility.Visible : Visibility.Collapsed;
                 BuildWaterfallView();
+                BuildQuickView();
             }
         }
         catch
@@ -972,7 +973,7 @@ public sealed partial class MainWindow : Window
             var tb = new TextBlock
             {
                 Text = line,
-                FontSize = 20,
+                FontSize = _settings.QuickViewFontSize,
                 TextWrapping = TextWrapping.WrapWholeWords,
                 IsTextSelectionEnabled = true,
                 Margin = new Thickness(0, 1, 0, 1)
