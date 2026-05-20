@@ -34,6 +34,11 @@ public sealed class SettingsService
     private const string ExitAppAfterSuccessfulInstallKey = "ExitAppAfterSuccessfulInstall";
     private const string RunAsAdministratorKey = "RunAsAdministrator";
     private const string ElevateForAllUsersInstallKey = "ElevateForAllUsersInstall";
+    private const string WindowWidthKey = "WindowWidth";
+    private const string WindowHeightKey = "WindowHeight";
+    private const string WindowXKey = "WindowX";
+    private const string WindowYKey = "WindowY";
+    private const string WindowMaximizedKey = "WindowMaximized";
 
     private const string DefaultPreviewTextValue = "The quick brown fox jumps over the lazy dog. 0123456789";
     private const double DefaultFontSizeValue = 32;
@@ -239,6 +244,36 @@ public sealed class SettingsService
     {
         get => GetValue<bool?>(ElevateForAllUsersInstallKey) ?? true;
         set => SetValue(ElevateForAllUsersInstallKey, value);
+    }
+
+    public int? WindowWidth
+    {
+        get => GetValue<int?>(WindowWidthKey);
+        set => SetValue(WindowWidthKey, value);
+    }
+
+    public int? WindowHeight
+    {
+        get => GetValue<int?>(WindowHeightKey);
+        set => SetValue(WindowHeightKey, value);
+    }
+
+    public int? WindowX
+    {
+        get => GetValue<int?>(WindowXKey);
+        set => SetValue(WindowXKey, value);
+    }
+
+    public int? WindowY
+    {
+        get => GetValue<int?>(WindowYKey);
+        set => SetValue(WindowYKey, value);
+    }
+
+    public bool WindowMaximized
+    {
+        get => GetValue<bool?>(WindowMaximizedKey) ?? false;
+        set => SetValue(WindowMaximizedKey, value);
     }
 
     /// <summary>

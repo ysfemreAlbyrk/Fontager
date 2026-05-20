@@ -112,6 +112,7 @@ public sealed partial class MainWindow : Window
 
         // Auto-show/hide Quick View based on window size
         this.SizeChanged += OnWindowSizeChanged;
+        this.Closed += OnWindowClosed;
         this.SizeChanged += (_, _) => ScheduleTitleBarPassthroughUpdate();
 
         AppTitleBar.Loaded += (_, _) => ScheduleTitleBarPassthroughUpdate();
@@ -194,9 +195,85 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private void OnWindowClosed(object sender, WindowEventArgs args)
+    {
+        try
+        {
+            if (AppWindow.Presenter is OverlappedPresenter overlappedPresenter)
+            {
+                bool isMaximized = overlappedPresenter.State == OverlappedPresenterState.Maximized;
+                _settings.WindowMaximized = isMaximized;
+
+                // Only save width, height, and coordinates if in restored windowed state
+                if (overlappedPresenter.State == OverlappedPresenterState.Restored)
+                {
+                    _settings.WindowWidth = AppWindow.Size.Width;
+                    _settings.WindowHeight = AppWindow.Size.Height;
+                    _settings.WindowX = AppWindow.Position.X;
+                    _settings.WindowY = AppWindow.Position.Y;
+                }
+            }
+        }
+        catch
+        {
+            // Best effort
+        }
+    }
+
+    private bool IsPositionOnScreen(int x, int y, int width, int height)
+    {
+        try
+        {
+            var displayAreas = DisplayArea.FindAll();
+            foreach (var area in displayAreas)
+            {
+                var bounds = area.OuterBounds;
+                // Check if there is intersection
+                if (x < bounds.X + bounds.Width &&
+                    x + width > bounds.X &&
+                    y < bounds.Y + bounds.Height &&
+                    y + height > bounds.Y)
+                {
+                    return true;
+                }
+            }
+        }
+        catch
+        {
+            // Fallback to true if API fails
+            return true;
+        }
+        return false;
+    }
+
     private void ConfigureWindow()
     {
-        AppWindow.Resize(new Windows.Graphics.SizeInt32(1300, 750));
+        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        var dpi = GetDpiForWindow(hwnd);
+        var scale = dpi / 96.0;
+
+        int width = _settings.WindowWidth ?? (int)(850 * scale);
+        int height = _settings.WindowHeight ?? (int)(600 * scale);
+
+        if (_settings.WindowX.HasValue && _settings.WindowY.HasValue)
+        {
+            var x = _settings.WindowX.Value;
+            var y = _settings.WindowY.Value;
+
+            if (IsPositionOnScreen(x, y, width, height))
+            {
+                AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(x, y, width, height));
+            }
+            else
+            {
+                AppWindow.Resize(new Windows.Graphics.SizeInt32(width, height));
+            }
+        }
+        else
+        {
+            AppWindow.Resize(new Windows.Graphics.SizeInt32(width, height));
+        }
+
         AppWindow.Title = "Fontager";
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
@@ -205,6 +282,14 @@ public sealed partial class MainWindow : Window
 
         ApplyWindowIcon();
         AllowDragDropFromLowerIntegrity();
+
+        if (_settings.WindowMaximized)
+        {
+            if (AppWindow.Presenter is OverlappedPresenter overlappedPresenter)
+            {
+                overlappedPresenter.Maximize();
+            }
+        }
     }
 
     /// <summary>
