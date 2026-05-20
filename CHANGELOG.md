@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.2.2] - 2026-05-21
+
+Patch release: DPI-aware default window sizing and window layout persistence (size, coordinates, and maximized/windowed state).
+
+### ➕ Added
+- **DPI-Aware Default Sizing**: Defined the default initial window size in DIPs (`850x600`), which dynamically scales according to the active display's DPI scale factor (e.g. `1275x900` physical pixels on a 150% scaled 2K screen). This resolves the issue where the app's window appeared too large on `1366x768` (100% scaled) displays.
+- **Window Layout & State Persistence**: The application now saves its window size, screen coordinates, and maximized/windowed state to `%LocalAppData%\Fontager\settings.json` on exit, restoring them perfectly on next launch.
+- **Safe Off-Screen Layout Recovery**: Added a robust screen-intersection safety check using WinUI 3's `DisplayArea` API. If coordinates are found to be off-screen (e.g. if a secondary monitor was disconnected), the window safely centers on the primary display.
+
 ## [1.2.1] - 2026-05-20
 
 Patch release: Restores standard Windows context menu right-click "Install" options when Fontager is the default handler, and introduces official links across the UI.
