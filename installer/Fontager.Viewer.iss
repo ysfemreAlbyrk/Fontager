@@ -2,10 +2,10 @@
 ; 1) Visual Studio: Release + x64 → Publish (FolderProfile) → win-x64\publish
 ; 2) Install Inno Setup 6: https://jrsoftware.org/isinfo.php
 ; 3) Open this file in Inno Setup Compiler → Build → Compile
-; Output: installer\output\Fontager.Viewer-1.2.1-win-x64-setup.exe
+; Output: installer\output\Fontager.Viewer-1.2.2-win-x64-setup.exe
 
 #define MyAppName "Fontager Viewer"
-#define MyAppVersion "1.2.1"
+#define MyAppVersion "1.2.2"
 #define MyAppPublisher "Fontager"
 #define MyAppURL "https://github.com/ysfemreAlbyrk/Fontager"
 #define MyAppExeName "Fontager Viewer.exe"
