@@ -39,9 +39,24 @@ A lightweight font previewer that can be set as the default handler for font fil
 - 🎨 **Modern UI** — Mica/Acrylic backdrop, Fluent Design, custom title bar
 - ⚙️ **Configurable** — theme, backdrop, preview defaults, and display options
 
-<img width="1920" height="1080" alt="img-1" src="https://github.com/user-attachments/assets/62713c1d-c14f-4a51-a8f1-a7b231b8f95c" />
-<img width="1920" height="1080" alt="img-2" src="https://github.com/user-attachments/assets/dd25198e-7339-4e79-a679-adad2ab8d116" />
-<img width="1920" height="1080" alt="img-3" src="https://github.com/user-attachments/assets/217856aa-6c5b-448b-ba8d-ae7a273e8c3c" />
+<table>
+  <tr>
+    <td> 
+      <img width="1920" height="1080" alt="img-1" src="https://github.com/user-attachments/assets/62713c1d-c14f-4a51-a8f1-a7b231b8f95c" />
+    </td>
+    <td>
+      <img width="1920" height="1080" alt="img-2" src="https://github.com/user-attachments/assets/dd25198e-7339-4e79-a679-adad2ab8d116" />
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <img width="1920" height="1080" alt="img-3" src="https://github.com/user-attachments/assets/217856aa-6c5b-448b-ba8d-ae7a273e8c3c" />
+    </td>
+    <td>
+    
+    </td>
+  </tr>
+</table>
 
 ### Fontager Manager *(planned)*
 
