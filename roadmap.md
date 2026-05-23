@@ -63,14 +63,14 @@ Shared models, parsing, and font services used by Viewer and Manager.
 Lightweight font previewer; default handler for font files on Windows.
 
 - [x] **Instant preview** — `.ttf`, `.otf`, `.ttc`, `.woff2`
-- [x] **Editable preview text** and adjustable size
+- [x] **Editable preview text** — and adjustable size
 - [x] **Quick View** — character set overview in the header
 - [x] **Waterfall view** — multiple sizes at once
 - [x] **Glyph grid** — Unicode blocks, category filters, hex/decimal search, detail card
 - [x] **Copy glyph to clipboard** — from the glyph detail UI
 - [x] **Font metadata panel** — family, designer, license, version, and extended fields
 - [x] **Multi-font navigation** — fonts inside `.ttc` collections
-- [x] **Drag & drop** and file activation (double-click / open with)
+- [x] **Drag & drop** — and file activation (double-click / open with)
 - [x] **Font installation** — current user or all users; session refresh (`AddFontResource`, `WM_FONTCHANGE`)
 - [x] **Settings → Fonts uninstall** — remove fonts installed via Fontager (unpackaged path)
 - [x] **Settings page** — full in-app `SettingsPage` (replaces modal dialog); JSON settings at `%LocalAppData%\Fontager\settings.json`
