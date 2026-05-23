@@ -27,168 +27,41 @@
         content="Fontager replaces the outdated Windows fontview.exe with a fast, beautiful font previewer and full-featured font management suite.">
     <meta property="twitter:image" content="https://ysfemrealbyrk.github.io/Fontager/Assets/banner.png">
 
-    <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Outfit:wght@400;600;800&display=swap"
-        rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
     <style>
-        :root {
-            --bg-color: #050505;
-            --surface: #111111;
-            --surface-glass: rgba(15, 15, 15, 0.7);
-            --border-glass: rgba(255, 255, 255, 0.08);
-            --primary: #63d0f1;
-            --primary-hover: #46b8e5;
-            --text-main: #ffffff;
-            --text-muted: #a1a1aa;
-            --accent: #44a9ff;
-            --glow: rgba(55, 166, 255, 0.4);
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-main);
-            line-height: 1.6;
-            overflow-x: hidden;
-            -webkit-font-smoothing: antialiased;
-        }
-
-        h1,
-        h2,
-        h3,
-        h4 {
-            font-family: 'Outfit', sans-serif;
-            font-weight: 800;
-            letter-spacing: -0.02em;
-        }
-
-        a {
-            text-decoration: none;
-            color: inherit;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 0 2rem;
-        }
-
-        /* Floating Navbar */
-        .nav-wrapper {
-            position: fixed;
-            top: 20px;
-            left: 0;
-            width: 100%;
-            z-index: 100;
-            display: flex;
-            justify-content: center;
-            pointer-events: none;
-        }
-
-        nav {
-            pointer-events: auto;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            background: var(--surface-glass);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid var(--border-glass);
-            padding: 0.75rem 1.5rem;
-            border-radius: 100px;
-            width: 90%;
-            max-width: 1000px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-            transition: all 0.3s ease;
-        }
-
-        .logo {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            font-size: 1.25rem;
-            font-weight: 800;
-            font-family: 'Outfit', sans-serif;
-        }
-
-        .logo img {
-            height: 32px;
-        }
-
-        .nav-links {
-            display: flex;
-            gap: 2rem;
-            align-items: center;
-        }
-
-        .nav-links a {
-            font-size: 0.9rem;
-            font-weight: 500;
-            color: var(--text-muted);
-            transition: color 0.2s, transform 0.2s;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .nav-links a:hover {
-            color: var(--text-main);
-        }
-
-        .nav-links a.active {
-            color: var(--primary);
-        }
-
-        .btn {
-            background: #fff;
-            color: #000;
-            padding: 0.6rem 1.25rem;
-            border-radius: 8px;
-            font-weight: 500;
-            font-size: 0.95rem;
-            transition: all 0.2s;
-            border: 1px solid transparent;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .btn:hover {
-            background: #e4e4e7;
-        }
-
-        .btn-outline {
-            background: rgba(255, 255, 255, 0.05);
-            color: #fff;
-            border: 1px solid rgba(255, 255, 255, 0.15);
-        }
-
-        .btn-outline:hover {
-            background: rgba(255, 255, 255, 0.1);
-        }
-
-        /* Hero */
+        /* Hero Styling with Premium Tech Grid Pattern */
         .hero {
             padding: 12rem 0 6rem;
             position: relative;
             text-align: center;
         }
 
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image:
+                linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+            background-size: 50px 50px;
+            background-position: center;
+            mask-image: radial-gradient(circle at center, black 40%, transparent 80%);
+            -webkit-mask-image: radial-gradient(circle at center, black 40%, transparent 80%);
+            pointer-events: none;
+            z-index: -1;
+        }
+
         .hero-container {
-            max-width: 900px;
+            max-width: 1200px;
             margin: 0 auto;
             padding: 0 2rem;
         }
 
         .hero h1 {
-            font-size: 5rem;
+            font-size: 3.5rem;
             line-height: 1.1;
             margin-bottom: 1.5rem;
             color: #fff;
@@ -211,30 +84,48 @@
         .hero-visual {
             position: relative;
             margin-top: 5rem;
+            border-radius: 20px;
+            padding: 8px;
+            background: linear-gradient(135deg, rgba(99, 213, 241, 0.15) 0%, rgba(255, 255, 255, 0.02) 50%, rgba(99, 213, 241, 0.15) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 50px 100px -30px rgba(0, 0, 0, 0.95), 0 0 50px rgba(99, 213, 241, 0.04);
+            transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .hero-visual:hover {
+            transform: scale(1.01) translateY(-4px);
+            border-color: rgba(99, 213, 241, 0.25);
+            box-shadow: 0 60px 120px -30px rgba(0, 0, 0, 0.98), 0 0 60px rgba(99, 213, 241, 0.08);
         }
 
         .hero-visual video {
             width: 100%;
             display: block;
-            border-radius: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: 0 40px 80px rgba(0, 0, 0, 0.8);
-            background: #111;
+            border-radius: 14px;
+            border: 1px solid rgba(0, 0, 0, 0.8);
+            background: #000;
         }
 
-        /* Subtitle Badge */
         .hero-badge {
             display: inline-block;
             padding: 0.5rem 1rem;
             border-radius: 100px;
-            background: rgba(99, 213, 241, 0.1);
-            border: 1px solid rgba(99, 213, 241, 0.2);
+            background: rgba(99, 213, 241, 0.08);
+            border: 1px solid rgba(99, 213, 241, 0.18);
             color: #81c8f8;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             font-weight: 600;
             margin-bottom: 2rem;
             letter-spacing: 0.05em;
             text-transform: uppercase;
+            box-shadow: 0 4px 12px rgba(99, 213, 241, 0.05);
+        }
+
+        .gradient-text {
+            background: linear-gradient(135deg, #63d0f1 0%, #37a6ff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: inline-block;
         }
 
         /* Products Showcase */
@@ -268,19 +159,20 @@
             margin-bottom: 5rem;
         }
 
-        .section-title img {
-            margin: 0 auto;
-            display: block;
-            width: 100%;
-            max-width: 800px;
-            border-radius: 20px;
+        .section-title h2 {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .section-title p {
+            color: var(--text-muted);
+            font-size: 1.15rem;
         }
 
         /* Features */
         .features {
             padding: 8rem 0;
             position: relative;
-            /* background: rgba(255, 255, 255, 0.01); */
             border-top: 1px solid var(--border-glass);
         }
 
@@ -302,7 +194,7 @@
         }
 
         .feature-card:hover {
-            transform: translateY(-10px);
+            transform: translateY(-6px);
             background: rgba(25, 28, 31, 0.6);
             border-color: rgba(99, 213, 241, 0.4);
             box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), inset 0 0 20px rgba(99, 213, 241, 0.05);
@@ -426,6 +318,11 @@
             text-align: center;
         }
 
+        .tech-stack h2 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+
         .badges {
             display: flex;
             flex-wrap: wrap;
@@ -451,21 +348,21 @@
             border-color: rgba(255, 255, 255, 0.2);
         }
 
-        /* CTA Section */
+        /* CTA Section & Download Center */
         .cta-section {
-            padding: 8rem 0;
+            padding: 1rem 0;
             text-align: center;
             position: relative;
         }
 
         .cta-box {
-            background: linear-gradient(180deg, rgba(20, 20, 20, 0.8) 0%, rgba(10, 10, 10, 0.9) 100%);
+            background: linear-gradient(180deg, rgba(12, 12, 14, 0.8) 0%, rgba(5, 5, 5, 0.95) 100%);
             border: 1px solid var(--border-glass);
             border-radius: 32px;
-            padding: 6rem 2rem;
+            padding: 3rem 1rem;
             position: relative;
             overflow: hidden;
-            box-shadow: 0 40px 80px rgba(0, 0, 0, 0.6), inset 0 2px 20px rgba(255, 255, 255, 0.05);
+            box-shadow: inset 0 2px 20px rgba(255, 255, 255, 0.03);
             backdrop-filter: blur(10px);
         }
 
@@ -476,102 +373,133 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: radial-gradient(circle at 50% 0%, rgba(99, 213, 241, 0.1), transparent 70%);
+            background: radial-gradient(circle at 50% 0%, rgba(99, 208, 241, 0.1), transparent 70%);
             pointer-events: none;
         }
 
         .cta-box h2 {
             font-size: 3.5rem;
-            margin-bottom: 1.5rem;
+            margin-bottom: 1rem;
             color: #fff;
             position: relative;
             z-index: 2;
+            letter-spacing: -0.03em;
         }
 
         .cta-box p {
             color: var(--text-muted);
-            font-size: 1.25rem;
+            font-size: 1.2rem;
             max-width: 600px;
             margin: 0 auto 3rem;
             position: relative;
             z-index: 2;
         }
 
-        .cta-actions {
+        .download-container {
             display: flex;
-            gap: 1rem;
+            align-items: stretch;
             justify-content: center;
-            flex-wrap: wrap;
+            gap: 4rem;
+            max-width: 900px;
+            margin: 3.5rem auto 1rem;
+            text-align: left;
             position: relative;
             z-index: 2;
         }
 
-        /* Footer */
-        footer {
-            padding: 5rem 0 3rem;
-            text-align: center;
-            color: var(--text-muted);
-            border-top: 1px solid var(--border-glass);
-            background: var(--bg-color);
-        }
-
-        .footer-logo {
+        .download-item {
+            flex: 1;
             display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.75rem;
-            margin-bottom: 1.5rem;
-            font-family: 'Outfit', sans-serif;
+            flex-direction: column;
+            align-items: flex-start;
+            justify-content: space-between;
+            padding: 1rem 0;
+        }
+
+        .download-divider {
+            width: 1px;
+            background: linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.08), transparent);
+        }
+
+        .status-badge {
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 1.25rem;
+            padding: 0.2rem 0.6rem;
+            border-radius: 100px;
+            display: inline-block;
+        }
+
+        .status-badge.available {
+            background: rgba(99, 208, 241, 0.08);
+            color: #81c8f8;
+            border: 1px solid rgba(99, 208, 241, 0.15);
+        }
+
+        .status-badge.roadmap {
+            background: rgba(168, 85, 247, 0.08);
+            color: #d8b4fe;
+            border: 1px solid rgba(168, 85, 247, 0.15);
+        }
+
+        .download-item h3 {
+            font-size: 1.6rem;
             font-weight: 800;
-            font-size: 1.5rem;
-            color: var(--text-main);
+            color: #fff;
+            margin-bottom: 0.75rem;
+            letter-spacing: -0.02em;
         }
 
-        .footer-logo img {
-            height: 28px;
+        .download-item p {
+            font-size: 0.95rem;
+            color: var(--text-muted);
+            line-height: 1.5;
+            margin-bottom: 2rem !important;
+            min-height: 48px;
         }
 
-        .copyright {
-            font-size: 0.9rem;
-            margin-top: 3rem;
-            opacity: 0.5;
+        .download-item .btn {
+            padding: 0.6rem 1.5rem;
+            border-radius: 100px;
         }
 
-        /* Animations */
-        @keyframes fadeUp {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
+        @media (max-width: 768px) {
+            .download-container {
+                flex-direction: column;
+                gap: 3rem;
             }
 
-            to {
-                opacity: 1;
-                transform: translateY(0);
+            .download-divider {
+                width: 100%;
+                height: 1px;
+                background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.08), transparent);
+            }
+
+            .download-item p {
+                min-height: auto;
             }
         }
 
-        .animate-up {
-            animation: fadeUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-            opacity: 0;
+        .download-meta {
+            display: flex;
+            justify-content: center;
+            gap: 1.5rem;
+            align-items: center;
+            flex-wrap: wrap;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            opacity: 0.7;
+            position: relative;
+            z-index: 2;
         }
 
-        .delay-1 {
-            animation-delay: 0.1s;
-        }
-
-        .delay-2 {
-            animation-delay: 0.2s;
-        }
-
-        .delay-3 {
-            animation-delay: 0.3s;
+        .meta-dot {
+            color: rgba(255, 255, 255, 0.15);
         }
 
         @media (max-width: 1000px) {
-            .nav-links {
-                display: none;
-            }
-
             .hero h1 {
                 font-size: 3.5rem;
             }
@@ -581,6 +509,10 @@
                 flex-direction: column;
                 gap: 3rem;
                 margin-bottom: 6rem;
+            }
+
+            .cta-box h2 {
+                font-size: 2.5rem;
             }
         }
     </style>
@@ -609,7 +541,7 @@
                     GitHub
                 </a>
             </div>
-            <a href="https://github.com/ysfemreAlbyrk/Fontager/releases/latest" class="btn" target="_blank">
+            <a href="#download" class="btn">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -623,13 +555,19 @@
 
     <header class="hero">
         <div class="container hero-container">
-            <h1 class="animate-up delay-1">Manage Fonts <span style="color: #63d0f1;">Beautifully.</span></h1>
+            <!-- <div class="hero-badge animate-up delay-1">Fast. Light. Native WinUI 3.</div> -->
+            <h1 class="animate-up delay-1">Manage Fonts <span class="gradient-text">Beautifully.</span></h1>
             <p class="animate-up delay-2">Fontager replaces the aging Windows fontview.exe with a lightning-fast native
                 previewer, alongside a comprehensive library manager for creative professionals.</p>
 
             <div class="hero-actions animate-up delay-3">
-                <a href="https://github.com/ysfemreAlbyrk/Fontager/releases/latest" class="btn" target="_blank"
-                    style="padding: 1rem 2rem; font-size: 1rem;">
+                <a href="#download" class="btn" style="padding: 1rem 2rem; font-size: 1rem;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
                     Download Viewer
                 </a>
                 <a href="#products" class="btn btn-outline" style="padding: 1rem 2rem; font-size: 1rem;">
@@ -643,13 +581,6 @@
                     Your browser does not support the video tag.
                 </video>
             </div>
-
-            <!-- <div class="animate-up delay-3" style="margin-top: 4rem; opacity: 0.6;">
-                <span style="display: block; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 0.5rem; color: var(--text-muted);">Backed By</span>
-                <a href="https://4pp.studio" target="_blank">
-                    <img src="Assets/backedby.png" alt="4PP Studio" style="height: 24px; filter: grayscale(100%); transition: filter 0.3s;" onmouseover="this.style.filter='grayscale(0%)'" onmouseout="this.style.filter='grayscale(100%)'">
-                </a>
-            </div> -->
         </div>
     </header>
 
@@ -667,8 +598,7 @@
                         preview your .ttf, .otf, .ttc, and .woff2 files without installing them to the system. Features
                         a sleek WinUI 3 interface, instant metadata inspection, and effortless installation directly
                         into Windows.</p>
-                    <a href="https://github.com/ysfemreAlbyrk/Fontager/releases/latest" class="btn" target="_blank"
-                        style="margin-top: 1rem;">
+                    <a href="#download" class="btn" style="margin-top: 1rem;">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -837,24 +767,36 @@
             </div>
         </div>
     </section>
-    <!-- 
-    <section class="cta-section container">
+    <section id="download" class="cta-section container">
         <div class="cta-box">
-            <h2>Ready to Upgrade Your Workflow?</h2>
-            <p>Join the typography revolution. Download the incredibly fast Viewer today, and track the Manager's
-                development on GitHub.</p>
-            <div class="cta-actions">
-                <a href="https://github.com/ysfemreAlbyrk/Fontager/releases/latest" target="_blank" class="btn"
-                    style="padding: 1rem 2.5rem; font-size: 1.1rem;">
-                    Download Viewer
-                </a>
-                <a href="https://github.com/ysfemreAlbyrk/Fontager" target="_blank" class="btn btn-outline"
-                    style="padding: 1rem 2.5rem; font-size: 1.1rem;">
-                    Star on GitHub
-                </a>
+            <h2>Get Fontager</h2>
+
+            <div class="download-container">
+                <!-- Viewer Item -->
+                <div class="download-item">
+                    <span class="status-badge available">Viewer — Shipped</span>
+                    <h3>Fontager Viewer</h3>
+                    <p>Lightweight, instant WinUI 3 font previewer and metadata inspector for Windows 10 & 11.</p>
+                    <a href="https://github.com/ysfemreAlbyrk/Fontager/releases/latest" class="btn">
+                        Download Viewer (.exe)
+                    </a>
+                </div>
+
+                <!-- Divider Line -->
+                <div class="download-divider"></div>
+
+                <!-- Manager Item -->
+                <div class="download-item">
+                    <span class="status-badge roadmap">Manager — In Dev</span>
+                    <h3>Fontager Manager</h3>
+                    <p>Professional font management library, conflict resolution, and temporary activations.</p>
+                    <a href="roadmap.html" class="btn btn-outline">
+                        View Roadmap
+                    </a>
+                </div>
             </div>
         </div>
-    </section> -->
+    </section>
 
     <footer>
         <div class="container">
