@@ -4,6 +4,15 @@ High-level picture of what Fontager has shipped and what is planned next. Releas
 
 **Current focus:** Fontager.Viewer polish and reliability. Fontager.Manager is a longer-term track.
 
+## General Project Goals
+
+High-level vision and cross-component milestones for Fontager.
+
+- [ ] **Windows Store & Packaged (MSIX) Distribution** — Bring Fontager to the official Microsoft Store to maximize reach and installation ease.
+  - *Dependency:* Requires full implementation of **Fontager.Manager**'s custom library and font uninstallation UI to bypass the native Windows Settings "Uninstall" gap caused by registry virtualization in sandboxed packaged apps.
+  - *Manifesting:* Limit packaged file-type associations to `.otf`, `.ttc`, and `.woff2` due to system reservation constraints on `.ttf`.
+- [ ] **Unified Engine Consolidation** — Migrate all font installation, file association, and preview rendering primitives into the shared `Fontager.Core` library. Both the lightweight `Viewer` and the full `Manager` will run on the identical, high-performance C# parsing and rendering core.
+
 ---
 
 ## Fontager.Core
@@ -79,6 +88,11 @@ Lightweight font previewer; default handler for font files on Windows.
 - [ ] **Adopt Core font & glyph rendering** — drop Viewer-local render helpers once Core preview/glyph APIs ship
 - [ ] **Adopt Core install + glyph browse APIs** — thin wrappers over Core for install UI and Glyphs tab
 - [ ] **Smoke test checklist in CI (optional)** — scripted launch / headless checks only after Core tests exist; Viewer remains mostly manual until UI automation is justified
+- [ ] **Windows Store & MSIX Distribution** — Transition Fontager.Viewer to a packaged MSIX app for Windows Store distribution. **Prerequisite: Fontager.Manager implementation.** This requires addressing key platform hurdles:
+  - *HKCU Registry Virtualization Gap*: MSIX redirects `HKCU` writes to a private virtual registry hive. Because per-user font installations register in the sandboxed hive rather than the real `HKCU`, Windows Settings -> Fonts only offers to "Hide" rather than "Uninstall" them. **To resolve this, we must first implement Fontager.Manager** so users can manage and uninstall installed fonts directly through Fontager's UI, bypassing the native Windows Settings limitation.
+  - *The `.ttf` Manifest Restriction*: The Windows Appx Manifest schema strictly blocks packaging declarations of the `.ttf` extension as it is reserved for the system font viewer. Packaging requires limiting manifest-declared file-type associations to `.otf`, `.ttc`, and `.woff2`, and dynamically disabling `.ttf` default handling settings in packaged mode.
+  - *Elevation & Sandboxing*: Ensure the `runFullTrust` capability is declared in `Package.appxmanifest` to support UAC-prompted "Install for all users" (which writes to `HKLM` and `C:\Windows\Fonts`) from the packaged sandbox.
+  - *Path Portability & Settings*: Adapt path resolution so the existing JSON storage schema at `%LocalAppData%\Fontager\settings.json` is mapped cleanly, or seamlessly bridge to WinRT AppData storage under packaged execution.
 
 ---
 
