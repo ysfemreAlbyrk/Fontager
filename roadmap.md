@@ -100,9 +100,11 @@ Lightweight font previewer; default handler for font files on Windows.
 
 Professional font management suite — **planned**, not in active development.
 - [x] **Project scaffold** — shared Core reference; assembly metadata aligned with Viewer
-- [ ] **Library** — organize installed and project fonts; collections and tagging
-- [ ] **Activation** — temporary font activation without permanent install
-- [ ] **Discovery** — Google Fonts integration
+- [ ] **Library & Tagging** — Organize installed and local project fonts in a database; custom tagging, rating, and filtering by format, family, or style metadata.
+- [ ] **Temporary Font Activation ("Virtual Loading")** — Load fonts into system memory temporarily using Win32 `AddFontResourceEx` with `FR_PRIVATE` flags. Designers can use fonts immediately in creative apps (Photoshop, Illustrator, Figma, Word) without copying files to `C:\Windows\Fonts` or writing permanent registry entries. Toggled off cleanly when Fontager closes or on-demand.
+- [ ] **Smart Duplicate & Conflict Resolution** — Detect and manage duplicate font files by comparing PostScript names, versions, or file hashes. Provide clean conflict resolution flows (e.g., "Replace active version", "Keep both side-by-side", "Uninstall outdated versions") to prevent library and system clutter.
+- [ ] **Virtual Workspaces (Collections & Projects)** — Create virtual, tag-based collections or client-specific workspaces (e.g., "Brand Retro Style", "Client X Web Project") and activate/deactivate entire font groups in a single click.
+- [ ] **Discovery** — Google Fonts integration and local library importing / watch folders
 - [ ] **Compare & export** — side-by-side comparison; export font catalogs
 - [ ] **Convert fonts (UI)** — pick source format(s), target format, and output folder; progress for batch jobs
 - [ ] **WOFF2 for web** — export desktop fonts (TTF/OTF) to WOFF2 for web projects
