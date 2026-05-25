@@ -2,8 +2,6 @@
 
 ## [1.3.0] - 2026-05-25
 
-Minor release: dynamic dark/light preview backgrounds (contrast check) and integrated GitHub release update checking.
-
 ### ➕ Added
 - **Recent files on empty state**: Last opened fonts (up to 3) appear under the open button for quick reopen; paths persist in settings. Each entry has a remove button.
 - **GitHub Release Update Checker**: Automatically queries the latest release from the GitHub API on startup (optimized to run at most once every 24 hours to avoid API rate limits).
