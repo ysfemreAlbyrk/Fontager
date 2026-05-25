@@ -115,7 +115,6 @@
                                             Spacing="2">
                                     <TextBlock Text="{Binding Character}"
                                                FontSize="28"
-                                               FontFamily="{Binding FontFamily, ElementName=GlyphGrid}"
                                                HorizontalAlignment="Center"
                                                VerticalAlignment="Center" />
                                     <TextBlock Text="{Binding UnicodeLabel}"

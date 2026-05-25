@@ -40,8 +40,9 @@ public sealed partial class GlyphsTabPage : Page
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(FontViewerViewModel.CurrentFont) ||
-            e.PropertyName == nameof(FontViewerViewModel.LoadedFontFamily))
+        // LoadedFontFamily changes AFTER CurrentFont + glyph generation is complete —
+        // use it as the signal that everything is ready to refresh the glyph grid.
+        if (e.PropertyName == nameof(FontViewerViewModel.LoadedFontFamily))
         {
             DispatcherQueue.TryEnqueue(() =>
             {
@@ -52,13 +53,53 @@ public sealed partial class GlyphsTabPage : Page
 
     private void BuildGlyphGrid()
     {
-        BuildCategoryChips();
-        ResetGlyphFilters();
+        // Set FontFamily on the GridView — used as fallback and for the container callback.
+        if (ViewModel.LoadedFontFamily is not null)
+            GlyphGrid.FontFamily = ViewModel.LoadedFontFamily;
+
+        // Recompute the filtered glyph list.
+        ViewModel.ApplyFilters();
+
+        // Explicit set in case x:Bind was suspended while page was off-screen
+        // (NavigationCacheMode="Required" pauses bindings when page leaves visual tree).
+        GlyphGrid.ItemsSource = ViewModel.FilteredGlyphs;
+        GlyphBlockList.SelectedItem = ViewModel.SelectedBlockEntry;
+
+        // ContainerContentChanging applies FontFamily explicitly to each realized
+        // TextBlock — GridViewItem's own style blocks inheritance from the parent
+        // GridView, so we must set it per-container.
+        GlyphGrid.ContainerContentChanging -= GlyphGrid_ContainerContentChanging;
+        GlyphGrid.ContainerContentChanging += GlyphGrid_ContainerContentChanging;
 
         GlyphGrid.SelectionChanged -= GlyphGrid_SelectionChanged;
         GlyphGrid.SelectionChanged += GlyphGrid_SelectionChanged;
 
+        BuildCategoryChips();
+        ResetGlyphFilters();
+
         ApplySelectedGlyphFontFamily();
+    }
+
+    private void GlyphGrid_ContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
+    {
+        if (args.Phase != 0) return;
+        // Always register Phase 1 — BuildGlyphGrid is only called after
+        // LoadedFontFamily is set, so Phase 1 will always have a valid font.
+        args.RegisterUpdateCallback(GlyphGrid_ApplyFontToContainer);
+    }
+
+    private void GlyphGrid_ApplyFontToContainer(ListViewBase sender, ContainerContentChangingEventArgs args)
+    {
+        if (ViewModel.LoadedFontFamily is null) return;
+
+        if (args.ItemContainer?.ContentTemplateRoot is Grid grid
+            && grid.Children.Count > 0
+            && grid.Children[0] is StackPanel panel
+            && panel.Children.Count > 0
+            && panel.Children[0] is TextBlock charBlock)
+        {
+            charBlock.FontFamily = ViewModel.LoadedFontFamily;
+        }
     }
 
     private void GlyphGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
