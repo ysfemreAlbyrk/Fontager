@@ -113,8 +113,14 @@ public sealed partial class MainWindow : Window
 
                 if (overlappedPresenter.State == OverlappedPresenterState.Restored)
                 {
-                    _settings.WindowWidth = AppWindow.Size.Width;
-                    _settings.WindowHeight = AppWindow.Size.Height;
+                    double scale = GetScaleForPoint(
+                        AppWindow.Position.X + AppWindow.Size.Width / 2,
+                        AppWindow.Position.Y + AppWindow.Size.Height / 2);
+
+                    if (scale <= 0) scale = 1.0;
+
+                    _settings.WindowWidth = (int)(AppWindow.Size.Width / scale);
+                    _settings.WindowHeight = (int)(AppWindow.Size.Height / scale);
                     _settings.WindowX = AppWindow.Position.X;
                     _settings.WindowY = AppWindow.Position.Y;
                 }
@@ -129,20 +135,37 @@ public sealed partial class MainWindow : Window
     private void ConfigureWindow()
     {
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+
+        // Get the DPI scale of the monitor where the window is initially created (primary monitor)
         var dpi = GetDpiForWindow(hwnd);
-        var scale = dpi / 96.0;
+        double initialScale = dpi / 96.0;
+        if (initialScale <= 0) initialScale = 1.0;
 
-        int width = _settings.WindowWidth ?? (int)(850 * scale);
-        int height = _settings.WindowHeight ?? (int)(600 * scale);
+        int targetX = 0;
+        int targetY = 0;
+        bool hasSavedPosition = _settings.WindowX.HasValue && _settings.WindowY.HasValue;
 
-        if (_settings.WindowX.HasValue && _settings.WindowY.HasValue)
+        if (hasSavedPosition)
         {
-            var x = _settings.WindowX.Value;
-            var y = _settings.WindowY.Value;
+            targetX = _settings.WindowX!.Value;
+            targetY = _settings.WindowY!.Value;
+        }
 
-            if (IsPositionOnScreen(x, y, width, height))
+        int widthDips = _settings.WindowWidth ?? 850;
+        int heightDips = _settings.WindowHeight ?? 600;
+
+        // ALWAYS scale the restored/default DIP size by the initial (primary) monitor's scale factor.
+        // Upon moving/activating the window on the target monitor, the OS's Per-Monitor V2 DPI awareness
+        // manager automatically handles resizing the physical dimensions from the initial scale to the
+        // target monitor's scale factor, preventing double/compound scaling.
+        int width = (int)(widthDips * initialScale);
+        int height = (int)(heightDips * initialScale);
+
+        if (hasSavedPosition)
+        {
+            if (IsPositionOnScreen(targetX, targetY, width, height))
             {
-                AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(x, y, width, height));
+                AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(targetX, targetY, width, height));
             }
             else
             {
@@ -172,7 +195,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private bool IsPositionOnScreen(int x, int y, int width, int height)
+    private static bool IsPositionOnScreen(int x, int y, int width, int height)
     {
         try
         {
@@ -195,6 +218,27 @@ public sealed partial class MainWindow : Window
             return true;
         }
         return false;
+    }
+
+    private static double GetScaleForPoint(int x, int y)
+    {
+        try
+        {
+            var pt = new POINT { x = x, y = y };
+            var hMonitor = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
+            if (hMonitor != IntPtr.Zero)
+            {
+                if (GetDpiForMonitor(hMonitor, MDT_EFFECTIVE_DPI, out uint dpiX, out _) == 0)
+                {
+                    return dpiX / 96.0;
+                }
+            }
+        }
+        catch
+        {
+            // Fallback
+        }
+        return 1.0;
     }
 
     private void ScheduleTitleBarPassthroughUpdate()
@@ -221,7 +265,7 @@ public sealed partial class MainWindow : Window
             TitleBarLeftInsetColumn.Width = new GridLength(chrome.LeftInset / scale);
             TitleBarRightInsetColumn.Width = new GridLength(chrome.RightInset / scale);
 
-            var rects = new List<RectInt32>();
+            List<RectInt32> rects = [];
 
             void AddIfInteractive(FrameworkElement? el)
             {
@@ -555,6 +599,15 @@ public sealed partial class MainWindow : Window
 
     [DllImport("user32.dll")]
     private static extern int GetDpiForWindow(IntPtr hwnd);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromPoint(POINT pt, uint dwFlags);
+
+    [DllImport("shcore.dll")]
+    private static extern int GetDpiForMonitor(IntPtr hmonitor, int dpiType, out uint dpiX, out uint dpiY);
+
+    private const uint MONITOR_DEFAULTTONEAREST = 2;
+    private const int MDT_EFFECTIVE_DPI = 0;
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern IntPtr SendMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);

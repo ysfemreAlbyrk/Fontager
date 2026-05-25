@@ -79,8 +79,6 @@ public sealed partial class FontViewerPage : Page
 
             if (ViewModel.HasFont)
                 UpdateFontDisplay();
-            else
-                ApplyQuickViewBackground();
         });
     }
 
@@ -145,10 +143,6 @@ public sealed partial class FontViewerPage : Page
     /// <summary>Re-applies Quick View chrome when backdrop/theme changes while this page stays cached under Settings.</summary>
     public void RefreshQuickViewChrome()
     {
-        if (!IsLoaded || QuickViewSection is null || !ViewModel.HasFont)
-            return;
-
-        ApplyQuickViewBackground();
     }
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
@@ -207,7 +201,12 @@ public sealed partial class FontViewerPage : Page
                 return;
             }
 
-            DeactivateCurrentFont();
+            bool isSameFile = _currentFilePath == filePath && _cachedFontDiskPath != null && File.Exists(_cachedFontDiskPath);
+
+            if (!isSameFile)
+            {
+                DeactivateCurrentFont();
+            }
 
             _currentFilePath = filePath;
             _currentFontIndex = ViewModel.CurrentFont.FontIndex;
@@ -216,10 +215,36 @@ public sealed partial class FontViewerPage : Page
             var meta = ViewModel.CurrentFont.Metadata;
             var familyName = PickDirectWriteFamilyName(meta, filePath);
 
-            var (diskPath, msAppDataRelativePath, msAppxRelativePath) = await CacheFontForXamlAsync(filePath);
+            string diskPath;
+            string? msAppDataRelativePath;
+            string? msAppxRelativePath;
 
-            _ = AddFontResourceEx(diskPath, FR_PRIVATE, IntPtr.Zero);
-            _activeFontPath = diskPath;
+            if (isSameFile)
+            {
+                diskPath = _cachedFontDiskPath!;
+                var relative = $"{FontCacheFolderName}/{Path.GetFileName(diskPath)}".Replace('\\', '/');
+                if (FileAssociationService.IsRunningPackaged)
+                {
+                    msAppDataRelativePath = relative;
+                    msAppxRelativePath = null;
+                }
+                else if (FontCacheSetup.IsUnderInstallDirectory(diskPath))
+                {
+                    msAppDataRelativePath = null;
+                    msAppxRelativePath = relative;
+                }
+                else
+                {
+                    msAppDataRelativePath = null;
+                    msAppxRelativePath = null;
+                }
+            }
+            else
+            {
+                (diskPath, msAppDataRelativePath, msAppxRelativePath) = await CacheFontForXamlAsync(filePath);
+                _ = AddFontResourceEx(diskPath, FR_PRIVATE, IntPtr.Zero);
+                _activeFontPath = diskPath;
+            }
 
             LoadedFontFamily = CreateLoadedFontFamily(familyName, diskPath, msAppDataRelativePath, msAppxRelativePath);
             GlyphGrid.FontFamily = LoadedFontFamily;
@@ -392,8 +417,19 @@ public sealed partial class FontViewerPage : Page
             return;
 
         SelectedGlyphChar.FontFamily = LoadedFontFamily;
-        SelectedGlyphChar.FontWeight = new Windows.UI.Text.FontWeight(400);
-        SelectedGlyphChar.FontStyle = Windows.UI.Text.FontStyle.Normal;
+        var meta = ViewModel.CurrentFont?.Metadata;
+        if (meta is not null)
+        {
+            SelectedGlyphChar.FontWeight = new Windows.UI.Text.FontWeight((ushort)meta.Weight);
+            SelectedGlyphChar.FontStyle = meta.IsItalic ? Windows.UI.Text.FontStyle.Italic
+                : meta.IsOblique ? Windows.UI.Text.FontStyle.Oblique
+                : Windows.UI.Text.FontStyle.Normal;
+        }
+        else
+        {
+            SelectedGlyphChar.FontWeight = new Windows.UI.Text.FontWeight(400);
+            SelectedGlyphChar.FontStyle = Windows.UI.Text.FontStyle.Normal;
+        }
     }
 
     private void ApplyFontToElement(Control element, FontMetadata meta)
@@ -401,9 +437,6 @@ public sealed partial class FontViewerPage : Page
         if (LoadedFontFamily != null)
         {
             element.FontFamily = LoadedFontFamily;
-            element.FontWeight = new Windows.UI.Text.FontWeight(400);
-            element.FontStyle = Windows.UI.Text.FontStyle.Normal;
-            return;
         }
 
         element.FontWeight = new Windows.UI.Text.FontWeight((ushort)meta.Weight);
@@ -417,9 +450,6 @@ public sealed partial class FontViewerPage : Page
         if (LoadedFontFamily != null)
         {
             tb.FontFamily = LoadedFontFamily;
-            tb.FontWeight = new Windows.UI.Text.FontWeight(400);
-            tb.FontStyle = Windows.UI.Text.FontStyle.Normal;
-            return;
         }
 
         tb.FontWeight = new Windows.UI.Text.FontWeight((ushort)meta.Weight);
@@ -456,8 +486,6 @@ public sealed partial class FontViewerPage : Page
             ApplyFontToTextBlock(tb, meta);
             QuickViewPanel.Children.Add(tb);
         }
-
-        ApplyQuickViewBackground();
     }
 
     // ── Waterfall ───────────────────────────────────────────────────────────
@@ -565,59 +593,7 @@ public sealed partial class FontViewerPage : Page
             BuildWaterfallView();
     }
 
-    /// <summary>
-    /// Quick View follows <see cref="SettingsService.PreviewBackground"/> for light/dark contrast.
-    /// System default uses XAML <c>{ThemeResource}</c> card brushes (not app/page fill, not hardcoded colors).
-    /// </summary>
-    private void ApplyQuickViewBackground()
-    {
-        if (QuickViewSection == null) return;
 
-        var mode = _settings.PreviewBackground;
-
-        if (mode == 0)
-        {
-            ApplyQuickViewSystemDefaultCard();
-            return;
-        }
-
-        ApplyPreviewSurfaceAppearance(QuickViewSection, mode);
-
-        if (mode == 1)
-        {
-            var darkText = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 18, 18, 18));
-            foreach (var child in QuickViewPanel.Children)
-            {
-                if (child is TextBlock tb)
-                    tb.Foreground = darkText;
-            }
-        }
-        else if (mode == 2)
-        {
-            var lightText = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 245, 245, 245));
-            foreach (var child in QuickViewPanel.Children)
-            {
-                if (child is TextBlock tb)
-                    tb.Foreground = lightText;
-            }
-        }
-    }
-
-    /// <summary>System default: WinUI <c>{ThemeResource}</c> card chrome from XAML (no hardcoded fills).</summary>
-    private void ApplyQuickViewSystemDefaultCard()
-    {
-        QuickViewSection.RequestedTheme = ElementTheme.Default;
-        QuickViewSection.ClearValue(Border.BackgroundProperty);
-        QuickViewSection.ClearValue(Border.BorderBrushProperty);
-        QuickViewSection.BorderThickness = new Thickness(1);
-        QuickViewSection.CornerRadius = new CornerRadius(8);
-
-        foreach (var child in QuickViewPanel.Children)
-        {
-            if (child is TextBlock tb)
-                tb.ClearValue(TextBlock.ForegroundProperty);
-        }
-    }
 
     /// <summary>Shared chrome for editable preview border and Quick View (light/dark contrast modes).</summary>
     private static void ApplyPreviewSurfaceAppearance(Border border, int mode)
@@ -872,10 +848,7 @@ public sealed partial class FontViewerPage : Page
 
         var border = new Border
         {
-            Background = ResolveThemeBrush("CardBackgroundFillColorDefaultBrush"),
-            CornerRadius = new CornerRadius(4),
-            Padding = new Thickness(16, 10, 16, 10),
-            Margin = new Thickness(0, 1, 0, 1)
+            Style = (Style)Resources["MetadataCardStyle"]
         };
 
         var grid = new Grid();
@@ -1242,8 +1215,19 @@ public sealed partial class FontViewerPage : Page
             && panel.Children[0] is TextBlock charBlock)
         {
             charBlock.FontFamily = LoadedFontFamily;
-            charBlock.FontWeight = new Windows.UI.Text.FontWeight(400);
-            charBlock.FontStyle = Windows.UI.Text.FontStyle.Normal;
+            var meta = ViewModel.CurrentFont?.Metadata;
+            if (meta is not null)
+            {
+                charBlock.FontWeight = new Windows.UI.Text.FontWeight((ushort)meta.Weight);
+                charBlock.FontStyle = meta.IsItalic ? Windows.UI.Text.FontStyle.Italic
+                    : meta.IsOblique ? Windows.UI.Text.FontStyle.Oblique
+                    : Windows.UI.Text.FontStyle.Normal;
+            }
+            else
+            {
+                charBlock.FontWeight = new Windows.UI.Text.FontWeight(400);
+                charBlock.FontStyle = Windows.UI.Text.FontStyle.Normal;
+            }
         }
     }
 

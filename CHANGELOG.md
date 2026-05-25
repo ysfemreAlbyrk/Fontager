@@ -20,6 +20,9 @@ Minor release: dynamic dark/light preview backgrounds (contrast check) and integ
 - **Streamlined Preview Toolbar**: Completely removed the redundant contrast paintbrush button from the size control stack panel in the main preview tab toolbar to minimize clutter.
 
 ### 🐛 Fixed
+- **Multi-Monitor DPI Window Sizing**: Resolved layout scaling compound growth by replacing unstable API window scale detection at closure with point-based native screen scaling (`GetScaleForPoint`) using the window's center coordinates. This prevents the restored window from growing exponentially larger on subsequent launches when closed on secondary monitors with different DPI factors (e.g. 150% scaled displays).
+- **TTC Font Collection Navigation**: Optimized TrueType Collection (`.ttc`) navigation to reuse the cached file path, preventing file locks, and correctly mapped dynamic font weights and italic styles.
+- **Quick View & Metadata Panel Backgrounds**: Replaced custom code-behind brush logic and manual color checks with unified `{ThemeResource}` styling references (`CardBackgroundFillColorDefaultBrush` and `CardStrokeColorDefaultBrush`) for native, robust Fluent Design theme switching.
 - **Solid backdrop + theme**: Light/dark app or Windows theme now updates the solid window fill and theme brushes correctly; solid color is resolved from the effective theme instead of a cached `ApplicationPageBackgroundThemeBrush`. Theme is applied on the window root elements (not `Application.RequestedTheme`, which WinUI rejects at runtime).
 - **Light-theme UI fixes**: Waterfall size labels and Info tab field labels use theme-aware colors in code-built UI.
 - **Settings performance**: Skip rebuilding the cached font viewer while Settings is open; avoid raising global settings-changed for recent-file list updates; reduce redundant solid-backdrop brush churn.
