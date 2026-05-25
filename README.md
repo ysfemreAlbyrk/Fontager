@@ -52,9 +52,6 @@ A lightweight font previewer that can be set as the default handler for font fil
     <td>
       <img width="1920" height="1080" alt="img-3" src="https://github.com/user-attachments/assets/217856aa-6c5b-448b-ba8d-ae7a273e8c3c" />
     </td>
-    <td>
-    
-    </td>
   </tr>
 </table>
 
