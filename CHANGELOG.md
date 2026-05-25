@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.3.0] - 2026-05-25
+
+Minor release: dynamic dark/light preview backgrounds (contrast check) and integrated GitHub release update checking.
+
+### ➕ Added
+- **GitHub Release Update Checker**: Automatically queries the latest release from the GitHub API on startup (optimized to run at most once every 24 hours to avoid API rate limits).
+- **Manual Update Checking in Settings**: Added a new "Updates" section in Settings allowing users to trigger manual checks on-demand, showing checking progression, and displaying the last checked timestamp in local time.
+- **Title Bar Update Notification**: Integrates a prominent, high-visibility "Update Available" button (using accent styling) on the left side of the title bar, placed immediately after the action buttons (Open, Settings) for a clean, cohesive layout.
+- **Default Preview Background Setting**: Added a configuration card in Settings -> Preview to let users choose their preferred default background contrast mode when opening fonts.
+- **Quick View Background Setting**: Added a configuration card in Settings -> Quick View to select default contrast options specifically for the Quick View panel.
+
+### 🔄 Changed
+- **Adaptive Waterfall & Character Grids**: Modified the waterfall layout and character preview grids to automatically adapt their text foreground and label colors when high-contrast modes are toggled.
+- **Title Bar Passthrough Integration**: Registered the new title bar update button inside the interactive passthrough region tracker so click events are captured perfectly without interfering with window drag operations.
+- **Streamlined Preview Toolbar**: Completely removed the redundant contrast paintbrush button from the size control stack panel in the main preview tab toolbar to minimize clutter.
+
+### 🐛 Fixed
+- **Settings ComboBox Rendering Bug**: Resolved a WinUI 3 empty-on-load rendering bug by deferring all ComboBox `SelectedIndex` index assignments to the next dispatcher tick (`DispatcherQueue.TryEnqueue`) within a transient state-lock, guaranteeing selections like *"System default"* appear immediately.
+- **Dynamic Quick View Theme Restoration**: Solved the default Quick View background restoration bug by fetching and re-binding the native dynamic `{ThemeResource}` brushes (`CardBackgroundFillColorDefaultBrush` and `CardStrokeColorDefaultBrush`) directly from application resources.
+- **Mixed Theme Contrast Propagation**: Resolved a WinUI 3 layout inheritance bug where a parent border's `RequestedTheme` fails to propagate down through scroll viewers, ensuring that size controls, textboxes, and labels remain fully visible when contrasting themes are mixed (e.g. system default is dark but preview background is light).
+
 ## [1.2.2] - 2026-05-21
 
 Patch release: DPI-aware default window sizing and window layout persistence (size, coordinates, and maximized/windowed state).
