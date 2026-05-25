@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using Fontager.Core.Helpers;
 using Fontager.Core.Services;
 using Fontager.Viewer.Services;
 using Fontager.Viewer.ViewModels;
@@ -27,14 +28,22 @@ public partial class App : Application
     /// </summary>
     public static string? FontFilePath { get; private set; }
 
+    /// <summary>
+    /// The active MainWindow instance of the application.
+    /// </summary>
+    public static MainWindow? MainWindowInstance { get; set; }
+
     public App()
     {
+        // Bind Core ProcessElevationHelper's ExitAction to WinUI's clean shutdown
+        Fontager.Core.Helpers.ProcessElevationHelper.ExitAction = ExitOnElevationRestart;
+
         if (ElevatedInstallCommandLine.TryExecuteAndExit(Environment.GetCommandLineArgs()))
             return;
 
         InitializeComponent();
 
-        if (!FileAssociationService.IsRunningPackaged)
+        if (!Fontager.Core.Services.FileAssociationService.IsRunningPackaged)
             FontCacheSetup.EnsureWritableCacheDirectory();
 
         // Configure DI
@@ -88,6 +97,7 @@ public partial class App : Application
     {
         // Core services
         services.AddSingleton<IFontService, FontService>();
+        services.AddSingleton<IFontInstallerService, FontInstallerService>();
 
         // App services
         services.AddSingleton<SettingsService>();
@@ -95,12 +105,14 @@ public partial class App : Application
 
         // ViewModels
         services.AddTransient<FontViewerViewModel>();
+        services.AddTransient<SettingsViewModel>();
     }
+
 
     protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
     {
         var settings = Services.GetRequiredService<SettingsService>();
-        if (ProcessElevationHelper.TryRelaunchElevatedOnStartup(settings))
+        if (ProcessElevationHelper.TryRelaunchElevatedOnStartup(settings.RunAsAdministrator))
             return;
 
         _window = new MainWindow();
