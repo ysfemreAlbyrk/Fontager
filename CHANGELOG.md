@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.3.1] - 2026-05-26
+
+### 🐛 Fixed
+- **Quick View & Editable Preview Settings Toggles**: Resolved an issue where toggling the "Quick View" (character set overview) or "Editable Preview" options in Settings had no effect on the active font viewer. Added background property change notifications and back-navigation refresh logic to ensure the views synchronize instantly with settings changes.
+
 ## [1.3.0] - 2026-05-25
 
 ### ➕ Added

@@ -58,6 +58,8 @@ public sealed partial class FontViewerPage : Page
     {
         if (ViewModel.HasFont)
             UpdateFontDisplay();
+
+        SyncSelectorBarSelection();
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
@@ -143,6 +145,40 @@ public sealed partial class FontViewerPage : Page
     /// <summary>Re-applies Quick View chrome when backdrop/theme changes while this page stays cached under Settings.</summary>
     public void RefreshQuickViewChrome()
     {
+        ViewModel.NotifySettingsDependentPropertiesChanged();
+        ApplyPreviewBackground(_settings.PreviewBackground);
+    }
+
+    private void TabSelectorBar_SelectionChanged(SelectorBar sender, SelectorBarSelectionChangedEventArgs args)
+    {
+        var selectedItem = sender.SelectedItem;
+        int index = sender.Items.IndexOf(selectedItem);
+        if (index >= 0)
+        {
+            ViewModel.SelectedTabIndex = index;
+            UpdateTabVisibility(index);
+        }
+    }
+
+    private void UpdateTabVisibility(int index)
+    {
+        if (PreviewSurfaceBorder == null || GlyphsTabContent == null || InfoTabContent == null)
+            return;
+
+        PreviewSurfaceBorder.Visibility = index == 0 ? Visibility.Visible : Visibility.Collapsed;
+        GlyphsTabContent.Visibility = index == 1 ? Visibility.Visible : Visibility.Collapsed;
+        InfoTabContent.Visibility = index == 2 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void SyncSelectorBarSelection()
+    {
+        if (TabSelectorBar == null) return;
+        int index = ViewModel.SelectedTabIndex;
+        if (index >= 0 && index < TabSelectorBar.Items.Count)
+        {
+            TabSelectorBar.SelectedItem = TabSelectorBar.Items[index];
+            UpdateTabVisibility(index);
+        }
     }
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
@@ -157,8 +193,10 @@ public sealed partial class FontViewerPage : Page
         // Returning from Settings: keep the open font; only refresh UI chrome.
         if (e.NavigationMode == NavigationMode.Back)
         {
+            ViewModel.NotifySettingsDependentPropertiesChanged();
             if (ViewModel.HasFont)
                 UpdateFontDisplay();
+            SyncSelectorBarSelection();
             return;
         }
 
@@ -172,6 +210,8 @@ public sealed partial class FontViewerPage : Page
         {
             _ = LoadFontFromPathAsync(App.FontFilePath, 0);
         }
+
+        SyncSelectorBarSelection();
     }
 
     // ── Font Loading & Cache ────────────────────────────────────────────────
@@ -391,6 +431,8 @@ public sealed partial class FontViewerPage : Page
         if (font is null || !IsDisplayReady())
             return;
 
+        ViewModel.NotifySettingsDependentPropertiesChanged();
+
         if (App.MainWindowInstance?.AppWindow is { } appWindow)
             appWindow.Title = $"Fontager \u2014 {font.DisplayName}";
 
@@ -409,6 +451,8 @@ public sealed partial class FontViewerPage : Page
 
         BuildGlyphGrid();
         ApplySelectedGlyphFontFamily();
+
+        SyncSelectorBarSelection();
     }
 
     private void ApplySelectedGlyphFontFamily()
