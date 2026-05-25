@@ -144,6 +144,7 @@ public sealed partial class MainWindow : Window
                 fe.RequestedTheme = _settings.Theme;
             ApplyBackdrop();
             ApplyPreviewBackground(_settings.PreviewBackground);
+            ApplyQuickViewBackground(_settings.QuickViewBackground);
 
             // Install button label tracks the saved target.
             UpdateInstallButtonPresentation(GetSavedInstallTarget());
@@ -987,6 +988,8 @@ public sealed partial class MainWindow : Window
             ApplyFontToTextBlock(tb, meta);
             QuickViewPanel.Children.Add(tb);
         }
+
+        ApplyQuickViewBackground(_settings.QuickViewBackground);
     }
 
     // ── Preview ────────────────────────────────────────────────
@@ -1367,6 +1370,11 @@ public sealed partial class MainWindow : Window
 
         if (mode == 1) // Light
         {
+            PreviewSurfaceBorder.RequestedTheme = ElementTheme.Light;
+            if (PreviewSurfaceBorder.Child is FrameworkElement child)
+            {
+                child.RequestedTheme = ElementTheme.Light;
+            }
             var lightBg = new SolidColorBrush(Microsoft.UI.Colors.White);
             var darkText = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 18, 18, 18));
 
@@ -1380,6 +1388,11 @@ public sealed partial class MainWindow : Window
         }
         else if (mode == 2) // Dark
         {
+            PreviewSurfaceBorder.RequestedTheme = ElementTheme.Dark;
+            if (PreviewSurfaceBorder.Child is FrameworkElement child)
+            {
+                child.RequestedTheme = ElementTheme.Dark;
+            }
             var darkBg = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 26, 26, 26));
             var lightText = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 245, 245, 245));
 
@@ -1393,6 +1406,11 @@ public sealed partial class MainWindow : Window
         }
         else // Default (0)
         {
+            PreviewSurfaceBorder.RequestedTheme = ElementTheme.Default;
+            if (PreviewSurfaceBorder.Child is FrameworkElement child)
+            {
+                child.RequestedTheme = ElementTheme.Default;
+            }
             PreviewSurfaceBorder.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
             PreviewSurfaceBorder.BorderBrush = null;
             PreviewSurfaceBorder.BorderThickness = new Thickness(0);
@@ -1404,6 +1422,62 @@ public sealed partial class MainWindow : Window
         if (_viewModel.HasFont)
         {
             BuildWaterfallView();
+        }
+    }
+
+    private void ApplyQuickViewBackground(int mode)
+    {
+        if (QuickViewSection == null) return;
+
+        if (mode == 1) // Light
+        {
+            QuickViewSection.RequestedTheme = ElementTheme.Light;
+            var lightBg = new SolidColorBrush(Microsoft.UI.Colors.White);
+            var darkText = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 18, 18, 18));
+            var lightBorder = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 224, 224, 224));
+
+            QuickViewSection.Background = lightBg;
+            QuickViewSection.BorderBrush = lightBorder;
+
+            foreach (var child in QuickViewPanel.Children)
+            {
+                if (child is TextBlock tb)
+                {
+                    tb.Foreground = darkText;
+                }
+            }
+        }
+        else if (mode == 2) // Dark
+        {
+            QuickViewSection.RequestedTheme = ElementTheme.Dark;
+            var darkBg = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 26, 26, 26));
+            var lightText = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 245, 245, 245));
+            var darkBorder = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 48, 48, 48));
+
+            QuickViewSection.Background = darkBg;
+            QuickViewSection.BorderBrush = darkBorder;
+
+            foreach (var child in QuickViewPanel.Children)
+            {
+                if (child is TextBlock tb)
+                {
+                    tb.Foreground = lightText;
+                }
+            }
+        }
+        else // Default (0)
+        {
+            QuickViewSection.RequestedTheme = ElementTheme.Default;
+            QuickViewSection.Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"];
+            QuickViewSection.BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"];
+
+            foreach (var child in QuickViewPanel.Children)
+            {
+                if (child is TextBlock tb)
+                {
+                    tb.ClearValue(TextBlock.ForegroundProperty);
+                }
+            }
         }
     }
 

@@ -43,6 +43,7 @@ public sealed class SettingsService
     private const double DefaultQuickViewFontSizeValue = 20;
 
     private const string PreviewBackgroundKey = "PreviewBackground"; // 0 = Default, 1 = Light, 2 = Dark
+    private const string QuickViewBackgroundKey = "QuickViewBackground"; // 0 = Default, 1 = Light, 2 = Dark
     private const string LastUpdateCheckTimeKey = "LastUpdateCheckTime";
     private const string LatestAvailableVersionKey = "LatestAvailableVersion";
     private const string LatestReleaseUrlKey = "LatestReleaseUrl";
@@ -335,6 +336,16 @@ public sealed class SettingsService
             return v is >= 0 and <= 2 ? v.Value : 0;
         }
         set => SetValue(PreviewBackgroundKey, value);
+    }
+
+    public int QuickViewBackground
+    {
+        get
+        {
+            var v = GetValue<int?>(QuickViewBackgroundKey);
+            return v is >= 0 and <= 2 ? v.Value : 0;
+        }
+        set => SetValue(QuickViewBackgroundKey, value);
     }
 
     public DateTime LastUpdateCheckTime

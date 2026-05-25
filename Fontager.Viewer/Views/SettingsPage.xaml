@@ -147,6 +147,116 @@
                         </Grid>
                     </Border>
 
+                    <TextBlock Text="Quick View"
+                               Style="{StaticResource SettingsSectionHeaderStyle}" />
+
+                    <Border Style="{StaticResource SettingsCardBorderStyle}">
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="52" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon Grid.Column="0"
+                                      Glyph="&#xE8FF;"
+                                      FontSize="20"
+                                      VerticalAlignment="Top"
+                                      Margin="0,2,0,0"
+                                      Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <StackPanel Grid.Column="1"
+                                        VerticalAlignment="Center"
+                                        Spacing="4"
+                                        Margin="0,0,12,0">
+                                <TextBlock Text="Quick view panel"
+                                           Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                <TextBlock Text="Character overview under the font header. Automatically appears in small windows."
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           TextWrapping="WrapWholeWords" />
+                            </StackPanel>
+                            <ToggleSwitch x:Name="QuickViewToggle"
+                                          Grid.Column="2"
+                                          VerticalAlignment="Center"
+                                          HorizontalAlignment="Right"
+                                          MinWidth="0"
+                                          OnContent=""
+                                          OffContent=""
+                                          Toggled="QuickViewToggle_Toggled" />
+                        </Grid>
+                    </Border>
+
+                    <Border Style="{StaticResource SettingsCardBorderStyle}">
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon Grid.Column="0"
+                                      Glyph="&#xE8E9;"
+                                      FontSize="20"
+                                      VerticalAlignment="Top"
+                                      Margin="0,2,0,0"
+                                      Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <StackPanel Grid.Column="1"
+                                        VerticalAlignment="Center"
+                                        Spacing="4"
+                                        Margin="0,0,12,0">
+                                <TextBlock x:Name="QuickViewFontSizeSliderHeaderText"
+                                           Style="{StaticResource BodyStrongTextBlockStyle}"
+                                           Text="Quick view font size" />
+                                <TextBlock Text="Font size for the characters in the Quick view overview panel."
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           TextWrapping="WrapWholeWords" />
+                            </StackPanel>
+                            <Slider x:Name="QuickViewFontSizeSlider"
+                                    Grid.Column="2"
+                                    VerticalAlignment="Center"
+                                    Width="220"
+                                    Minimum="12"
+                                    Maximum="48"
+                                    StepFrequency="1"
+                                    ValueChanged="QuickViewFontSizeSlider_ValueChanged" />
+                        </Grid>
+                    </Border>
+
+                    <Border Style="{StaticResource SettingsCardBorderStyle}">
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon Grid.Column="0"
+                                      Glyph="&#xE790;"
+                                      FontSize="20"
+                                      VerticalAlignment="Top"
+                                      Margin="0,2,0,0"
+                                      Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <StackPanel Grid.Column="1"
+                                        VerticalAlignment="Center"
+                                        Spacing="4"
+                                        Margin="0,0,12,0">
+                                <TextBlock Text="Quick view background"
+                                           Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                <TextBlock Text="Choose the default contrast mode for the character Quick view panel."
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           TextWrapping="WrapWholeWords" />
+                            </StackPanel>
+                            <ComboBox x:Name="QuickViewBgCombo"
+                                      Grid.Column="2"
+                                      VerticalAlignment="Center"
+                                      MinWidth="200"
+                                      SelectionChanged="QuickViewBgCombo_SelectionChanged">
+                                <ComboBoxItem Content="System default" Tag="0" />
+                                <ComboBoxItem Content="Light background" Tag="1" />
+                                <ComboBoxItem Content="Dark background" Tag="2" />
+                            </ComboBox>
+                        </Grid>
+                    </Border>
+
                     <TextBlock Text="Preview"
                                Style="{StaticResource SettingsSectionHeaderStyle}" />
 
@@ -294,80 +404,8 @@
                         </Grid>
                     </Border>
 
-
-                    <TextBlock Text="Display"
+                    <TextBlock Text="Waterfall"
                                Style="{StaticResource SettingsSectionHeaderStyle}" />
-
-                    <Border Style="{StaticResource SettingsCardBorderStyle}">
-                        <Grid ColumnSpacing="16">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="52" />
-                            </Grid.ColumnDefinitions>
-                            <FontIcon Grid.Column="0"
-                                      Glyph="&#xE8FF;"
-                                      FontSize="20"
-                                      VerticalAlignment="Top"
-                                      Margin="0,2,0,0"
-                                      Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                            <StackPanel Grid.Column="1"
-                                        VerticalAlignment="Center"
-                                        Spacing="4"
-                                        Margin="0,0,12,0">
-                                <TextBlock Text="Quick view"
-                                           Style="{StaticResource BodyStrongTextBlockStyle}" />
-                                <TextBlock Text="Character overview under the font header. Automatically appears in small windows."
-                                           Style="{StaticResource CaptionTextBlockStyle}"
-                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                           TextWrapping="WrapWholeWords" />
-                            </StackPanel>
-                            <ToggleSwitch x:Name="QuickViewToggle"
-                                          Grid.Column="2"
-                                          VerticalAlignment="Center"
-                                          HorizontalAlignment="Right"
-                                          MinWidth="0"
-                                          OnContent=""
-                                          OffContent=""
-                                          Toggled="QuickViewToggle_Toggled" />
-                        </Grid>
-                    </Border>
-
-                    <Border Style="{StaticResource SettingsCardBorderStyle}">
-                        <Grid ColumnSpacing="16">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <FontIcon Grid.Column="0"
-                                      Glyph="&#xE8E9;"
-                                      FontSize="20"
-                                      VerticalAlignment="Top"
-                                      Margin="0,2,0,0"
-                                      Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                            <StackPanel Grid.Column="1"
-                                        VerticalAlignment="Center"
-                                        Spacing="4"
-                                        Margin="0,0,12,0">
-                                <TextBlock x:Name="QuickViewFontSizeSliderHeaderText"
-                                           Style="{StaticResource BodyStrongTextBlockStyle}"
-                                           Text="Quick view font size" />
-                                <TextBlock Text="Font size for the characters in the Quick view overview panel."
-                                           Style="{StaticResource CaptionTextBlockStyle}"
-                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                           TextWrapping="WrapWholeWords" />
-                            </StackPanel>
-                            <Slider x:Name="QuickViewFontSizeSlider"
-                                    Grid.Column="2"
-                                    VerticalAlignment="Center"
-                                    Width="220"
-                                    Minimum="12"
-                                    Maximum="48"
-                                    StepFrequency="1"
-                                    ValueChanged="QuickViewFontSizeSlider_ValueChanged" />
-                        </Grid>
-                    </Border>
 
                     <Border Style="{StaticResource SettingsCardBorderStyle}">
                         <Grid ColumnSpacing="16">
@@ -386,7 +424,7 @@
                                         VerticalAlignment="Center"
                                         Spacing="4"
                                         Margin="0,0,12,0">
-                                <TextBlock Text="Waterfall"
+                                <TextBlock Text="Waterfall preview"
                                            Style="{StaticResource BodyStrongTextBlockStyle}" />
                                 <TextBlock Text="Show multiple sample sizes at once."
                                            Style="{StaticResource CaptionTextBlockStyle}"
@@ -662,35 +700,98 @@
                     </Border>
 
                     <Border Style="{StaticResource SettingsCardBorderStyle}">
-                        <Grid ColumnSpacing="16">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <FontIcon Grid.Column="0"
-                                      Glyph="&#xE777;"
-                                      FontSize="20"
-                                      VerticalAlignment="Top"
-                                      Margin="0,2,0,0"
-                                      Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                            <StackPanel Grid.Column="1"
+                        <Grid>
+                            <!-- 1. State: Update Available (Visible only when update is available) -->
+                            <Grid x:Name="UpdateAvailablePanel" ColumnSpacing="16" Visibility="Collapsed">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                
+                                <Button x:Name="UpdateAvailableButton" 
+                                        Style="{StaticResource SubtleButtonStyle}"
+                                        HorizontalAlignment="Left"
+                                        Click="UpdateAvailableButton_Click"
+                                        Padding="4,4,12,4">
+                                    <Grid ColumnSpacing="16">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        
+                                        <!-- Gradient circle with refresh icon -->
+                                        <Border Grid.Column="0" Width="20" Height="20" CornerRadius="10" VerticalAlignment="Center">
+                                            <Border.Background>
+                                                <LinearGradientBrush StartPoint="0,0" EndPoint="0.5,1">
+                                                    <GradientStop Offset="0.0" Color="#239DE0" />
+                                                    <GradientStop Offset="1.0" Color="#037CD6" />
+                                                </LinearGradientBrush>
+                                            </Border.Background>
+                                            <FontIcon AutomationProperties.AccessibilityView="Raw" FontSize="11" Foreground="White" Glyph="&#xE895;" />
+                                        </Border>
+                                        
+                                        <StackPanel Grid.Column="1" Orientation="Vertical" VerticalAlignment="Center">
+                                            <TextBlock FontWeight="SemiBold" Text="Update Available" />
+                                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" Style="{StaticResource CaptionTextBlockStyle}">
+                                                <Run Text="Version" />
+                                                <Run x:Name="UpdateAvailableVersionText" Text="1.3.0" />
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </Grid>
+                                </Button>
+                                
+                                <!-- Right side download button -->
+                                <Button x:Name="DownloadButton" 
+                                        Grid.Column="1" 
+                                        Content="Download" 
+                                        Style="{StaticResource AccentButtonStyle}"
                                         VerticalAlignment="Center"
-                                        Spacing="4"
-                                        Margin="0,0,12,0">
-                                <TextBlock Text="Check for updates now"
-                                           Style="{StaticResource BodyStrongTextBlockStyle}" />
-                                <TextBlock x:Name="LastUpdateCheckText"
-                                           Text="Last checked: Never"
-                                           Style="{StaticResource CaptionTextBlockStyle}"
-                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                           TextWrapping="WrapWholeWords" />
-                            </StackPanel>
-                            <Button x:Name="ManualCheckButton"
-                                    Content="Check for updates"
-                                    Grid.Column="2"
-                                    VerticalAlignment="Center"
-                                    Click="ManualCheckButton_Click" />
+                                        Click="UpdateAvailableButton_Click" />
+                            </Grid>
+
+                            <!-- 2. State: Up to date (Visible only when NO update is available) -->
+                            <Grid x:Name="UpdateNotAvailablePanel" ColumnSpacing="16" Visibility="Visible">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                
+                                <Grid Padding="0,0,4,0" VerticalAlignment="Center" ColumnSpacing="16" HorizontalAlignment="Left">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    
+                                    <!-- Gradient circle with check icon -->
+                                    <Border Grid.Column="0" Width="20" Height="20" CornerRadius="10" VerticalAlignment="Center">
+                                        <Border.Background>
+                                            <LinearGradientBrush StartPoint="0,0" EndPoint="0.5,1">
+                                                <GradientStop Offset="0.0" Color="#6FB538" />
+                                                <GradientStop Offset="1.0" Color="#397A24" />
+                                            </LinearGradientBrush>
+                                        </Border.Background>
+                                        <FontIcon AutomationProperties.AccessibilityView="Raw" FontSize="11" Foreground="White" Glyph="&#xE73E;" />
+                                    </Border>
+                                    
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock FontWeight="SemiBold" Text="You're up to date" />
+                                        <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" Style="{StaticResource CaptionTextBlockStyle}">
+                                            <Run Text="Last checked:" />
+                                            <Run x:Name="LastUpdateCheckDateText" Text="Never" />
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Grid>
+                                
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                                    <ProgressRing x:Name="UpdateProgressRing"
+                                                  IsActive="False"
+                                                  Visibility="Collapsed"
+                                                  Width="20" Height="20" />
+                                    <Button x:Name="ManualCheckButton"
+                                            Content="Check now"
+                                            Click="ManualCheckButton_Click" />
+                                </StackPanel>
+                            </Grid>
                         </Grid>
                     </Border>
 

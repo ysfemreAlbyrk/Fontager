@@ -64,16 +64,11 @@ public sealed partial class SettingsPage : Page
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        // Appearance
-        ThemeCombo.SelectedIndex = (int)_settings.Theme;
-        SyncBackdropComboSelection();
-
         // Preview
         PreviewTextBox.Text = _settings.DefaultPreviewText;
         FontSizeSlider.Value = _settings.DefaultFontSize;
         FontSizeSliderHeaderText.Text = $"Default font size ({(int)_settings.DefaultFontSize}px)";
         PreviewControlsToggle.IsOn = _settings.ShowPreviewControls;
-        PreviewBgCombo.SelectedIndex = _settings.PreviewBackground;
 
         // Display
         QuickViewToggle.IsOn = _settings.ShowQuickView;
@@ -83,7 +78,6 @@ public sealed partial class SettingsPage : Page
         WaterfallSizesBox.Text = _settings.WaterfallSizesRaw;
 
         // Install
-        InstallModeCombo.SelectedIndex = _settings.InstallMode;
         ElevateForAllUsersInstallToggle.IsOn = _settings.ElevateForAllUsersInstall;
         RunAsAdminToggle.IsOn = _settings.RunAsAdministrator;
         SyncInstallAdminDescriptions();
@@ -92,7 +86,6 @@ public sealed partial class SettingsPage : Page
 
         // Updates
         UpdateCheckToggle.IsOn = _settings.IsUpdateNotificationEnabled;
-        SyncLastUpdateCheckText();
 
         // File association
         bool fontAssocPackaged = FileAssociationService.IsRunningPackaged;
@@ -125,11 +118,19 @@ public sealed partial class SettingsPage : Page
 
         AboutVersionText.Text = $"Version {version}";
         ApplyAboutLogo();
-        // AboutBuildKindText.Text = FileAssociationService.IsRunningPackaged
-        //     ? "Packaged (MSIX) build — Windows manages identity and updates."
-        //     : "📦 Desktop app — wrap the published folder with an installer for Start menu & uninstall (recommended). Settings: %LocalAppData%\\Fontager\\settings.json";
 
-        _initialized = true;
+        // Defer ComboBox selection assignments to the next dispatcher tick so WinUI 3 enqueues the rendering pass properly
+        DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Normal, () =>
+        {
+            _initialized = false;
+            ThemeCombo.SelectedIndex = (int)_settings.Theme;
+            SyncBackdropComboSelection();
+            PreviewBgCombo.SelectedIndex = _settings.PreviewBackground;
+            QuickViewBgCombo.SelectedIndex = _settings.QuickViewBackground;
+            InstallModeCombo.SelectedIndex = _settings.InstallMode;
+            SyncLastUpdateCheckText();
+            _initialized = true;
+        });
 
         DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low,
             () => ApplyTwoPaneLayout(TwoPaneRoot.ActualWidth > 1 ? TwoPaneRoot.ActualWidth : ActualWidth));
@@ -525,30 +526,76 @@ public sealed partial class SettingsPage : Page
         }
     }
 
+    private void QuickViewBgCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_initialized) return;
+        if (QuickViewBgCombo.SelectedItem is ComboBoxItem item
+            && TryReadComboBoxIntTag(item, out var v)
+            && v is >= 0 and <= 2)
+        {
+            _settings.QuickViewBackground = v;
+        }
+    }
+
     private void UpdateCheckToggle_Toggled(object sender, RoutedEventArgs e)
     {
         if (!_initialized) return;
         _settings.IsUpdateNotificationEnabled = UpdateCheckToggle.IsOn;
     }
 
+    private static string GetCurrentVersionString()
+    {
+        var asm = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+        return asm != null ? $"{asm.Major}.{asm.Minor}.{asm.Build}" : "0.0.0";
+    }
+
     private void SyncLastUpdateCheckText()
     {
         var dt = _settings.LastUpdateCheckTime;
-        if (dt == DateTime.MinValue)
+        var latest = _settings.LatestAvailableVersion;
+        var currentVersionStr = GetCurrentVersionString();
+
+        bool isUpdateAvailable = !string.IsNullOrEmpty(latest) && 
+                                 Version.TryParse(latest, out var latestVer) && 
+                                 Version.TryParse(currentVersionStr, out var currentVer) && 
+                                 latestVer > currentVer;
+
+        if (isUpdateAvailable)
         {
-            LastUpdateCheckText.Text = "Last checked: Never";
+            UpdateAvailablePanel.Visibility = Visibility.Visible;
+            UpdateNotAvailablePanel.Visibility = Visibility.Collapsed;
+            UpdateAvailableVersionText.Text = latest;
         }
         else
         {
-            LastUpdateCheckText.Text = $"Last checked: {dt.ToLocalTime():yyyy-MM-dd HH:mm:ss}";
+            UpdateAvailablePanel.Visibility = Visibility.Collapsed;
+            UpdateNotAvailablePanel.Visibility = Visibility.Visible;
+
+            if (dt == DateTime.MinValue)
+            {
+                LastUpdateCheckDateText.Text = "Never";
+            }
+            else
+            {
+                LastUpdateCheckDateText.Text = $"{dt.ToLocalTime():yyyy-MM-dd HH:mm:ss}";
+            }
+        }
+    }
+
+    private async void UpdateAvailableButton_Click(object sender, RoutedEventArgs e)
+    {
+        var url = _settings.LatestReleaseUrl;
+        if (!string.IsNullOrEmpty(url))
+        {
+            await Windows.System.Launcher.LaunchUriAsync(new Uri(url));
         }
     }
 
     private async void ManualCheckButton_Click(object sender, RoutedEventArgs e)
     {
-        ManualCheckButton.IsEnabled = false;
-        var originalText = ManualCheckButton.Content;
-        ManualCheckButton.Content = "Checking...";
+        ManualCheckButton.Visibility = Visibility.Collapsed;
+        UpdateProgressRing.Visibility = Visibility.Visible;
+        UpdateProgressRing.IsActive = true;
 
         try
         {
@@ -606,8 +653,9 @@ public sealed partial class SettingsPage : Page
         }
         finally
         {
-            ManualCheckButton.Content = originalText;
-            ManualCheckButton.IsEnabled = true;
+            UpdateProgressRing.IsActive = false;
+            UpdateProgressRing.Visibility = Visibility.Collapsed;
+            ManualCheckButton.Visibility = Visibility.Visible;
         }
     }
 }

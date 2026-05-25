@@ -346,17 +346,17 @@
 
                     <!-- Preview Tab -->
                     <PivotItem Header="Preview">
-                        <Border x:Name="PreviewSurfaceBorder" Background="Transparent" CornerRadius="8" Padding="12,12,12,12">
-                        <ScrollViewer Padding="0,0,0,0" VerticalScrollBarVisibility="Auto">
+                        <Border x:Name="PreviewSurfaceBorder" Background="Transparent">
+                        <ScrollViewer Padding="-12,8,12,0" VerticalScrollBarVisibility="Auto">
                             <StackPanel Spacing="12">
-
+ 
                                 <!-- Editable preview + size control -->
                                 <Grid x:Name="PreviewSection" ColumnSpacing="12">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-
+ 
                                     <TextBox x:Name="PreviewTextBox" Grid.Column="0"
                                              PlaceholderText="Type preview text here..."
                                              Text="The quick brown fox jumps over the lazy dog. 0123456789"
@@ -368,7 +368,7 @@
                                              Padding="12"
                                              BorderThickness="0"
                                              CornerRadius="8" />
-
+ 
                                     <!-- Size control on the right -->
                                     <StackPanel Grid.Column="1" Spacing="2"
                                                 VerticalAlignment="Center">
@@ -391,37 +391,9 @@
                                                 ToolTipService.ToolTip="Decrease font size">
                                             <FontIcon Glyph="&#xE738;" FontSize="10" />
                                         </Button>
-                                        
-                                        <!-- Preview Background contrast check button -->
-                                        <Button x:Name="PreviewBackgroundButton"
-                                                Style="{StaticResource SubtleButtonStyle}"
-                                                Padding="6,4" MinWidth="0" MinHeight="0"
-                                                Margin="0,8,0,0"
-                                                ToolTipService.ToolTip="Preview Background (Contrast Check)">
-                                            <FontIcon Glyph="&#xE790;" FontSize="12" />
-                                            <Button.Flyout>
-                                                <MenuFlyout>
-                                                    <MenuFlyoutItem x:Name="PreviewBgDefaultItem" Text="Default" Click="PreviewBgDefault_Click">
-                                                        <MenuFlyoutItem.Icon>
-                                                            <FontIcon Glyph="&#xE771;" />
-                                                        </MenuFlyoutItem.Icon>
-                                                    </MenuFlyoutItem>
-                                                    <MenuFlyoutItem x:Name="PreviewBgLightItem" Text="Light" Click="PreviewBgLight_Click">
-                                                        <MenuFlyoutItem.Icon>
-                                                            <FontIcon Glyph="&#xE706;" />
-                                                        </MenuFlyoutItem.Icon>
-                                                    </MenuFlyoutItem>
-                                                    <MenuFlyoutItem x:Name="PreviewBgDarkItem" Text="Dark" Click="PreviewBgDark_Click">
-                                                        <MenuFlyoutItem.Icon>
-                                                            <FontIcon Glyph="&#xE708;" />
-                                                        </MenuFlyoutItem.Icon>
-                                                    </MenuFlyoutItem>
-                                                </MenuFlyout>
-                                            </Button.Flyout>
-                                        </Button>
                                     </StackPanel>
                                 </Grid>
-
+ 
                                 <!-- Waterfall -->
                                 <StackPanel x:Name="WaterfallSection" Spacing="0" Margin="0" Padding="0,0,0,0">
                                     <!--<TextBlock Text="Waterfall" 
