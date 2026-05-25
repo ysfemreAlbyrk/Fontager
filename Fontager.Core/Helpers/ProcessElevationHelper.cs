@@ -4,15 +4,22 @@ using System.Diagnostics;
 using System.Linq;
 using System.Security.Principal;
 
-namespace Fontager.Viewer.Services;
+namespace Fontager.Core.Helpers;
 
 /// <summary>
-/// Restarts Fontager with or without administrator elevation according to
-/// <see cref="SettingsService.RunAsAdministrator"/>.
+/// Decoupled utility for verifying process elevation and performing UAC administrative restarts.
 /// </summary>
-internal static class ProcessElevationHelper
+public static class ProcessElevationHelper
 {
     private const int ErrorCancelled = 1223;
+    public const int ExitSuccess = 0;
+    public const int ExitError = 1;
+    public const int ExitAlreadyExists = 2;
+
+    /// <summary>
+    /// Callback hooked by the UI layer to cleanly shut down the application after triggering a restart.
+    /// </summary>
+    public static Action? ExitAction { get; set; }
 
     public static bool IsRunningElevated()
     {
@@ -32,9 +39,9 @@ internal static class ProcessElevationHelper
     /// When the user enabled “run as administrator” but this instance is not elevated,
     /// relaunch elevated (UAC). Returns true if the current process should exit.
     /// </summary>
-    public static bool TryRelaunchElevatedOnStartup(SettingsService settings)
+    public static bool TryRelaunchElevatedOnStartup(bool runAsAdministrator)
     {
-        if (!settings.RunAsAdministrator || IsRunningElevated())
+        if (!runAsAdministrator || IsRunningElevated())
             return false;
 
         try
@@ -56,7 +63,7 @@ internal static class ProcessElevationHelper
     {
         try
         {
-            var args = ElevatedInstallCommandLine.BuildArguments(sourcePath, displayName, overwrite);
+            var args = BuildElevatedInstallerArguments(sourcePath, displayName, overwrite);
             using var process = Process.Start(new ProcessStartInfo
             {
                 FileName = GetExecutablePath(),
@@ -66,7 +73,7 @@ internal static class ProcessElevationHelper
             });
 
             if (process is null)
-                return FontInstallerService.ExitError;
+                return ExitError;
 
             process.WaitForExit();
             return process.ExitCode;
@@ -136,9 +143,22 @@ internal static class ProcessElevationHelper
 
     private static void RequestAppExit()
     {
-        if (Microsoft.UI.Xaml.Application.Current is App app)
-            app.ExitOnElevationRestart();
+        if (ExitAction is not null)
+            ExitAction();
         else
             Environment.Exit(0);
     }
+
+    private static string BuildElevatedInstallerArguments(string sourcePath, string displayName, bool overwrite)
+    {
+        var source = Quote(sourcePath);
+        var name = Quote(displayName);
+        var args = $"--install-all-users --source {source} --name {name}";
+        if (overwrite)
+            args += " --overwrite";
+        return args;
+    }
+
+    private static string Quote(string value) =>
+        value.Contains(' ') ? $"\"{value}\"" : value;
 }

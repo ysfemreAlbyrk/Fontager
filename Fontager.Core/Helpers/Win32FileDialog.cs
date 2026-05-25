@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
-namespace Fontager.Viewer.Services;
+namespace Fontager.Core.Helpers;
 
 /// <summary>
 /// Win32 IFileOpenDialog wrapper used as a fallback to the WinRT FileOpenPicker.
@@ -10,7 +10,7 @@ namespace Fontager.Viewer.Services;
 /// (admin) under some MSIX/identity combinations. IFileOpenDialog has no such
 /// restriction and is the dialog Explorer itself uses.
 /// </summary>
-internal static class Win32FileDialog
+public static class Win32FileDialog
 {
     /// <summary>
     /// Shows a modern Open dialog filtered to the supplied extensions and
