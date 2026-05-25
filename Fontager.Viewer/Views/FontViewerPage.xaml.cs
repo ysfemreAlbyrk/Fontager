@@ -66,8 +66,13 @@ public sealed partial class FontViewerPage : Page
         DispatcherQueue.TryEnqueue(() =>
         {
             ViewModel.NotifySettingsDependentPropertiesChanged();
-            if (IsDisplayReady() && ViewModel.HasFont)
+            if (!IsDisplayReady())
+                return;
+
+            if (ViewModel.HasFont)
                 UpdateFontDisplay();
+            else
+                ApplyQuickViewBackground(_settings.QuickViewBackground);
         });
     }
 
@@ -582,21 +587,67 @@ public sealed partial class FontViewerPage : Page
                 }
             }
         }
-        else // Default (0)
+        else // Default (0) — follow app theme: light uses page backdrop, dark uses elevated card
         {
-            QuickViewSection.RequestedTheme = ElementTheme.Default;
-            QuickViewSection.ClearValue(Border.BackgroundProperty);
-            QuickViewSection.ClearValue(Border.BorderBrushProperty);
-
-            foreach (var child in QuickViewPanel.Children)
-            {
-                if (child is TextBlock tb)
-                {
-                    tb.ClearValue(TextBlock.ForegroundProperty);
-                }
-            }
+            ApplyQuickViewSystemDefaultBackground();
         }
     }
+
+    /// <summary>
+    /// Quick View "System default": on Light / Windows light, match the app shell background;
+    /// on dark themes, keep the subtle card fill so the strip stays readable on Mica.
+    /// </summary>
+    private void ApplyQuickViewSystemDefaultBackground()
+    {
+        QuickViewSection.RequestedTheme = ElementTheme.Default;
+
+        if (IsApplicationLightTheme())
+        {
+            if (IsSolidWindowBackdrop())
+            {
+                QuickViewSection.Background = ResolveThemeBrush(
+                    "ApplicationPageBackgroundThemeBrush",
+                    Windows.UI.Color.FromArgb(255, 243, 243, 243));
+                QuickViewSection.BorderBrush = ResolveThemeBrush(
+                    "CardStrokeColorDefaultBrush",
+                    Windows.UI.Color.FromArgb(255, 224, 224, 224));
+                QuickViewSection.BorderThickness = new Thickness(1);
+            }
+            else
+            {
+                // Mica / Acrylic: shell is transparent — blend with the same backdrop
+                QuickViewSection.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+                QuickViewSection.BorderThickness = new Thickness(0);
+                QuickViewSection.ClearValue(Border.BorderBrushProperty);
+            }
+        }
+        else
+        {
+            QuickViewSection.Background = ResolveThemeBrush(
+                "CardBackgroundFillColorDefaultBrush",
+                Windows.UI.Color.FromArgb(255, 32, 32, 32));
+            QuickViewSection.BorderBrush = ResolveThemeBrush(
+                "CardStrokeColorDefaultBrush",
+                Windows.UI.Color.FromArgb(255, 48, 48, 48));
+            QuickViewSection.BorderThickness = new Thickness(1);
+        }
+
+        foreach (var child in QuickViewPanel.Children)
+        {
+            if (child is TextBlock tb)
+                tb.ClearValue(TextBlock.ForegroundProperty);
+        }
+    }
+
+    private bool IsApplicationLightTheme() =>
+        _settings.Theme switch
+        {
+            ElementTheme.Light => true,
+            ElementTheme.Dark => false,
+            _ => Application.Current.RequestedTheme == ApplicationTheme.Light
+        };
+
+    private bool IsSolidWindowBackdrop() => _settings.Backdrop == 2;
 
     // ── Preview Interaction Handlers ────────────────────────────────────────
 
