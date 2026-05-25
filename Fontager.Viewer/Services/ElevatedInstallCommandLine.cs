@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using Fontager.Core.Services;
 
 namespace Fontager.Viewer.Services;
 
@@ -35,11 +36,12 @@ internal static class ElevatedInstallCommandLine
 
         if (string.IsNullOrWhiteSpace(source) || string.IsNullOrWhiteSpace(displayName))
         {
-            Environment.Exit(FontInstallerService.ExitError);
+            Environment.Exit(1); // ExitError
             return true;
         }
 
-        var code = FontInstallerService.InstallForAllUsers(source, displayName, overwrite);
+        var installer = new Fontager.Core.Services.FontInstallerService();
+        var code = installer.InstallForAllUsersSynchronous(source, displayName, overwrite);
         Environment.Exit(code);
         return true;
     }
@@ -60,3 +62,4 @@ internal static class ElevatedInstallCommandLine
     private static bool EqualsFlag(string[] args, int index, string flag) =>
         string.Equals(args[index], flag, StringComparison.OrdinalIgnoreCase);
 }
+

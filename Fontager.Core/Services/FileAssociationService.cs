@@ -4,38 +4,13 @@ using System.IO;
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
 
-namespace Fontager.Viewer.Services;
+namespace Fontager.Core.Services;
 
 /// <summary>
 /// Per-user file-association helpers for Fontager's supported font formats
 /// (<c>.ttf</c>, <c>.otf</c>, <c>.ttc</c>, <c>.woff2</c>).
-///
-/// <para>
-/// We never claim the default handler and never write under HKLM. All entries
-/// go under <c>HKCU\Software\Classes</c> so the user (a) doesn't need
-/// administrator rights and (b) can fully reverse the change from inside the
-/// Fontager Settings dialog.
-/// </para>
-///
-/// <para>
-/// <b>Why <c>.ttf</c> is special:</b> the MSIX
-/// <c>windows.fileTypeAssociation</c> manifest schema rejects <c>.ttf</c>
-/// (it's on Windows' reserved list, owned by the built-in Font Viewer).
-/// For the unpackaged build (see <c>docs/research/packaging-decision.md</c>)
-/// we can still add a per-user "Open with..." entry — which is what this
-/// service does for all four extensions in one shot.
-/// </para>
-///
-/// <para>
-/// <b>Note on Microsoft Store distribution:</b> we are deliberately NOT
-/// pursuing the Store at this stage. If we revisit it later, the path is
-/// either (a) re-enable MSIX (and lose the <c>.ttf</c> entry here, because
-/// the manifest still won't allow it), or (b) ship the unpackaged build via
-/// the Store as a Win32 app — see the packaging-decision doc for the
-/// trade-offs.
-/// </para>
 /// </summary>
-internal static class FileAssociationService
+public static class FileAssociationService
 {
     /// <summary>Win32: buffer too small — means the process has a package identity.</summary>
     private const int ErrorInsufficientBuffer = 122;
@@ -69,11 +44,6 @@ internal static class FileAssociationService
     /// no effect on Explorer, so we surface the feature as disabled. With
     /// the unpackaged build this is normally <c>false</c>.
     /// </summary>
-    /// <remarks>
-    /// Uses <c>GetCurrentPackageFullName</c> instead of <c>Package.Current</c>
-    /// so unpackaged runs do not throw <see cref="InvalidOperationException"/>
-    /// (debugger first-chance noise and slower startup).
-    /// </remarks>
     public static bool IsRunningPackaged => s_isRunningPackaged.Value;
 
     private static bool ComputeIsRunningPackaged()
