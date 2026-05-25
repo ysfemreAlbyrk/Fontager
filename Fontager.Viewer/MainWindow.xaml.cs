@@ -120,6 +120,8 @@ public sealed partial class MainWindow : Window
 
         if (!string.IsNullOrEmpty(App.FontFilePath))
             _ = LoadFontFromPathAsync(App.FontFilePath, 0);
+
+        CheckForUpdatesOnStartup();
     }
 
     private bool _suppressSettingsChangedReaction;
@@ -141,6 +143,7 @@ public sealed partial class MainWindow : Window
             if (Content is FrameworkElement fe)
                 fe.RequestedTheme = _settings.Theme;
             ApplyBackdrop();
+            ApplyPreviewBackground(_settings.PreviewBackground);
 
             // Install button label tracks the saved target.
             UpdateInstallButtonPresentation(GetSavedInstallTarget());
@@ -339,6 +342,7 @@ public sealed partial class MainWindow : Window
             AddIfInteractive(BackButton);
             AddIfInteractive(OpenButtonPanel);
             AddIfInteractive(SettingsButton);
+            AddIfInteractive(UpdateNotificationButton);
 
             var src = InputNonClientPointerSource.GetForWindowId(AppWindow.Id);
             src.ClearRegionRects(NonClientRegionKind.Passthrough);
@@ -908,9 +912,11 @@ public sealed partial class MainWindow : Window
         QuickViewSection.Visibility = _settings.ShowQuickView ? Visibility.Visible : Visibility.Collapsed;
         BuildQuickView();
 
+        // Apply preview background (which in turn builds the waterfall view)
+        ApplyPreviewBackground(_settings.PreviewBackground);
+
         // Waterfall
         WaterfallSection.Visibility = _settings.ShowWaterfall ? Visibility.Visible : Visibility.Collapsed;
-        BuildWaterfallView();
 
         BuildGlyphGrid();
         BuildMetadataView();
@@ -1025,6 +1031,21 @@ public sealed partial class MainWindow : Window
             ? "The quick brown fox jumps over the lazy dog"
             : _viewModel.PreviewText;
 
+        var previewBgMode = _settings.PreviewBackground;
+        Brush? customTbBrush = null;
+        Brush? customLabelBrush = null;
+
+        if (previewBgMode == 1) // Light
+        {
+            customTbBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 18, 18, 18));
+            customLabelBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 100, 100, 100));
+        }
+        else if (previewBgMode == 2) // Dark
+        {
+            customTbBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 245, 245, 245));
+            customLabelBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 170, 170, 170));
+        }
+
         foreach (var size in sizes)
         {
             var row = new Grid { Margin = new Thickness(0, 1, 0, 1) };
@@ -1035,7 +1056,7 @@ public sealed partial class MainWindow : Window
             {
                 Text = $"{size}",
                 Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
-                Foreground = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
+                Foreground = customLabelBrush ?? (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
                 VerticalAlignment = VerticalAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Left,
                 Margin = new Thickness(0, 0, 12, 0)
@@ -1050,6 +1071,10 @@ public sealed partial class MainWindow : Window
                 IsTextSelectionEnabled = true,
                 VerticalAlignment = VerticalAlignment.Center
             };
+            if (customTbBrush != null)
+            {
+                tb.Foreground = customTbBrush;
+            }
             ApplyFontToTextBlock(tb, meta);
             Grid.SetColumn(tb, 1);
 
@@ -1091,6 +1116,7 @@ public sealed partial class MainWindow : Window
         SetPreviewFontSize(_settings.DefaultFontSize);
         UpdateInstallButtonPresentation(GetSavedInstallTarget());
         ApplyInstallElevatedUi();
+        ApplyPreviewBackground(_settings.PreviewBackground);
     }
 
     // ── Settings navigation ────────────────────────────────────────
@@ -1333,6 +1359,103 @@ public sealed partial class MainWindow : Window
         if (Application.Current.Resources.TryGetValue(resourceKey, out var o) && o is Brush br)
             return br;
         return new SolidColorBrush(fallback);
+    }
+
+    private void ApplyPreviewBackground(int mode)
+    {
+        if (PreviewSurfaceBorder == null) return;
+
+        if (mode == 1) // Light
+        {
+            var lightBg = new SolidColorBrush(Microsoft.UI.Colors.White);
+            var darkText = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 18, 18, 18));
+
+            PreviewSurfaceBorder.Background = lightBg;
+            PreviewSurfaceBorder.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 224, 224, 224));
+            PreviewSurfaceBorder.BorderThickness = new Thickness(1);
+            PreviewSurfaceBorder.CornerRadius = new CornerRadius(8);
+
+            PreviewTextBox.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            PreviewTextBox.Foreground = darkText;
+        }
+        else if (mode == 2) // Dark
+        {
+            var darkBg = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 26, 26, 26));
+            var lightText = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 245, 245, 245));
+
+            PreviewSurfaceBorder.Background = darkBg;
+            PreviewSurfaceBorder.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 48, 48, 48));
+            PreviewSurfaceBorder.BorderThickness = new Thickness(1);
+            PreviewSurfaceBorder.CornerRadius = new CornerRadius(8);
+
+            PreviewTextBox.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            PreviewTextBox.Foreground = lightText;
+        }
+        else // Default (0)
+        {
+            PreviewSurfaceBorder.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            PreviewSurfaceBorder.BorderBrush = null;
+            PreviewSurfaceBorder.BorderThickness = new Thickness(0);
+
+            PreviewTextBox.ClearValue(TextBox.BackgroundProperty);
+            PreviewTextBox.ClearValue(TextBox.ForegroundProperty);
+        }
+
+        if (_viewModel.HasFont)
+        {
+            BuildWaterfallView();
+        }
+    }
+
+    private void PreviewBgDefault_Click(object sender, RoutedEventArgs e)
+    {
+        _settings.PreviewBackground = 0;
+    }
+
+    private void PreviewBgLight_Click(object sender, RoutedEventArgs e)
+    {
+        _settings.PreviewBackground = 1;
+    }
+
+    private void PreviewBgDark_Click(object sender, RoutedEventArgs e)
+    {
+        _settings.PreviewBackground = 2;
+    }
+
+    private async void CheckForUpdatesOnStartup()
+    {
+        if (!_settings.IsUpdateNotificationEnabled) return;
+
+        try
+        {
+            var updateService = App.Services.GetRequiredService<UpdateCheckService>();
+            var result = await updateService.CheckForUpdatesAsync(forceCheck: false);
+
+            if (result.IsUpdateAvailable)
+            {
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    UpdateNotificationButton.Visibility = Visibility.Visible;
+                    ScheduleTitleBarPassthroughUpdate();
+                });
+            }
+        }
+        catch
+        {
+            // Fail silently on startup
+        }
+    }
+
+    private async void UpdateNotificationButton_Click(object sender, RoutedEventArgs e)
+    {
+        var latestVersion = _settings.LatestAvailableVersion;
+        var releaseUrl = _settings.LatestReleaseUrl;
+
+        var contentText = $"A new version of Fontager ({latestVersion}) is available! Would you like to open the download page?";
+        if (await ShowConfirmDialogAsync("Update Available", contentText))
+        {
+            await Windows.System.Launcher.LaunchUriAsync(new Uri(releaseUrl));
+        }
     }
 
     private static string GetWeightName(int weight) => weight switch

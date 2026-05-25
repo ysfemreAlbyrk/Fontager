@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
@@ -11,7 +11,7 @@
   <Identity
     Name="ysfemrealbyrk.Fontager"
     Publisher="CN=Yusuf Emre ALBAYRAK"
-    Version="1.2.2.0" />
+    Version="1.3.0.0" />
 
   <mp:PhoneIdentity PhoneProductId="6ee7d5ee-77c8-48bb-9fb6-4ebc3538f7b0" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 

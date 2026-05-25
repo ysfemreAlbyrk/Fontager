@@ -73,6 +73,7 @@ public sealed partial class SettingsPage : Page
         FontSizeSlider.Value = _settings.DefaultFontSize;
         FontSizeSliderHeaderText.Text = $"Default font size ({(int)_settings.DefaultFontSize}px)";
         PreviewControlsToggle.IsOn = _settings.ShowPreviewControls;
+        PreviewBgCombo.SelectedIndex = _settings.PreviewBackground;
 
         // Display
         QuickViewToggle.IsOn = _settings.ShowQuickView;
@@ -88,6 +89,10 @@ public sealed partial class SettingsPage : Page
         SyncInstallAdminDescriptions();
         ExitAfterInstallToggle.IsOn = _settings.ExitAppAfterSuccessfulInstall;
         SyncInstallModeComboEnabled();
+
+        // Updates
+        UpdateCheckToggle.IsOn = _settings.IsUpdateNotificationEnabled;
+        SyncLastUpdateCheckText();
 
         // File association
         bool fontAssocPackaged = FileAssociationService.IsRunningPackaged;
@@ -506,6 +511,103 @@ public sealed partial class SettingsPage : Page
         finally
         {
             _initialized = true;
+        }
+    }
+
+    private void PreviewBgCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_initialized) return;
+        if (PreviewBgCombo.SelectedItem is ComboBoxItem item
+            && TryReadComboBoxIntTag(item, out var v)
+            && v is >= 0 and <= 2)
+        {
+            _settings.PreviewBackground = v;
+        }
+    }
+
+    private void UpdateCheckToggle_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (!_initialized) return;
+        _settings.IsUpdateNotificationEnabled = UpdateCheckToggle.IsOn;
+    }
+
+    private void SyncLastUpdateCheckText()
+    {
+        var dt = _settings.LastUpdateCheckTime;
+        if (dt == DateTime.MinValue)
+        {
+            LastUpdateCheckText.Text = "Last checked: Never";
+        }
+        else
+        {
+            LastUpdateCheckText.Text = $"Last checked: {dt.ToLocalTime():yyyy-MM-dd HH:mm:ss}";
+        }
+    }
+
+    private async void ManualCheckButton_Click(object sender, RoutedEventArgs e)
+    {
+        ManualCheckButton.IsEnabled = false;
+        var originalText = ManualCheckButton.Content;
+        ManualCheckButton.Content = "Checking...";
+
+        try
+        {
+            var updateService = App.Services.GetRequiredService<UpdateCheckService>();
+            var result = await updateService.CheckForUpdatesAsync(forceCheck: true);
+
+            SyncLastUpdateCheckText();
+
+            var xamlRoot = this.XamlRoot ?? (Content as FrameworkElement)?.XamlRoot;
+            if (xamlRoot is null) return;
+
+            if (result.IsUpdateAvailable)
+            {
+                var dialog = new ContentDialog
+                {
+                    Title = "Update Available",
+                    Content = $"A new version ({result.LatestVersion}) of Fontager is available. Would you like to open the download page?",
+                    PrimaryButtonText = "Download",
+                    CloseButtonText = "Close",
+                    DefaultButton = ContentDialogButton.Primary,
+                    XamlRoot = xamlRoot
+                };
+
+                if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+                {
+                    await Windows.System.Launcher.LaunchUriAsync(new Uri(result.ReleaseUrl));
+                }
+            }
+            else
+            {
+                var dialog = new ContentDialog
+                {
+                    Title = "Up to Date",
+                    Content = "You are running the latest version of Fontager.",
+                    CloseButtonText = "OK",
+                    XamlRoot = xamlRoot
+                };
+                await dialog.ShowAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            var xamlRoot = this.XamlRoot ?? (Content as FrameworkElement)?.XamlRoot;
+            if (xamlRoot is not null)
+            {
+                var dialog = new ContentDialog
+                {
+                    Title = "Error",
+                    Content = $"Failed to check for updates: {ex.Message}",
+                    CloseButtonText = "OK",
+                    XamlRoot = xamlRoot
+                };
+                await dialog.ShowAsync();
+            }
+        }
+        finally
+        {
+            ManualCheckButton.Content = originalText;
+            ManualCheckButton.IsEnabled = true;
         }
     }
 }

@@ -91,6 +91,7 @@ public partial class App : Application
 
         // App services
         services.AddSingleton<SettingsService>();
+        services.AddSingleton<UpdateCheckService>();
 
         // ViewModels
         services.AddTransient<FontViewerViewModel>();

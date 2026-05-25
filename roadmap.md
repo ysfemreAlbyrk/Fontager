@@ -78,9 +78,9 @@ Lightweight font previewer; default handler for font files on Windows.
 - [x] **Backdrop options** — Mica, Acrylic, Mica Alt, solid; persisted and applied without unnecessary recreation
 - [x] **Elevation** — install targets and tooltips reflect admin vs standard user; drag-drop and open dialog work when run as administrator
 - [x] **Glyph performance** — virtualized grid, debounced search/filter, precomputed block/category on `GlyphItem`
-- [ ] **Dark / light preview backgrounds** — toggle preview surface for contrast checks
+- [x] **Dark / light preview backgrounds** — toggle preview surface for contrast checks
 - [ ] **Recent files** — quick reopen list on the empty state
-- [ ] **Update checks via GitHub Releases** — check for new versions on startup(only once a day) or on-demand in settings and notify the user when a new update is available.
+- [x] **Update checks via GitHub Releases** — check for new versions on startup (only once a day) or on-demand in settings and notify the user when a new update is available.
 - [x] **Restore context menu "Install" options** — prevent standard Windows right-click "Install" and "Install for all users" from disappearing when Fontager is the default handler
 - [x] **Batch font installation** — support installing multiple selected fonts at once from Explorer
 - [ ] **Internationalization (i18n)** — localized UI strings

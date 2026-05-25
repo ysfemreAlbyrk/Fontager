@@ -42,6 +42,12 @@ public sealed class SettingsService
     private const string QuickViewFontSizeKey = "QuickViewFontSize";
     private const double DefaultQuickViewFontSizeValue = 20;
 
+    private const string PreviewBackgroundKey = "PreviewBackground"; // 0 = Default, 1 = Light, 2 = Dark
+    private const string LastUpdateCheckTimeKey = "LastUpdateCheckTime";
+    private const string LatestAvailableVersionKey = "LatestAvailableVersion";
+    private const string LatestReleaseUrlKey = "LatestReleaseUrl";
+    private const string IsUpdateNotificationEnabledKey = "IsUpdateNotificationEnabled";
+
     private const string DefaultPreviewTextValue = "The quick brown fox jumps over the lazy dog. 0123456789";
     private const double DefaultFontSizeValue = 32;
     private const string DefaultWaterfallSizesValue = "8,10,12,14,16,18,20,24,28,32,36,40,48,56,64,72";
@@ -319,5 +325,43 @@ public sealed class SettingsService
         {
             return [8, 12, 16, 20, 24, 32, 48, 64, 72];
         }
+    }
+
+    public int PreviewBackground
+    {
+        get
+        {
+            var v = GetValue<int?>(PreviewBackgroundKey);
+            return v is >= 0 and <= 2 ? v.Value : 0;
+        }
+        set => SetValue(PreviewBackgroundKey, value);
+    }
+
+    public DateTime LastUpdateCheckTime
+    {
+        get
+        {
+            var s = GetValue<string>(LastUpdateCheckTimeKey);
+            return DateTime.TryParse(s, out var dt) ? dt : DateTime.MinValue;
+        }
+        set => SetValue(LastUpdateCheckTimeKey, value.ToString("o"));
+    }
+
+    public string LatestAvailableVersion
+    {
+        get => GetValue<string>(LatestAvailableVersionKey) ?? string.Empty;
+        set => SetValue(LatestAvailableVersionKey, value ?? string.Empty);
+    }
+
+    public string LatestReleaseUrl
+    {
+        get => GetValue<string>(LatestReleaseUrlKey) ?? string.Empty;
+        set => SetValue(LatestReleaseUrlKey, value ?? string.Empty);
+    }
+
+    public bool IsUpdateNotificationEnabled
+    {
+        get => GetValue<bool?>(IsUpdateNotificationEnabledKey) ?? true;
+        set => SetValue(IsUpdateNotificationEnabledKey, value);
     }
 }
