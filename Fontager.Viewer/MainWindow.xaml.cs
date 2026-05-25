@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Fontager.Core.Helpers;
 using Fontager.Core.Services;
+using Fontager.Viewer.Helpers;
 using Fontager.Viewer.Services;
 using Fontager.Viewer.ViewModels;
 using Fontager.Viewer.Views;
@@ -33,6 +34,9 @@ public sealed partial class MainWindow : Window
     private int _appliedBackdropKind = int.MinValue;
     private bool _titleBarPassthroughScheduled;
 
+    /// <summary>True when the font viewer page is the active frame content (not Settings).</summary>
+    public bool IsFontViewerPageActive => RootFrame.Content is FontViewerPage;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -42,7 +46,7 @@ public sealed partial class MainWindow : Window
         _settings = App.Services.GetRequiredService<SettingsService>();
 
         ConfigureWindow();
-        ApplySettings();
+        ApplyThemeSettings();
         ApplyBackdrop();
 
         RootGrid.AllowDrop = true;
@@ -87,9 +91,10 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            if (Content is FrameworkElement fe)
-                fe.RequestedTheme = _settings.Theme;
+            ApplyThemeSettings();
             ApplyBackdrop();
+            FontViewerPage.CachedForSettingsSync?.DispatcherQueue.TryEnqueue(
+                () => FontViewerPage.CachedForSettingsSync?.RefreshQuickViewChrome());
         }
         catch
         {
@@ -367,7 +372,9 @@ public sealed partial class MainWindow : Window
         {
             case 2:
                 SystemBackdrop = null;
-                RootGrid.Background = new SolidColorBrush(ResolveSolidBackdropColor());
+                var solidColor = AppThemeHelper.SolidBackdropColor(_settings.Theme, RootGrid);
+                if (RootGrid.Background is not SolidColorBrush existing || existing.Color != solidColor)
+                    RootGrid.Background = new SolidColorBrush(solidColor);
                 _appliedBackdropKind = 2;
                 return;
 
@@ -398,22 +405,6 @@ public sealed partial class MainWindow : Window
                 _appliedBackdropKind = 0;
                 return;
         }
-    }
-
-    private Windows.UI.Color ResolveSolidBackdropColor()
-    {
-        if (Application.Current.Resources.TryGetValue("ApplicationPageBackgroundThemeBrush", out var o)
-            && o is SolidColorBrush scb)
-            return scb.Color;
-
-        var theme = RootGrid.ActualTheme;
-        var dark = theme == ElementTheme.Dark
-            || (theme == ElementTheme.Default
-                && Application.Current.RequestedTheme == ApplicationTheme.Dark);
-
-        return dark
-            ? Windows.UI.Color.FromArgb(255, 32, 32, 32)
-            : Windows.UI.Color.FromArgb(255, 243, 243, 243);
     }
 
     private void OpenFileButton_Click(object sender, RoutedEventArgs e)
@@ -469,12 +460,21 @@ public sealed partial class MainWindow : Window
         return false;
     }
 
-    private void ApplySettings()
+    private void ApplyThemeSettings()
     {
+        void Apply()
+        {
+            var theme = _settings.Theme;
+            // WinUI throws if Application.RequestedTheme is changed at runtime; apply per-root instead.
+            RootGrid.RequestedTheme = theme;
+            RootFrame.RequestedTheme = theme;
+            AppTitleBar.RequestedTheme = theme;
+        }
+
         if (RootGrid.XamlRoot != null)
-            ((FrameworkElement)Content).RequestedTheme = _settings.Theme;
+            Apply();
         else
-            RootGrid.Loaded += (_, _) => ((FrameworkElement)Content).RequestedTheme = _settings.Theme;
+            RootGrid.Loaded += (_, _) => Apply();
     }
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e)

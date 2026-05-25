@@ -32,6 +32,27 @@
             <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
             <Setter Property="Margin" Value="0,20,0,10" />
         </Style>
+        <!-- Tighter than default Expander (16,0,0,0 header + 20,0,8,0 chevron margin + 16 content). -->
+        <Thickness x:Key="ExpanderHeaderPadding">0,0,0,0</Thickness>
+        <Thickness x:Key="ExpanderChevronMargin">4,0,8,0</Thickness>
+        <Thickness x:Key="ExpanderContentPadding">0,0,0,0</Thickness>
+        <Style x:Key="SettingsGroupExpanderStyle" TargetType="Expander">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style x:Key="SettingsExpanderHeaderGridStyle" TargetType="Grid">
+            <Setter Property="Padding" Value="0,14,0,14" />
+            <Setter Property="ColumnSpacing" Value="12" />
+        </Style>
+        <Style x:Key="SettingsExpanderNestedRowStyle" TargetType="Border">
+            <Setter Property="BorderBrush" Value="{ThemeResource DividerStrokeColorDefaultBrush}" />
+            <Setter Property="BorderThickness" Value="0,1,0,0" />
+            <!-- Indented under header title (icon + spacing), with horizontal padding on both sides. -->
+            <Setter Property="Padding" Value="56,12,16,12" />
+        </Style>
     </Page.Resources>
 
     <Grid Background="Transparent">
@@ -151,119 +172,10 @@
                         </Grid>
                     </Border>
 
-                    <TextBlock Text="Quick View"
-                               Style="{StaticResource SettingsSectionHeaderStyle}" />
-
-                    <Border Style="{StaticResource SettingsCardBorderStyle}">
-                        <Grid ColumnSpacing="16">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="52" />
-                            </Grid.ColumnDefinitions>
-                            <FontIcon Grid.Column="0"
-                                      Glyph="&#xE8FF;"
-                                      FontSize="20"
-                                      VerticalAlignment="Top"
-                                      Margin="0,2,0,0"
-                                      Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                            <StackPanel Grid.Column="1"
-                                        VerticalAlignment="Center"
-                                        Spacing="4"
-                                        Margin="0,0,12,0">
-                                <TextBlock Text="Quick view panel"
-                                           Style="{StaticResource BodyStrongTextBlockStyle}" />
-                                <TextBlock Text="Character overview under the font header. Automatically appears in small windows."
-                                           Style="{StaticResource CaptionTextBlockStyle}"
-                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                           TextWrapping="WrapWholeWords" />
-                            </StackPanel>
-                            <ToggleSwitch x:Name="QuickViewToggle"
-                                          Grid.Column="2"
-                                          VerticalAlignment="Center"
-                                          HorizontalAlignment="Right"
-                                          MinWidth="0"
-                                          OnContent=""
-                                          OffContent=""
-                                          IsOn="{x:Bind ViewModel.ShowQuickView, Mode=TwoWay}" />
-                        </Grid>
-                    </Border>
-
-                    <Border Style="{StaticResource SettingsCardBorderStyle}">
-                        <Grid ColumnSpacing="16">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <FontIcon Grid.Column="0"
-                                      Glyph="&#xE8E9;"
-                                      FontSize="20"
-                                      VerticalAlignment="Top"
-                                      Margin="0,2,0,0"
-                                      Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                            <StackPanel Grid.Column="1"
-                                        VerticalAlignment="Center"
-                                        Spacing="4"
-                                        Margin="0,0,12,0">
-                                <TextBlock x:Name="QuickViewFontSizeSliderHeaderText"
-                                           Style="{StaticResource BodyStrongTextBlockStyle}"
-                                           Text="{x:Bind ViewModel.QuickViewFontSizeLabel, Mode=OneWay}" />
-                                <TextBlock Text="Font size for the characters in the Quick view overview panel."
-                                           Style="{StaticResource CaptionTextBlockStyle}"
-                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                           TextWrapping="WrapWholeWords" />
-                            </StackPanel>
-                            <Slider x:Name="QuickViewFontSizeSlider"
-                                    Grid.Column="2"
-                                    VerticalAlignment="Center"
-                                    Width="220"
-                                    Minimum="12"
-                                    Maximum="48"
-                                    StepFrequency="1"
-                                    Value="{x:Bind ViewModel.QuickViewFontSize, Mode=TwoWay}" />
-                        </Grid>
-                    </Border>
-
-                    <Border Style="{StaticResource SettingsCardBorderStyle}">
-                        <Grid ColumnSpacing="16">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <FontIcon Grid.Column="0"
-                                      Glyph="&#xE790;"
-                                      FontSize="20"
-                                      VerticalAlignment="Top"
-                                      Margin="0,2,0,0"
-                                      Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                            <StackPanel Grid.Column="1"
-                                        VerticalAlignment="Center"
-                                        Spacing="4"
-                                        Margin="0,0,12,0">
-                                <TextBlock Text="Quick view background"
-                                           Style="{StaticResource BodyStrongTextBlockStyle}" />
-                                <TextBlock Text="Choose the default contrast mode for the character Quick view panel."
-                                           Style="{StaticResource CaptionTextBlockStyle}"
-                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                           TextWrapping="WrapWholeWords" />
-                            </StackPanel>
-                            <ComboBox x:Name="QuickViewBgCombo"
-                                      Grid.Column="2"
-                                      VerticalAlignment="Center"
-                                      MinWidth="200"
-                                      SelectedIndex="{x:Bind ViewModel.QuickViewBackground, Mode=TwoWay}">
-                                <ComboBoxItem Content="System default" Tag="0" />
-                                <ComboBoxItem Content="Light background" Tag="1" />
-                                <ComboBoxItem Content="Dark background" Tag="2" />
-                            </ComboBox>
-                        </Grid>
-                    </Border>
-
                     <TextBlock Text="Preview"
                                Style="{StaticResource SettingsSectionHeaderStyle}" />
 
+                    <!-- 2 settings cards -->
                     <Border Style="{StaticResource SettingsCardBorderStyle}">
                         <Grid RowSpacing="12">
                             <Grid.RowDefinitions>
@@ -308,77 +220,6 @@
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <FontIcon Grid.Column="0"
-                                      Glyph="&#xE8E9;"
-                                      FontSize="20"
-                                      VerticalAlignment="Top"
-                                      Margin="0,2,0,0"
-                                      Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                            <StackPanel Grid.Column="1"
-                                        VerticalAlignment="Center"
-                                        Spacing="4"
-                                        Margin="0,0,12,0">
-                                <TextBlock x:Name="FontSizeSliderHeaderText"
-                                           Style="{StaticResource BodyStrongTextBlockStyle}"
-                                           Text="Default font size" />
-                                <TextBlock Text="Default point size for the editable preview box."
-                                           Style="{StaticResource CaptionTextBlockStyle}"
-                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                           TextWrapping="WrapWholeWords" />
-                            </StackPanel>
-                            <Slider x:Name="FontSizeSlider"
-                                    Grid.Column="2"
-                                    VerticalAlignment="Center"
-                                    Width="220"
-                                    Minimum="8"
-                                    Maximum="120"
-                                    StepFrequency="1"
-                                    Value="{x:Bind ViewModel.DefaultFontSize, Mode=TwoWay}" />
-                        </Grid>
-                    </Border>
-
-                    <Border Style="{StaticResource SettingsCardBorderStyle}">
-                        <Grid ColumnSpacing="16">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="52" />
-                            </Grid.ColumnDefinitions>
-                            <FontIcon Grid.Column="0"
-                                      Glyph="&#xE70F;"
-                                      FontSize="20"
-                                      VerticalAlignment="Top"
-                                      Margin="0,2,0,0"
-                                      Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                            <StackPanel Grid.Column="1"
-                                        VerticalAlignment="Center"
-                                        Spacing="4"
-                                        Margin="0,0,12,0">
-                                <TextBlock Text="Editable preview"
-                                           Style="{StaticResource BodyStrongTextBlockStyle}" />
-                                <TextBlock Text="Show the text preview area with size controls. When off, only the waterfall is shown."
-                                           Style="{StaticResource CaptionTextBlockStyle}"
-                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                           TextWrapping="WrapWholeWords" />
-                            </StackPanel>
-                            <ToggleSwitch x:Name="PreviewControlsToggle"
-                                          Grid.Column="2"
-                                          VerticalAlignment="Center"
-                                          HorizontalAlignment="Right"
-                                          MinWidth="0"
-                                          OnContent=""
-                                          OffContent=""
-                                          IsOn="{x:Bind ViewModel.ShowPreviewControls, Mode=TwoWay}" />
-                        </Grid>
-                    </Border>
-
-                    <Border Style="{StaticResource SettingsCardBorderStyle}">
-                        <Grid ColumnSpacing="16">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <FontIcon Grid.Column="0"
                                       Glyph="&#xE790;"
                                       FontSize="20"
                                       VerticalAlignment="Top"
@@ -388,10 +229,10 @@
                                         VerticalAlignment="Center"
                                         Spacing="4"
                                         Margin="0,0,12,0">
-                                <TextBlock Text="Default preview background"
-                                           Style="{StaticResource BodyStrongTextBlockStyle}" />
-                                <TextBlock Text="Choose the default contrast mode for the preview surface."
-                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                            <TextBlock Text="Default preview background"
+                                                       Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                            <TextBlock Text="Contrast for the editable preview and Quick View panels."
+                                                       Style="{StaticResource CaptionTextBlockStyle}"
                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                            TextWrapping="WrapWholeWords" />
                             </StackPanel>
@@ -407,77 +248,214 @@
                         </Grid>
                     </Border>
 
-                    <TextBlock Text="Waterfall"
-                               Style="{StaticResource SettingsSectionHeaderStyle}" />
-
-                    <Border Style="{StaticResource SettingsCardBorderStyle}">
-                        <Grid ColumnSpacing="16">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="52" />
-                            </Grid.ColumnDefinitions>
-                            <FontIcon Grid.Column="0"
-                                      Glyph="&#xE81E;"
-                                      FontSize="20"
-                                      VerticalAlignment="Top"
-                                      Margin="0,2,0,0"
-                                      Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                            <StackPanel Grid.Column="1"
-                                        VerticalAlignment="Center"
-                                        Spacing="4"
-                                        Margin="0,0,12,0">
-                                <TextBlock Text="Waterfall preview"
-                                           Style="{StaticResource BodyStrongTextBlockStyle}" />
-                                <TextBlock Text="Show multiple sample sizes at once."
-                                           Style="{StaticResource CaptionTextBlockStyle}"
-                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                           TextWrapping="WrapWholeWords" />
-                            </StackPanel>
-                            <ToggleSwitch x:Name="WaterfallToggle"
-                                          Grid.Column="2"
-                                          VerticalAlignment="Center"
-                                          HorizontalAlignment="Right"
-                                          MinWidth="0"
-                                          OnContent=""
-                                          OffContent=""
-                                          IsOn="{x:Bind ViewModel.ShowWaterfall, Mode=TwoWay}" />
-                        </Grid>
+                    <!-- Quick View -->
+                    <Border Style="{StaticResource SettingsCardBorderStyle}" Padding="0">
+                        <Expander x:Name="QuickViewExpander"
+                                  Style="{StaticResource SettingsGroupExpanderStyle}"
+                                  IsExpanded="False">
+                            <Expander.Header>
+                                <Grid Style="{StaticResource SettingsExpanderHeaderGridStyle}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <FontIcon Grid.Column="0"
+                                              Glyph="&#xE8FF;"
+                                              FontSize="20"
+                                              VerticalAlignment="Top"
+                                              Margin="0,2,0,0"
+                                              Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    <StackPanel Grid.Column="1"
+                                                VerticalAlignment="Center"
+                                                Spacing="4"
+                                                Margin="0,0,12,0">
+                                        <TextBlock Text="Quick View"
+                                                   Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                        <TextBlock Text="Character overview under the font header. Automatically appears in small windows."
+                                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                   TextWrapping="WrapWholeWords" />
+                                    </StackPanel>
+                                    <ToggleSwitch x:Name="QuickViewToggle"
+                                                  Grid.Column="2"
+                                                  VerticalAlignment="Center"
+                                                  MinWidth="0"
+                                                  OnContent=""
+                                                  OffContent=""
+                                                  IsOn="{x:Bind ViewModel.ShowQuickView, Mode=TwoWay}" />
+                                </Grid>
+                            </Expander.Header>
+                            <ContentControl IsEnabled="{x:Bind ViewModel.ShowQuickView, Mode=OneWay}"
+                                            HorizontalContentAlignment="Stretch"
+                                            VerticalContentAlignment="Top">
+                                <StackPanel>
+                                    <Border Style="{StaticResource SettingsExpanderNestedRowStyle}">
+                                        <Grid ColumnSpacing="16">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0"
+                                                        VerticalAlignment="Center"
+                                                        Spacing="4"
+                                                        Margin="0,0,12,0">
+                                                <TextBlock x:Name="QuickViewFontSizeSliderHeaderText"
+                                                           Style="{StaticResource BodyStrongTextBlockStyle}"
+                                                           Text="{x:Bind ViewModel.QuickViewFontSizeLabel, Mode=OneWay}" />
+                                                <TextBlock Text="Font size for the characters in the Quick view overview panel."
+                                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                           TextWrapping="WrapWholeWords" />
+                                            </StackPanel>
+                                            <Slider x:Name="QuickViewFontSizeSlider"
+                                                    Grid.Column="1"
+                                                    VerticalAlignment="Center"
+                                                    Width="220"
+                                                    Minimum="12"
+                                                    Maximum="48"
+                                                    StepFrequency="1"
+                                                    Value="{x:Bind ViewModel.QuickViewFontSize, Mode=TwoWay}" />
+                                        </Grid>
+                                    </Border>
+                                </StackPanel>
+                            </ContentControl>
+                        </Expander>
                     </Border>
 
-                    <Border Style="{StaticResource SettingsCardBorderStyle}">
-                        <Grid RowSpacing="12">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-                            <Grid Grid.Row="0" ColumnSpacing="16">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <FontIcon Grid.Column="0"
-                                          Glyph="&#xE149;"
-                                          FontSize="20"
-                                          VerticalAlignment="Top"
-                                          Margin="0,2,0,0"
-                                          Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                <StackPanel Grid.Column="1" Spacing="4">
-                                    <TextBlock Text="Waterfall sizes"
-                                               Style="{StaticResource BodyStrongTextBlockStyle}" />
-                                    <TextBlock Text="Comma-separated pixel sizes (e.g. 8, 12, 16, 24)."
-                                               Style="{StaticResource CaptionTextBlockStyle}"
-                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                               TextWrapping="WrapWholeWords" />
+                    <!-- Editable Preview -->
+                    <Border Style="{StaticResource SettingsCardBorderStyle}" Padding="0">
+                        <Expander x:Name="EditablePreviewExpander"
+                                  Style="{StaticResource SettingsGroupExpanderStyle}"
+                                  IsExpanded="False">
+                            <Expander.Header>
+                                <Grid Style="{StaticResource SettingsExpanderHeaderGridStyle}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <FontIcon Grid.Column="0"
+                                              Glyph="&#xE70F;"
+                                              FontSize="20"
+                                              VerticalAlignment="Top"
+                                              Margin="0,2,0,0"
+                                              Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    <StackPanel Grid.Column="1"
+                                                VerticalAlignment="Center"
+                                                Spacing="4"
+                                                Margin="0,0,12,0">
+                                        <TextBlock Text="Editable Preview"
+                                                   Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                        <TextBlock Text="Show the text preview area with size controls. When off, only the waterfall is shown."
+                                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                   TextWrapping="WrapWholeWords" />
+                                    </StackPanel>
+                                    <ToggleSwitch x:Name="PreviewControlsToggle"
+                                                  Grid.Column="2"
+                                                  VerticalAlignment="Center"
+                                                  MinWidth="0"
+                                                  OnContent=""
+                                                  OffContent=""
+                                                  IsOn="{x:Bind ViewModel.ShowPreviewControls, Mode=TwoWay}" />
+                                </Grid>
+                            </Expander.Header>
+                            <ContentControl IsEnabled="{x:Bind ViewModel.ShowPreviewControls, Mode=OneWay}"
+                                            HorizontalContentAlignment="Stretch"
+                                            VerticalContentAlignment="Top">
+                                <Border Style="{StaticResource SettingsExpanderNestedRowStyle}">
+                                    <Grid ColumnSpacing="16">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0"
+                                                    VerticalAlignment="Center"
+                                                    Spacing="4"
+                                                    Margin="0,0,12,0">
+                                            <TextBlock x:Name="FontSizeSliderHeaderText"
+                                                       Style="{StaticResource BodyStrongTextBlockStyle}"
+                                                       Text="{x:Bind ViewModel.DefaultFontSizeLabel, Mode=OneWay}" />
+                                            <TextBlock Text="Default point size for the editable preview box."
+                                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                       TextWrapping="WrapWholeWords" />
+                                        </StackPanel>
+                                        <Slider x:Name="FontSizeSlider"
+                                                Grid.Column="1"
+                                                VerticalAlignment="Center"
+                                                Width="220"
+                                                Minimum="8"
+                                                Maximum="120"
+                                                StepFrequency="1"
+                                                Value="{x:Bind ViewModel.DefaultFontSize, Mode=TwoWay}" />
+                                    </Grid>
+                                </Border>
+                            </ContentControl>
+                        </Expander>
+                    </Border>
+
+                    <!-- Waterfall -->
+                    <Border Style="{StaticResource SettingsCardBorderStyle}" Padding="0">
+                        <Expander x:Name="WaterfallExpander"
+                                  Style="{StaticResource SettingsGroupExpanderStyle}"
+                                  IsExpanded="False">
+                            <Expander.Header>
+                                <Grid Style="{StaticResource SettingsExpanderHeaderGridStyle}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <FontIcon Grid.Column="0"
+                                              Glyph="&#xE81E;"
+                                              FontSize="20"
+                                              VerticalAlignment="Top"
+                                              Margin="0,2,0,0"
+                                              Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    <StackPanel Grid.Column="1"
+                                                VerticalAlignment="Center"
+                                                Spacing="4"
+                                                Margin="0,0,12,0">
+                                        <TextBlock Text="Waterfall"
+                                                   Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                        <TextBlock Text="Show multiple sample sizes at once."
+                                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                   TextWrapping="WrapWholeWords" />
+                                    </StackPanel>
+                                    <ToggleSwitch x:Name="WaterfallToggle"
+                                                  Grid.Column="2"
+                                                  VerticalAlignment="Center"
+                                                  MinWidth="0"
+                                                  OnContent=""
+                                                  OffContent=""
+                                                  IsOn="{x:Bind ViewModel.ShowWaterfall, Mode=TwoWay}" />
+                                </Grid>
+                            </Expander.Header>
+                            <ContentControl IsEnabled="{x:Bind ViewModel.ShowWaterfall, Mode=OneWay}"
+                                            HorizontalContentAlignment="Stretch"
+                                            VerticalContentAlignment="Top">
+                            <Border Style="{StaticResource SettingsExpanderNestedRowStyle}">
+                                <StackPanel Spacing="12">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="Waterfall sizes"
+                                                   Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                        <TextBlock Text="Comma-separated pixel sizes (e.g. 8, 12, 16, 24)."
+                                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                   TextWrapping="WrapWholeWords" />
+                                    </StackPanel>
+                                    <TextBox x:Name="WaterfallSizesBox"
+                                             PlaceholderText="8,12,16,24,32,48,72"
+                                             AcceptsReturn="False"
+                                             MaxLength="200"
+                                             Text="{x:Bind ViewModel.WaterfallSizesRaw, Mode=TwoWay}" />
                                 </StackPanel>
-                            </Grid>
-                            <TextBox x:Name="WaterfallSizesBox"
-                                     Grid.Row="1"
-                                     PlaceholderText="8,12,16,24,32,48,72"
-                                     AcceptsReturn="False"
-                                     MaxLength="200"
-                                     Text="{x:Bind ViewModel.WaterfallSizesRaw, Mode=TwoWay}" />
-                        </Grid>
+                            </Border>
+                            </ContentControl>
+                        </Expander>
                     </Border>
 
                     <TextBlock Text="Install"

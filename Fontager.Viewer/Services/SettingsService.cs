@@ -48,6 +48,9 @@ public sealed class SettingsService
     private const string LatestAvailableVersionKey = "LatestAvailableVersion";
     private const string LatestReleaseUrlKey = "LatestReleaseUrl";
     private const string IsUpdateNotificationEnabledKey = "IsUpdateNotificationEnabled";
+    private const string RecentFilesKey = "RecentFiles";
+
+    private const int MaxRecentFiles = 3;
 
     private const string DefaultPreviewTextValue = "The quick brown fox jumps over the lazy dog. 0123456789";
     private const double DefaultFontSizeValue = 32;
@@ -116,11 +119,12 @@ public sealed class SettingsService
         }
     }
 
-    private void SetValue<T>(string key, T value)
+    private void SetValue<T>(string key, T value, bool notify = true)
     {
         _values[key] = JsonSerializer.SerializeToElement(value);
         Save();
-        Changed?.Invoke(this, EventArgs.Empty);
+        if (notify)
+            Changed?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>
@@ -374,5 +378,70 @@ public sealed class SettingsService
     {
         get => GetValue<bool?>(IsUpdateNotificationEnabledKey) ?? true;
         set => SetValue(IsUpdateNotificationEnabledKey, value);
+    }
+
+    /// <summary>
+    /// Paths of recently opened font files (most recent first), persisted across sessions.
+    /// </summary>
+    public IReadOnlyList<string> GetRecentFiles()
+    {
+        var list = GetValue<List<string>>(RecentFilesKey);
+        if (list is null || list.Count == 0)
+            return Array.Empty<string>();
+
+        return list
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(MaxRecentFiles)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Records a successfully opened font at the front of the recent list.
+    /// </summary>
+    public void AddRecentFile(string filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+            return;
+
+        try
+        {
+            filePath = Path.GetFullPath(filePath);
+        }
+        catch
+        {
+            return;
+        }
+
+        var list = GetValue<List<string>>(RecentFilesKey) ?? [];
+        list.RemoveAll(p => string.Equals(p, filePath, StringComparison.OrdinalIgnoreCase));
+        list.Insert(0, filePath);
+        if (list.Count > MaxRecentFiles)
+            list = list.Take(MaxRecentFiles).ToList();
+
+        SetValue(RecentFilesKey, list, notify: false);
+    }
+
+    /// <summary>Removes one path from the recent list (no <see cref="Changed"/> — caller refreshes UI).</summary>
+    public void RemoveRecentFile(string filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+            return;
+
+        try
+        {
+            filePath = Path.GetFullPath(filePath);
+        }
+        catch
+        {
+            return;
+        }
+
+        var list = GetValue<List<string>>(RecentFilesKey) ?? [];
+        var removed = list.RemoveAll(p => string.Equals(p, filePath, StringComparison.OrdinalIgnoreCase));
+        if (removed == 0)
+            return;
+
+        SetValue(RecentFilesKey, list, notify: false);
     }
 }

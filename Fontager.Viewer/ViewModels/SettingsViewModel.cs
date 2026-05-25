@@ -217,19 +217,6 @@ public sealed class SettingsViewModel : ObservableObject
         }
     }
 
-    public int QuickViewBackground
-    {
-        get => _settings.QuickViewBackground;
-        set
-        {
-            if (_settings.QuickViewBackground != value)
-            {
-                _settings.QuickViewBackground = value;
-                OnPropertyChanged();
-            }
-        }
-    }
-
     public bool IsUpdateNotificationEnabled
     {
         get => _settings.IsUpdateNotificationEnabled;

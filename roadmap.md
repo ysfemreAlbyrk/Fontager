@@ -80,8 +80,7 @@ Lightweight font previewer; default handler for font files on Windows.
 - [x] **Glyph performance** — virtualized grid, debounced search/filter, precomputed block/category on `GlyphItem`
 - [x] **Dark / light preview backgrounds** — toggle preview surface for contrast checks
 - [x] **MVVM & shell refactor (1.3.0)** — `Fontager.Core` installer/Win32 helpers; `SettingsViewModel`; `FontViewerPage` + `RootFrame` navigation; glyph/filter state in `FontViewerViewModel`; title-bar Back only on Settings
-- [ ] **Shell navigation polish** — optional settings overlay above cached font view; harden off-screen settings sync (no full `UpdateFontDisplay` while page is detached)
-- [ ] **Recent files** — quick reopen list on the empty state
+- [x] **Recent files** — quick reopen list on the empty state
 - [x] **Update checks via GitHub Releases** — check for new versions on startup (only once a day) or on-demand in settings and notify the user when a new update is available.
 - [x] **Restore context menu "Install" options** — prevent standard Windows right-click "Install" and "Install for all users" from disappearing when Fontager is the default handler
 - [x] **Batch font installation** — support installing multiple selected fonts at once from Explorer

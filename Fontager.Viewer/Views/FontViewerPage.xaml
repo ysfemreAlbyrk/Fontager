@@ -23,7 +23,7 @@
         <!-- Empty State -->
         <Grid x:Name="EmptyState" Visibility="{x:Bind ViewModel.HasFont, Mode=OneWay, Converter={StaticResource InvertedBoolToVisibility}}"
               HorizontalAlignment="Center" VerticalAlignment="Center">
-            <StackPanel Spacing="20" HorizontalAlignment="Center" MaxWidth="420">
+            <StackPanel Spacing="20" HorizontalAlignment="Center" MaxWidth="480">
                 <Image Source="ms-appx:///Assets/Logo.png" Width="64" Height="64" 
                        HorizontalAlignment="Center" />
                 <TextBlock x:Name="EmptyStateTitle" Text="Fontager Viewer" 
@@ -38,6 +38,67 @@
                         HorizontalAlignment="Center"
                         Style="{StaticResource AccentButtonStyle}"
                         Padding="24,10" />
+
+                <StackPanel Spacing="8"
+                            Margin="0,4,0,0"
+                            Visibility="{x:Bind ViewModel.HasRecentFiles, Mode=OneWay, Converter={StaticResource BoolToVisibility}}"
+                            HorizontalAlignment="Stretch">
+                    <TextBlock Text="Recent"
+                               Style="{StaticResource CaptionTextBlockStyle}"
+                               FontWeight="SemiBold"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               HorizontalAlignment="Left" />
+                    <ListView x:Name="RecentFilesList"
+                              ItemsSource="{x:Bind ViewModel.RecentFiles, Mode=OneWay}"
+                              SelectionMode="None"
+                              IsItemClickEnabled="True"
+                              MaxHeight="220"
+                              HorizontalAlignment="Stretch"
+                              ItemClick="RecentFilesList_ItemClick">
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="ListViewItem">
+                                <Setter Property="Padding" Value="12,8" />
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="CornerRadius" Value="4" />
+                            </Style>
+                        </ListView.ItemContainerStyle>
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="viewModels:RecentFileItem"
+                                          xmlns:viewModels="using:Fontager.Viewer.ViewModels">
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <FontIcon Glyph="&#xE8E5;"
+                                              FontSize="16"
+                                              VerticalAlignment="Center"
+                                              Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                                        <TextBlock Text="{x:Bind FileName}"
+                                                   Style="{StaticResource BodyStrongTextBlockStyle}"
+                                                   TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{x:Bind DirectoryLabel}"
+                                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   ToolTipService.ToolTip="{x:Bind Path}" />
+                                    </StackPanel>
+                                    <Button Grid.Column="2"
+                                            Style="{StaticResource SubtleButtonStyle}"
+                                            Padding="6"
+                                            VerticalAlignment="Center"
+                                            ToolTipService.ToolTip="Remove from recent"
+                                            Click="RecentFileRemove_Click">
+                                        <FontIcon Glyph="&#xE74D;" FontSize="12" />
+                                    </Button>
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </StackPanel>
+
                 <StackPanel Spacing="6" Margin="0,12,0,0" HorizontalAlignment="Center">
                     <TextBlock x:Name="EmptyStateVersion" 
                                Text="{x:Bind ViewModel.CurrentVersionText, Mode=OneWay}"
@@ -188,7 +249,7 @@
                 </Grid>
 
                 <!-- Bottom row: metadata chips -->
-                <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="6" Margin="0,8,0,0">
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="6" Margin="0,8,0,0" VerticalAlignment="Center">
                     <TextBlock x:Name="FontStyleName" 
                                Text="{x:Bind ViewModel.HeaderSubfamilyName, Mode=OneWay}"
                                Style="{StaticResource CaptionTextBlockStyle}"
@@ -196,18 +257,20 @@
                                VerticalAlignment="Center" />
                     <Border x:Name="FormatBadge" 
                             Background="{ThemeResource AccentFillColorDefaultBrush}"
-                            CornerRadius="4" Padding="6,1" VerticalAlignment="Center">
+                            CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
                         <TextBlock x:Name="FormatBadgeText" 
                                    Text="{x:Bind ViewModel.HeaderFormatText, Mode=OneWay}"
                                    FontSize="11"
-                                   Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
+                                   Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"
+                                   VerticalAlignment="Center" />
                     </Border>
                     <Border x:Name="VariableBadge" 
                             Visibility="{x:Bind ViewModel.HeaderShowsVariableBadge, Mode=OneWay, Converter={StaticResource BoolToVisibility}}"
                             Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}"
                             CornerRadius="4" Padding="6,1" VerticalAlignment="Center">
                         <TextBlock Text="Variable" FontSize="11"
-                                   Foreground="{ThemeResource SystemFillColorSuccessBrush}" />
+                                   Foreground="{ThemeResource SystemFillColorSuccessBrush}"
+                                   VerticalAlignment="Center" />
                     </Border>
                     <TextBlock x:Name="FontFileSize" 
                                Text="{x:Bind ViewModel.HeaderFileSize, Mode=OneWay}"
@@ -215,6 +278,7 @@
                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                                VerticalAlignment="Center" />
                 </StackPanel>
+           
             </Grid>
 
             <!-- ═══ Quick View ═══ -->
@@ -228,7 +292,7 @@
             </Border>
 
             <!-- ═══ Tabs ═══ -->
-            <Pivot x:Name="ContentPivot" Grid.Row="2" Margin="12,0,0,0"
+            <Pivot x:Name="ContentPivot" Grid.Row="2" Margin="0,0,0,0"
                    SelectedIndex="{x:Bind ViewModel.SelectedTabIndex, Mode=TwoWay}">
                 <Pivot.Resources>
                     <Style TargetType="PivotHeaderItem">
@@ -245,7 +309,7 @@
                 <!-- Preview Tab -->
                 <PivotItem Header="Preview">
                     <Border x:Name="PreviewSurfaceBorder" Background="Transparent">
-                        <ScrollViewer Padding="-12,8,12,0" VerticalScrollBarVisibility="Auto">
+                        <ScrollViewer Padding="0,8,12,0" VerticalScrollBarVisibility="Auto">
                             <StackPanel Spacing="12">
 
                                 <!-- Editable preview + size control -->
@@ -312,7 +376,7 @@
                             </Grid.RowDefinitions>
 
                             <!-- Toolbar: search + category chips -->
-                            <Grid Grid.Row="0" Padding="12,8,12,8" ColumnSpacing="12">
+                            <Grid Grid.Row="0" Padding="8,8,12,8" ColumnSpacing="12">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
@@ -329,20 +393,20 @@
 
                             <Grid Grid.Row="1">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="220" />
+                                    <ColumnDefinition Width="Auto" MinWidth="148" MaxWidth="188" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
 
                                 <!-- Sidebar: Unicode blocks covered by the font -->
                                 <ListView x:Name="GlyphBlockList" Grid.Column="0"
-                                          Margin="6,0,6,8"
+                                          Margin="4,0,4,8"
                                           SelectionMode="Single"
                                           ItemsSource="{x:Bind ViewModel.GlyphBlockEntries, Mode=OneWay}"
                                           SelectedItem="{x:Bind ViewModel.SelectedBlockEntry, Mode=TwoWay}">
                                     <ListView.ItemContainerStyle>
                                         <Style TargetType="ListViewItem">
-                                            <Setter Property="Padding" Value="10,6" />
-                                            <Setter Property="MinHeight" Value="34" />
+                                            <Setter Property="Padding" Value="8,5" />
+                                            <Setter Property="MinHeight" Value="30" />
                                         </Style>
                                     </ListView.ItemContainerStyle>
                                     <ListView.ItemTemplate>
@@ -364,7 +428,7 @@
                                 </ListView>
 
                                 <!-- Glyph grid + details -->
-                                <Grid Grid.Column="1" Padding="12,0,12,8">
+                                <Grid Grid.Column="1" Padding="4,0,12,8">
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto" />
                                         <RowDefinition Height="*" />

@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Fontager.Core.Helpers;
 using Fontager.Core.Models;
 using Fontager.Core.Services;
+using Fontager.Viewer.Helpers;
 using Fontager.Viewer.Services;
 using Fontager.Viewer.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
@@ -35,6 +36,9 @@ public sealed partial class FontViewerPage : Page
     public FontViewerViewModel ViewModel { get; }
 
     public FontFamily? LoadedFontFamily { get; private set; }
+
+    /// <summary>Cached page instance (NavigationCacheMode) — refreshed when backdrop/theme changes on Settings.</summary>
+    internal static FontViewerPage? CachedForSettingsSync { get; private set; }
 
     public FontViewerPage()
     {
@@ -69,10 +73,14 @@ public sealed partial class FontViewerPage : Page
             if (!IsDisplayReady())
                 return;
 
+            // Cached under Settings — rebuilding glyphs/waterfall/metadata here freezes the app.
+            if (App.MainWindowInstance is not null && !App.MainWindowInstance.IsFontViewerPageActive)
+                return;
+
             if (ViewModel.HasFont)
                 UpdateFontDisplay();
             else
-                ApplyQuickViewBackground(_settings.QuickViewBackground);
+                ApplyQuickViewBackground();
         });
     }
 
@@ -105,18 +113,52 @@ public sealed partial class FontViewerPage : Page
         await Windows.System.Launcher.LaunchUriAsync(new Uri("https://github.com/ysfemreAlbworx/Fontager/discussions"));
     }
 
+    private bool _suppressRecentItemOpen;
+
+    private void RecentFilesList_ItemClick(object sender, ItemClickEventArgs e)
+    {
+        if (_suppressRecentItemOpen)
+            return;
+
+        if (e.ClickedItem is not RecentFileItem item)
+            return;
+
+        _ = LoadFontFromPathAsync(item.Path, 0);
+    }
+
+    private void RecentFileRemove_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: RecentFileItem item })
+            return;
+
+        _suppressRecentItemOpen = true;
+        ViewModel.RemoveRecentFile(item.Path);
+        DispatcherQueue.TryEnqueue(() => _suppressRecentItemOpen = false);
+    }
+
     protected override void OnNavigatedFrom(NavigationEventArgs e)
     {
         _settings.Changed -= OnSettingsChanged;
         base.OnNavigatedFrom(e);
     }
 
+    /// <summary>Re-applies Quick View chrome when backdrop/theme changes while this page stays cached under Settings.</summary>
+    public void RefreshQuickViewChrome()
+    {
+        if (!IsLoaded || QuickViewSection is null || !ViewModel.HasFont)
+            return;
+
+        ApplyQuickViewBackground();
+    }
+
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
+        CachedForSettingsSync = this;
 
         _settings.Changed -= OnSettingsChanged;
         _settings.Changed += OnSettingsChanged;
+        ViewModel.RefreshRecentFiles();
 
         // Returning from Settings: keep the open font; only refresh UI chrome.
         if (e.NavigationMode == NavigationMode.Back)
@@ -415,7 +457,7 @@ public sealed partial class FontViewerPage : Page
             QuickViewPanel.Children.Add(tb);
         }
 
-        ApplyQuickViewBackground(_settings.QuickViewBackground);
+        ApplyQuickViewBackground();
     }
 
     // ── Waterfall ───────────────────────────────────────────────────────────
@@ -458,7 +500,7 @@ public sealed partial class FontViewerPage : Page
             {
                 Text = $"{size}",
                 Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
-                Foreground = customLabelBrush ?? (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
+                Foreground = customLabelBrush ?? ResolveThemeBrush("TextFillColorTertiaryBrush"),
                 VerticalAlignment = VerticalAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Left,
                 Margin = new Thickness(0, 0, 12, 0)
@@ -490,147 +532,85 @@ public sealed partial class FontViewerPage : Page
     {
         if (PreviewSurfaceBorder == null) return;
 
-        if (mode == 1) // Light
+        ApplyPreviewSurfaceAppearance(PreviewSurfaceBorder, mode);
+
+        if (mode == 1)
         {
-            PreviewSurfaceBorder.RequestedTheme = ElementTheme.Light;
             if (PreviewSurfaceBorder.Child is FrameworkElement child)
-            {
                 child.RequestedTheme = ElementTheme.Light;
-            }
-            var lightBg = new SolidColorBrush(Microsoft.UI.Colors.White);
+
             var darkText = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 18, 18, 18));
-
-            PreviewSurfaceBorder.Background = lightBg;
-            PreviewSurfaceBorder.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 224, 224, 224));
-            PreviewSurfaceBorder.BorderThickness = new Thickness(1);
-            PreviewSurfaceBorder.CornerRadius = new CornerRadius(8);
-
             PreviewTextBox.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
             PreviewTextBox.Foreground = darkText;
         }
-        else if (mode == 2) // Dark
+        else if (mode == 2)
         {
-            PreviewSurfaceBorder.RequestedTheme = ElementTheme.Dark;
             if (PreviewSurfaceBorder.Child is FrameworkElement child)
-            {
                 child.RequestedTheme = ElementTheme.Dark;
-            }
-            var darkBg = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 26, 26, 26));
+
             var lightText = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 245, 245, 245));
-
-            PreviewSurfaceBorder.Background = darkBg;
-            PreviewSurfaceBorder.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 48, 48, 48));
-            PreviewSurfaceBorder.BorderThickness = new Thickness(1);
-            PreviewSurfaceBorder.CornerRadius = new CornerRadius(8);
-
             PreviewTextBox.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
             PreviewTextBox.Foreground = lightText;
         }
-        else // Default (0)
+        else
         {
-            PreviewSurfaceBorder.RequestedTheme = ElementTheme.Default;
             if (PreviewSurfaceBorder.Child is FrameworkElement child)
-            {
                 child.RequestedTheme = ElementTheme.Default;
-            }
-            PreviewSurfaceBorder.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-            PreviewSurfaceBorder.BorderBrush = null;
-            PreviewSurfaceBorder.BorderThickness = new Thickness(0);
 
             PreviewTextBox.ClearValue(TextBox.BackgroundProperty);
             PreviewTextBox.ClearValue(TextBox.ForegroundProperty);
         }
 
         if (ViewModel.HasFont)
-        {
             BuildWaterfallView();
-        }
-    }
-
-    private void ApplyQuickViewBackground(int mode)
-    {
-        if (QuickViewSection == null) return;
-
-        if (mode == 1) // Light
-        {
-            QuickViewSection.RequestedTheme = ElementTheme.Light;
-            var lightBg = new SolidColorBrush(Microsoft.UI.Colors.White);
-            var darkText = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 18, 18, 18));
-            var lightBorder = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 224, 224, 224));
-
-            QuickViewSection.Background = lightBg;
-            QuickViewSection.BorderBrush = lightBorder;
-
-            foreach (var child in QuickViewPanel.Children)
-            {
-                if (child is TextBlock tb)
-                {
-                    tb.Foreground = darkText;
-                }
-            }
-        }
-        else if (mode == 2) // Dark
-        {
-            QuickViewSection.RequestedTheme = ElementTheme.Dark;
-            var darkBg = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 26, 26, 26));
-            var lightText = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 245, 245, 245));
-            var darkBorder = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 48, 48, 48));
-
-            QuickViewSection.Background = darkBg;
-            QuickViewSection.BorderBrush = darkBorder;
-
-            foreach (var child in QuickViewPanel.Children)
-            {
-                if (child is TextBlock tb)
-                {
-                    tb.Foreground = lightText;
-                }
-            }
-        }
-        else // Default (0) — follow app theme: light uses page backdrop, dark uses elevated card
-        {
-            ApplyQuickViewSystemDefaultBackground();
-        }
     }
 
     /// <summary>
-    /// Quick View "System default": on Light / Windows light, match the app shell background;
-    /// on dark themes, keep the subtle card fill so the strip stays readable on Mica.
+    /// Quick View follows <see cref="SettingsService.PreviewBackground"/> for light/dark contrast.
+    /// System default uses XAML <c>{ThemeResource}</c> card brushes (not app/page fill, not hardcoded colors).
     /// </summary>
-    private void ApplyQuickViewSystemDefaultBackground()
+    private void ApplyQuickViewBackground()
+    {
+        if (QuickViewSection == null) return;
+
+        var mode = _settings.PreviewBackground;
+
+        if (mode == 0)
+        {
+            ApplyQuickViewSystemDefaultCard();
+            return;
+        }
+
+        ApplyPreviewSurfaceAppearance(QuickViewSection, mode);
+
+        if (mode == 1)
+        {
+            var darkText = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 18, 18, 18));
+            foreach (var child in QuickViewPanel.Children)
+            {
+                if (child is TextBlock tb)
+                    tb.Foreground = darkText;
+            }
+        }
+        else if (mode == 2)
+        {
+            var lightText = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 245, 245, 245));
+            foreach (var child in QuickViewPanel.Children)
+            {
+                if (child is TextBlock tb)
+                    tb.Foreground = lightText;
+            }
+        }
+    }
+
+    /// <summary>System default: WinUI <c>{ThemeResource}</c> card chrome from XAML (no hardcoded fills).</summary>
+    private void ApplyQuickViewSystemDefaultCard()
     {
         QuickViewSection.RequestedTheme = ElementTheme.Default;
-
-        if (IsApplicationLightTheme())
-        {
-            if (IsSolidWindowBackdrop())
-            {
-                QuickViewSection.Background = ResolveThemeBrush(
-                    "ApplicationPageBackgroundThemeBrush",
-                    Windows.UI.Color.FromArgb(255, 243, 243, 243));
-                QuickViewSection.BorderBrush = ResolveThemeBrush(
-                    "CardStrokeColorDefaultBrush",
-                    Windows.UI.Color.FromArgb(255, 224, 224, 224));
-                QuickViewSection.BorderThickness = new Thickness(1);
-            }
-            else
-            {
-                // Mica / Acrylic: shell is transparent — blend with the same backdrop
-                QuickViewSection.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-                QuickViewSection.BorderThickness = new Thickness(0);
-                QuickViewSection.ClearValue(Border.BorderBrushProperty);
-            }
-        }
-        else
-        {
-            QuickViewSection.Background = ResolveThemeBrush(
-                "CardBackgroundFillColorDefaultBrush",
-                Windows.UI.Color.FromArgb(255, 32, 32, 32));
-            QuickViewSection.BorderBrush = ResolveThemeBrush(
-                "CardStrokeColorDefaultBrush",
-                Windows.UI.Color.FromArgb(255, 48, 48, 48));
-            QuickViewSection.BorderThickness = new Thickness(1);
-        }
+        QuickViewSection.ClearValue(Border.BackgroundProperty);
+        QuickViewSection.ClearValue(Border.BorderBrushProperty);
+        QuickViewSection.BorderThickness = new Thickness(1);
+        QuickViewSection.CornerRadius = new CornerRadius(8);
 
         foreach (var child in QuickViewPanel.Children)
         {
@@ -639,15 +619,37 @@ public sealed partial class FontViewerPage : Page
         }
     }
 
-    private bool IsApplicationLightTheme() =>
-        _settings.Theme switch
+    /// <summary>Shared chrome for editable preview border and Quick View (light/dark contrast modes).</summary>
+    private static void ApplyPreviewSurfaceAppearance(Border border, int mode)
+    {
+        if (mode == 1)
         {
-            ElementTheme.Light => true,
-            ElementTheme.Dark => false,
-            _ => Application.Current.RequestedTheme == ApplicationTheme.Light
-        };
+            border.RequestedTheme = ElementTheme.Light;
+            border.Background = new SolidColorBrush(Microsoft.UI.Colors.White);
+            border.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 224, 224, 224));
+            border.BorderThickness = new Thickness(1);
+            border.CornerRadius = new CornerRadius(8);
+        }
+        else if (mode == 2)
+        {
+            border.RequestedTheme = ElementTheme.Dark;
+            border.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 26, 26, 26));
+            border.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 48, 48, 48));
+            border.BorderThickness = new Thickness(1);
+            border.CornerRadius = new CornerRadius(8);
+        }
+        else
+        {
+            border.RequestedTheme = ElementTheme.Default;
+            border.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            border.BorderBrush = null;
+            border.BorderThickness = new Thickness(0);
+            border.ClearValue(Border.CornerRadiusProperty);
+        }
+    }
 
-    private bool IsSolidWindowBackdrop() => _settings.Backdrop == 2;
+    private bool IsApplicationLightTheme() =>
+        AppThemeHelper.IsLightTheme(_settings.Theme, this);
 
     // ── Preview Interaction Handlers ────────────────────────────────────────
 
@@ -870,7 +872,7 @@ public sealed partial class FontViewerPage : Page
 
         var border = new Border
         {
-            Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
+            Background = ResolveThemeBrush("CardBackgroundFillColorDefaultBrush"),
             CornerRadius = new CornerRadius(4),
             Padding = new Thickness(16, 10, 16, 10),
             Margin = new Thickness(0, 1, 0, 1)
@@ -886,7 +888,7 @@ public sealed partial class FontViewerPage : Page
             {
                 Text = label,
                 Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
-                Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+                Foreground = ResolveThemeBrush("TextFillColorSecondaryBrush"),
                 VerticalAlignment = VerticalAlignment.Center
             };
             Grid.SetColumn(labelBlock, 0);
@@ -1205,11 +1207,14 @@ public sealed partial class FontViewerPage : Page
         return panel;
     }
 
-    private static Brush ResolveThemeBrush(string resourceKey, Windows.UI.Color fallback)
+    private Brush ResolveThemeBrush(string resourceKey, Windows.UI.Color? fallback = null)
     {
-        if (Application.Current.Resources.TryGetValue(resourceKey, out var o) && o is Brush br)
-            return br;
-        return new SolidColorBrush(fallback);
+        var color = resourceKey is "TextFillColorTertiaryBrush" or "TextFillColorSecondaryBrush"
+            or "CardBackgroundFillColorDefaultBrush" or "CardStrokeColorDefaultBrush"
+            ? AppThemeHelper.ThemeColor(resourceKey, IsApplicationLightTheme())
+            : fallback ?? AppThemeHelper.ThemeColor(resourceKey, IsApplicationLightTheme());
+
+        return new SolidColorBrush(color);
     }
 
     // ── Glyphs UI Handlers ───────────────────────────────────────────────────

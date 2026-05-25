@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -98,6 +99,29 @@ public partial class FontViewerViewModel : ObservableObject
     public bool IsPreviewControlsVisible => _settings.ShowPreviewControls;
 
     public bool IsWaterfallVisible => _settings.ShowWaterfall;
+
+    public ObservableCollection<RecentFileItem> RecentFiles { get; } = [];
+
+    public bool HasRecentFiles => RecentFiles.Count > 0;
+
+    public void RefreshRecentFiles()
+    {
+        RecentFiles.Clear();
+        foreach (var path in _settings.GetRecentFiles())
+        {
+            if (!File.Exists(path))
+                continue;
+            RecentFiles.Add(new RecentFileItem(path));
+        }
+
+        OnPropertyChanged(nameof(HasRecentFiles));
+    }
+
+    public void RemoveRecentFile(string filePath)
+    {
+        _settings.RemoveRecentFile(filePath);
+        RefreshRecentFiles();
+    }
 
     public string SelectedGlyphCharacter => SelectedGlyph?.Character ?? string.Empty;
 
@@ -371,6 +395,8 @@ public partial class FontViewerViewModel : ObservableObject
 
             CurrentFont = font;
             HasFont = true;
+            _settings.AddRecentFile(filePath);
+            RefreshRecentFiles();
 
             // Generate waterfall items
             GenerateWaterfallItems();
