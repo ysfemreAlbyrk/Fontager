@@ -102,7 +102,7 @@
                                       Grid.Column="2"
                                       VerticalAlignment="Center"
                                       MinWidth="200"
-                                      SelectionChanged="ThemeCombo_SelectionChanged">
+                                      SelectedIndex="{x:Bind ViewModel.ThemeComboIndex, Mode=TwoWay}">
                                 <ComboBoxItem Content="System default" Tag="0" />
                                 <ComboBoxItem Content="Light" Tag="1" />
                                 <ComboBoxItem Content="Dark" Tag="2" />
@@ -138,7 +138,7 @@
                                       Grid.Column="2"
                                       VerticalAlignment="Center"
                                       MinWidth="200"
-                                      SelectionChanged="BackdropCombo_SelectionChanged">
+                                      SelectedIndex="{x:Bind ViewModel.BackdropComboIndex, Mode=TwoWay}">
                                 <ComboBoxItem Content="Mica" Tag="0" />
                                 <ComboBoxItem Content="Mica Alt" Tag="3" />
                                 <ComboBoxItem Content="Acrylic" Tag="1" />
@@ -181,7 +181,7 @@
                                           MinWidth="0"
                                           OnContent=""
                                           OffContent=""
-                                          Toggled="QuickViewToggle_Toggled" />
+                                          IsOn="{x:Bind ViewModel.ShowQuickView, Mode=TwoWay}" />
                         </Grid>
                     </Border>
 
@@ -204,7 +204,7 @@
                                         Margin="0,0,12,0">
                                 <TextBlock x:Name="QuickViewFontSizeSliderHeaderText"
                                            Style="{StaticResource BodyStrongTextBlockStyle}"
-                                           Text="Quick view font size" />
+                                           Text="{x:Bind ViewModel.QuickViewFontSizeLabel, Mode=OneWay}" />
                                 <TextBlock Text="Font size for the characters in the Quick view overview panel."
                                            Style="{StaticResource CaptionTextBlockStyle}"
                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
@@ -217,7 +217,7 @@
                                     Minimum="12"
                                     Maximum="48"
                                     StepFrequency="1"
-                                    ValueChanged="QuickViewFontSizeSlider_ValueChanged" />
+                                    Value="{x:Bind ViewModel.QuickViewFontSize, Mode=TwoWay}" />
                         </Grid>
                     </Border>
 
@@ -249,7 +249,7 @@
                                       Grid.Column="2"
                                       VerticalAlignment="Center"
                                       MinWidth="200"
-                                      SelectionChanged="QuickViewBgCombo_SelectionChanged">
+                                      SelectedIndex="{x:Bind ViewModel.QuickViewBackground, Mode=TwoWay}">
                                 <ComboBoxItem Content="System default" Tag="0" />
                                 <ComboBoxItem Content="Light background" Tag="1" />
                                 <ComboBoxItem Content="Dark background" Tag="2" />
@@ -292,8 +292,7 @@
                                      TextWrapping="Wrap"
                                      AcceptsReturn="False"
                                      MaxLength="500"
-                                     TextChanged="PreviewTextBox_TextChanged"
-                                     LostFocus="PreviewTextBox_LostFocus" />
+                                     Text="{x:Bind ViewModel.DefaultPreviewText, Mode=TwoWay}" />
                         </Grid>
                     </Border>
 
@@ -329,7 +328,7 @@
                                     Minimum="8"
                                     Maximum="120"
                                     StepFrequency="1"
-                                    ValueChanged="FontSizeSlider_ValueChanged" />
+                                    Value="{x:Bind ViewModel.DefaultFontSize, Mode=TwoWay}" />
                         </Grid>
                     </Border>
 
@@ -364,7 +363,7 @@
                                           MinWidth="0"
                                           OnContent=""
                                           OffContent=""
-                                          Toggled="PreviewControlsToggle_Toggled" />
+                                          IsOn="{x:Bind ViewModel.ShowPreviewControls, Mode=TwoWay}" />
                         </Grid>
                     </Border>
 
@@ -396,7 +395,7 @@
                                       Grid.Column="2"
                                       VerticalAlignment="Center"
                                       MinWidth="200"
-                                      SelectionChanged="PreviewBgCombo_SelectionChanged">
+                                      SelectedIndex="{x:Bind ViewModel.PreviewBackground, Mode=TwoWay}">
                                 <ComboBoxItem Content="System default" Tag="0" />
                                 <ComboBoxItem Content="Light background" Tag="1" />
                                 <ComboBoxItem Content="Dark background" Tag="2" />
@@ -438,7 +437,7 @@
                                           MinWidth="0"
                                           OnContent=""
                                           OffContent=""
-                                          Toggled="WaterfallToggle_Toggled" />
+                                          IsOn="{x:Bind ViewModel.ShowWaterfall, Mode=TwoWay}" />
                         </Grid>
                     </Border>
 
@@ -473,7 +472,7 @@
                                      PlaceholderText="8,12,16,24,32,48,72"
                                      AcceptsReturn="False"
                                      MaxLength="200"
-                                     LostFocus="WaterfallSizesBox_LostFocus" />
+                                     Text="{x:Bind ViewModel.WaterfallSizesRaw, Mode=TwoWay}" />
                         </Grid>
                     </Border>
 
@@ -513,9 +512,9 @@
                                           Grid.Column="2"
                                           VerticalAlignment="Center"
                                           MinWidth="220"
-                                          SelectionChanged="InstallModeCombo_SelectionChanged">
+                                          SelectedIndex="{x:Bind ViewModel.InstallMode, Mode=TwoWay}">
                                     <ComboBoxItem Content="Current user" Tag="0" />
-                                    <ComboBoxItem Content="All users (Windows\Fonts)" Tag="1" />
+                                    <ComboBoxItem Content="All users (Windows\Fonts)" Tag="1" IsEnabled="{x:Bind ViewModel.CanSelectAllUsersInstallTarget, Mode=OneWay}" />
                                 </ComboBox>
                             </Grid>
                         </Grid>
@@ -541,6 +540,7 @@
                                 <TextBlock Text="UAC for all-users install"
                                            Style="{StaticResource BodyStrongTextBlockStyle}" />
                                 <TextBlock x:Name="ElevateForAllUsersInstallDescription"
+                                           Text="{x:Bind ViewModel.ElevateForAllUsersInstallDescription, Mode=OneWay}"
                                            Style="{StaticResource CaptionTextBlockStyle}"
                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                            TextWrapping="WrapWholeWords" />
@@ -552,7 +552,7 @@
                                           MinWidth="0"
                                           OnContent=""
                                           OffContent=""
-                                          Toggled="ElevateForAllUsersInstallToggle_Toggled" />
+                                          IsOn="{x:Bind ViewModel.ElevateForAllUsersInstall, Mode=TwoWay}" />
                         </Grid>
                     </Border>
 
@@ -576,6 +576,7 @@
                                 <TextBlock Text="Run entire app as administrator"
                                            Style="{StaticResource BodyStrongTextBlockStyle}" />
                                 <TextBlock x:Name="RunAsAdminDescription"
+                                           Text="{x:Bind ViewModel.RunAsAdminDescription, Mode=OneWay}"
                                            Style="{StaticResource CaptionTextBlockStyle}"
                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                            TextWrapping="WrapWholeWords" />
@@ -587,6 +588,7 @@
                                           MinWidth="0"
                                           OnContent=""
                                           OffContent=""
+                                          IsOn="{x:Bind ViewModel.RunAsAdministrator, Mode=OneWay}"
                                           Toggled="RunAsAdminToggle_Toggled" />
                         </Grid>
                     </Border>
@@ -622,7 +624,7 @@
                                           MinWidth="0"
                                           OnContent=""
                                           OffContent=""
-                                          Toggled="ExitAfterInstallToggle_Toggled" />
+                                          IsOn="{x:Bind ViewModel.ExitAppAfterSuccessfulInstall, Mode=TwoWay}" />
                         </Grid>
                     </Border>
 
@@ -646,6 +648,7 @@
                                 <TextBlock Text="Register for font files"
                                            Style="{StaticResource BodyStrongTextBlockStyle}" />
                                 <TextBlock x:Name="FontAssocDescription"
+                                           Text="{x:Bind ViewModel.FileAssociationDescriptionText, Mode=OneWay}"
                                            Style="{StaticResource CaptionTextBlockStyle}"
                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                            TextWrapping="WrapWholeWords" />
@@ -657,7 +660,8 @@
                                           MinWidth="0"
                                           OnContent=""
                                           OffContent=""
-                                          Toggled="FontAssocToggle_Toggled" />
+                                          IsOn="{x:Bind ViewModel.FontAssociationRegistered, Mode=TwoWay}"
+                                          IsEnabled="{x:Bind ViewModel.IsFileAssociationSupported, Mode=OneWay}" />
                         </Grid>
                     </Border>
 
@@ -695,14 +699,14 @@
                                           MinWidth="0"
                                           OnContent=""
                                           OffContent=""
-                                          Toggled="UpdateCheckToggle_Toggled" />
+                                          IsOn="{x:Bind ViewModel.IsUpdateNotificationEnabled, Mode=TwoWay}" />
                         </Grid>
                     </Border>
 
                     <Border Style="{StaticResource SettingsCardBorderStyle}">
                         <Grid>
                             <!-- 1. State: Update Available (Visible only when update is available) -->
-                            <Grid x:Name="UpdateAvailablePanel" ColumnSpacing="16" Visibility="Collapsed">
+                            <Grid x:Name="UpdateAvailablePanel" ColumnSpacing="16" Visibility="{x:Bind ViewModel.IsUpdateAvailable, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
@@ -734,7 +738,7 @@
                                             <TextBlock FontWeight="SemiBold" Text="Update Available" />
                                             <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" Style="{StaticResource CaptionTextBlockStyle}">
                                                 <Run Text="Version" />
-                                                <Run x:Name="UpdateAvailableVersionText" Text="1.3.0" />
+                                                <Run x:Name="UpdateAvailableVersionText" Text="{x:Bind ViewModel.LatestAvailableVersion, Mode=OneWay}" />
                                             </TextBlock>
                                         </StackPanel>
                                     </Grid>
@@ -750,7 +754,7 @@
                             </Grid>
 
                             <!-- 2. State: Up to date (Visible only when NO update is available) -->
-                            <Grid x:Name="UpdateNotAvailablePanel" ColumnSpacing="16" Visibility="Visible">
+                            <Grid x:Name="UpdateNotAvailablePanel" ColumnSpacing="16" Visibility="{x:Bind ViewModel.IsUpdateAvailable, Mode=OneWay, Converter={StaticResource InvertedBoolToVisibility}}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
@@ -777,7 +781,7 @@
                                         <TextBlock FontWeight="SemiBold" Text="You're up to date" />
                                         <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" Style="{StaticResource CaptionTextBlockStyle}">
                                             <Run Text="Last checked:" />
-                                            <Run x:Name="LastUpdateCheckDateText" Text="Never" />
+                                            <Run x:Name="LastUpdateCheckDateText" Text="{x:Bind ViewModel.LastUpdateCheckText, Mode=OneWay}" />
                                         </TextBlock>
                                     </StackPanel>
                                 </Grid>
@@ -827,19 +831,6 @@
                         CornerRadius="8"
                         Padding="20,18">
                     <StackPanel Spacing="14">
-                    <!-- <TextBlock Text="About this app"
-                                   Style="{StaticResource SubtitleTextBlockStyle}" /> -->
- 
-                        <!-- <Border Height="1"
-                                Margin="0,6,0,6">
-                            <Border.Background>
-                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                    <GradientStop Color="White" Offset="0.5" />
-                                    <GradientStop Color="Transparent" Offset="0" />
-                                    <GradientStop Color="Transparent" Offset="1" />
-                                </LinearGradientBrush>
-                            </Border.Background>
-                        </Border> -->
                    
                         <StackPanel Orientation="Vertical" Spacing="14">
                                 <Image x:Name="AboutLogoImage"
@@ -852,13 +843,10 @@
                                 <TextBlock Text="Fontager Viewer"
                                            Style="{StaticResource SubtitleTextBlockStyle}" />
                                 <TextBlock x:Name="AboutVersionText"
+                                           Text="{x:Bind ViewModel.CurrentVersionText, Mode=OneWay}"
                                            Style="{StaticResource CaptionTextBlockStyle}"
                                            FontWeight="SemiBold"
                                            Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
-                                <!-- <TextBlock x:Name="AboutBuildKindText"
-                                           Style="{StaticResource CaptionTextBlockStyle}"
-                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                           TextWrapping="WrapWholeWords" /> -->
                             </StackPanel>
                         </StackPanel>
 
