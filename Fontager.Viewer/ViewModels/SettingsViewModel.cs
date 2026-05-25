@@ -262,20 +262,30 @@ public sealed class SettingsViewModel : ObservableObject
         }
     }
 
+    // Combo order: Mica (0), Mica Alt (3), Acrylic (1), Solid (2) — indices differ from stored Backdrop values.
+    private static readonly int[] BackdropValuesByComboIndex = [0, 3, 1, 2];
+
     public int BackdropComboIndex
     {
         get
         {
             int saved = Backdrop;
-            // Backdrops aren't strictly sequential in ComboBox matching because they are bound by tag.
-            // But we can match the tags: 0, 1, 2, 3.
-            return saved is >= 0 and <= 3 ? saved : 0;
+            for (int i = 0; i < BackdropValuesByComboIndex.Length; i++)
+            {
+                if (BackdropValuesByComboIndex[i] == saved)
+                    return i;
+            }
+            return 0;
         }
         set
         {
-            if (Backdrop != value && value is >= 0 and <= 3)
+            if (value < 0 || value >= BackdropValuesByComboIndex.Length)
+                return;
+
+            int backdropValue = BackdropValuesByComboIndex[value];
+            if (Backdrop != backdropValue)
             {
-                Backdrop = value;
+                Backdrop = backdropValue;
                 OnPropertyChanged();
             }
         }

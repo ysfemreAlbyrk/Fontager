@@ -40,8 +40,8 @@ Shared models, parsing, and font services used by Viewer and Manager.
 - [ ] **Font rendering (Core)** — shared preview/sample text rendering (editable preview, waterfall, compare panes); Viewer and Manager call the same API instead of duplicating draw paths
 - [ ] **Glyph rendering (Core)** — shared glyph cell, detail, and metrics/outline drawing for grids and inspectors
 - [ ] **Rendering backend abstraction** — single interface over the chosen stack (e.g. DirectWrite / Win2D / future option) so neither app owns low-level font draw code
-- [ ] **Move installation primitives to Core** — copy to fonts folder, registry (`HKCU`/`HKLM`), `AddFontResource` / `RemoveFontResource`, `WM_FONTCHANGE`; apps keep menus and dialogs only
-- [ ] **Move glyph browse model to Core** — block sidebar, category chips, search/debounce inputs, filtered glyph lists (UI binds; logic not forked per app)
+- [x] **Move installation primitives to Core** — `IFontInstallerService` / `FontInstallerService`, elevation helper, file association (Viewer wired via DI; Manager to adopt)
+- [ ] **Move glyph browse model to Core** — block sidebar, category chips, search/debounce inputs, filtered glyph lists (logic still in `FontViewerViewModel`; extract when Manager needs it)
 - [ ] **Consolidate font load + cache** — one path from file/URI → loaded family + temp cache used by preview and Manager library thumbnails
 - [ ] **Shared settings schema** — keys, defaults, and validation in Core; Viewer/Manager only choose storage location and UI
 - [ ] **Shared file-association helpers** — ProgID registration and cleanup APIs in Core (Settings toggles stay in each app); includes registering standard shell verbs (e.g. "Install") to restore context menus under our custom ProgID
@@ -79,6 +79,8 @@ Lightweight font previewer; default handler for font files on Windows.
 - [x] **Elevation** — install targets and tooltips reflect admin vs standard user; drag-drop and open dialog work when run as administrator
 - [x] **Glyph performance** — virtualized grid, debounced search/filter, precomputed block/category on `GlyphItem`
 - [x] **Dark / light preview backgrounds** — toggle preview surface for contrast checks
+- [x] **MVVM & shell refactor (1.3.0)** — `Fontager.Core` installer/Win32 helpers; `SettingsViewModel`; `FontViewerPage` + `RootFrame` navigation; glyph/filter state in `FontViewerViewModel`; title-bar Back only on Settings
+- [ ] **Shell navigation polish** — optional settings overlay above cached font view; harden off-screen settings sync (no full `UpdateFontDisplay` while page is detached)
 - [ ] **Recent files** — quick reopen list on the empty state
 - [x] **Update checks via GitHub Releases** — check for new versions on startup (only once a day) or on-demand in settings and notify the user when a new update is available.
 - [x] **Restore context menu "Install" options** — prevent standard Windows right-click "Install" and "Install for all users" from disappearing when Fontager is the default handler

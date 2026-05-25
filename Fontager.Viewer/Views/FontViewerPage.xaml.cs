@@ -52,18 +52,13 @@ public sealed partial class FontViewerPage : Page
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        _settings.Changed += OnSettingsChanged;
-
         if (ViewModel.HasFont)
-        {
             UpdateFontDisplay();
-        }
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
-        _settings.Changed -= OnSettingsChanged;
-        DeactivateCurrentFont();
+        // Do not deactivate the private font session here — the page stays cached under Settings.
     }
 
     private void OnSettingsChanged(object? sender, EventArgs e)
@@ -71,12 +66,13 @@ public sealed partial class FontViewerPage : Page
         DispatcherQueue.TryEnqueue(() =>
         {
             ViewModel.NotifySettingsDependentPropertiesChanged();
-            if (ViewModel.HasFont)
-            {
+            if (IsDisplayReady() && ViewModel.HasFont)
                 UpdateFontDisplay();
-            }
         });
     }
+
+    /// <summary>True when the page visual tree is attached and safe to touch named controls.</summary>
+    private bool IsDisplayReady() => IsLoaded && XamlRoot is not null && PreviewTextBox is not null;
     // ── Empty-state event handlers ──────────────────────────────────────────
 
     private void OpenFileButton_Click(object sender, RoutedEventArgs e)
@@ -104,15 +100,34 @@ public sealed partial class FontViewerPage : Page
         await Windows.System.Launcher.LaunchUriAsync(new Uri("https://github.com/ysfemreAlbworx/Fontager/discussions"));
     }
 
+    protected override void OnNavigatedFrom(NavigationEventArgs e)
+    {
+        _settings.Changed -= OnSettingsChanged;
+        base.OnNavigatedFrom(e);
+    }
+
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
+
+        _settings.Changed -= OnSettingsChanged;
+        _settings.Changed += OnSettingsChanged;
+
+        // Returning from Settings: keep the open font; only refresh UI chrome.
+        if (e.NavigationMode == NavigationMode.Back)
+        {
+            if (ViewModel.HasFont)
+                UpdateFontDisplay();
+            return;
+        }
 
         if (e.Parameter is string filePath && !string.IsNullOrEmpty(filePath))
         {
             _ = LoadFontFromPathAsync(filePath, 0);
         }
-        else if (!string.IsNullOrEmpty(App.FontFilePath))
+        else if (e.NavigationMode == NavigationMode.New
+                 && !string.IsNullOrEmpty(App.FontFilePath)
+                 && !ViewModel.HasFont)
         {
             _ = LoadFontFromPathAsync(App.FontFilePath, 0);
         }
@@ -301,12 +316,11 @@ public sealed partial class FontViewerPage : Page
     private void UpdateFontDisplay()
     {
         var font = ViewModel.CurrentFont;
-        if (font is null) return;
+        if (font is null || !IsDisplayReady())
+            return;
 
-        if (App.MainWindowInstance != null)
-        {
-            App.MainWindowInstance.AppWindow.Title = $"Fontager \u2014 {font.DisplayName}";
-        }
+        if (App.MainWindowInstance?.AppWindow is { } appWindow)
+            appWindow.Title = $"Fontager \u2014 {font.DisplayName}";
 
         // Update installation button
         UpdateInstallButtonPresentation(GetSavedInstallTarget());

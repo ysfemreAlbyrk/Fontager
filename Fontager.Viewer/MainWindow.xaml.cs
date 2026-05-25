@@ -69,9 +69,18 @@ public sealed partial class MainWindow : Window
 
     private void OnRootFrameNavigated(object sender, NavigationEventArgs e)
     {
-        BackButton.Visibility = RootFrame.CanGoBack ? Visibility.Visible : Visibility.Collapsed;
-        SettingsButton.Visibility = (RootFrame.Content is SettingsPage) ? Visibility.Collapsed : Visibility.Visible;
+        UpdateTitleBarNavigationChrome();
         ScheduleTitleBarPassthroughUpdate();
+    }
+
+    /// <summary>
+    /// Back is shown only on Settings. Font viewer (empty or with a font) never shows Back.
+    /// </summary>
+    private void UpdateTitleBarNavigationChrome()
+    {
+        bool onSettings = RootFrame.Content is SettingsPage;
+        BackButton.Visibility = onSettings ? Visibility.Visible : Visibility.Collapsed;
+        SettingsButton.Visibility = onSettings ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void OnSettingsChanged(object? sender, EventArgs e)
@@ -163,9 +172,10 @@ public sealed partial class MainWindow : Window
         try
         {
             var displayAreas = DisplayArea.FindAll();
-            foreach (var area in displayAreas)
+            // Index-based loop: foreach can throw InvalidCastException on some WinRT builds.
+            for (int i = 0; i < displayAreas.Count; i++)
             {
-                var bounds = area.OuterBounds;
+                var bounds = displayAreas[i].OuterBounds;
                 if (x < bounds.X + bounds.Width &&
                     x + width > bounds.X &&
                     y < bounds.Y + bounds.Height &&
@@ -408,14 +418,8 @@ public sealed partial class MainWindow : Window
 
     private void OpenFileButton_Click(object sender, RoutedEventArgs e)
     {
-        if (RootFrame.Content is FontViewerPage viewerPage)
-        {
+        if (TryGetFontViewerPage(out var viewerPage))
             _ = viewerPage.TriggerFileOpenPickerAsync();
-        }
-        else
-        {
-            RootFrame.Navigate(typeof(FontViewerPage));
-        }
     }
 
     private void RootGrid_DragOver(object sender, Microsoft.UI.Xaml.DragEventArgs e)
@@ -433,15 +437,36 @@ public sealed partial class MainWindow : Window
         var items = await e.DataView.GetStorageItemsAsync();
         if (items.Count > 0 && items[0] is Windows.Storage.StorageFile file && App.Services.GetRequiredService<IFontService>().IsSupportedFont(file.Path))
         {
-            if (RootFrame.Content is FontViewerPage viewerPage)
-            {
+            if (TryGetFontViewerPage(out var viewerPage))
                 await viewerPage.LoadFontFromPathAsync(file.Path, 0);
-            }
-            else
-            {
-                RootFrame.Navigate(typeof(FontViewerPage), file.Path);
-            }
         }
+    }
+
+    /// <summary>
+    /// Returns the font viewer page, popping Settings first so the viewer stays underneath.
+    /// </summary>
+    private bool TryGetFontViewerPage(out FontViewerPage viewerPage)
+    {
+        if (RootFrame.Content is FontViewerPage page)
+        {
+            viewerPage = page;
+            return true;
+        }
+
+        if (RootFrame.Content is SettingsPage && RootFrame.CanGoBack)
+        {
+            RootFrame.GoBack();
+            UpdateTitleBarNavigationChrome();
+        }
+
+        if (RootFrame.Content is FontViewerPage restored)
+        {
+            viewerPage = restored;
+            return true;
+        }
+
+        viewerPage = null!;
+        return false;
     }
 
     private void ApplySettings()
@@ -454,15 +479,19 @@ public sealed partial class MainWindow : Window
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
+        if (RootFrame.Content is SettingsPage)
+            return;
+
         RootFrame.Navigate(typeof(SettingsPage), _isProcessElevated);
     }
 
     private void CustomTitleBarBack_Click(object sender, RoutedEventArgs e)
     {
+        if (RootFrame.Content is not SettingsPage)
+            return;
+
         if (RootFrame.CanGoBack)
-        {
             RootFrame.GoBack();
-        }
     }
 
     private void BackButton_PointerEntered(object sender, PointerRoutedEventArgs e)

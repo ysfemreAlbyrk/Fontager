@@ -104,7 +104,8 @@ public partial class App : Application
         services.AddSingleton<UpdateCheckService>();
 
         // ViewModels
-        services.AddTransient<FontViewerViewModel>();
+        // Singleton so font state survives Settings navigation and page cache restores.
+        services.AddSingleton<FontViewerViewModel>();
         services.AddTransient<SettingsViewModel>();
     }
 
