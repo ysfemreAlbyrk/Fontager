@@ -151,18 +151,21 @@ public sealed partial class FontViewerPage : Page
 
     private void TabSelectorBar_SelectionChanged(SelectorBar sender, SelectorBarSelectionChangedEventArgs args)
     {
+        if (_isSyncingTab) return; // Programmatic change — don't animate
+
         var selectedItem = sender.SelectedItem;
         int index = sender.Items.IndexOf(selectedItem);
         if (index >= 0)
         {
             ViewModel.SelectedTabIndex = index;
-            NavigateToTab(index);
+            NavigateToTab(index, animate: true);
         }
     }
 
     private int _lastActiveTabIndex = -1;
+    private bool _isSyncingTab;
 
-    private void NavigateToTab(int index)
+    private void NavigateToTab(int index, bool animate = false)
     {
         if (TabContentFrame == null) return;
 
@@ -174,28 +177,26 @@ public sealed partial class FontViewerPage : Page
             _ => null
         };
 
-        if (pageType != null)
-        {
-            SlideNavigationTransitionEffect effect;
-            if (_lastActiveTabIndex == -1)
-            {
-                TabContentFrame.Navigate(pageType);
-                _lastActiveTabIndex = index;
-                return;
-            }
-            else if (index > _lastActiveTabIndex)
-            {
-                effect = SlideNavigationTransitionEffect.FromRight;
-            }
-            else
-            {
-                effect = SlideNavigationTransitionEffect.FromLeft;
-            }
+        if (pageType == null) return;
 
-            var transition = new SlideNavigationTransitionInfo { Effect = effect };
-            TabContentFrame.Navigate(pageType, null, transition);
+        // If already showing this page, no-op
+        if (TabContentFrame.CurrentSourcePageType == pageType && _lastActiveTabIndex == index)
+            return;
+
+        if (!animate || _lastActiveTabIndex < 0)
+        {
+            // No slide: first load, programmatic sync, font change, TTC navigation
+            TabContentFrame.Navigate(pageType, null, new EntranceNavigationTransitionInfo());
             _lastActiveTabIndex = index;
+            return;
         }
+
+        // Directional slide only when user manually switches tabs
+        var effect = index > _lastActiveTabIndex
+            ? SlideNavigationTransitionEffect.FromRight
+            : SlideNavigationTransitionEffect.FromLeft;
+        TabContentFrame.Navigate(pageType, null, new SlideNavigationTransitionInfo { Effect = effect });
+        _lastActiveTabIndex = index;
     }
 
     private void TabContentFrame_NavigationFailed(object sender, NavigationFailedEventArgs e)
@@ -209,8 +210,12 @@ public sealed partial class FontViewerPage : Page
         int index = ViewModel.SelectedTabIndex;
         if (index >= 0 && index < TabSelectorBar.Items.Count)
         {
+            // Suppress SelectionChanged so it doesn't trigger slide animation
+            _isSyncingTab = true;
             TabSelectorBar.SelectedItem = TabSelectorBar.Items[index];
-            NavigateToTab(index);
+            _isSyncingTab = false;
+
+            NavigateToTab(index, animate: false);
         }
     }
 

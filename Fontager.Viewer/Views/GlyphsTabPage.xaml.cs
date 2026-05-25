@@ -50,57 +50,13 @@ public sealed partial class GlyphsTabPage : Page
         }
     }
 
-    private void GlyphGrid_ContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
-    {
-        if (args.Phase != 0)
-            return;
-
-        if (ViewModel.LoadedFontFamily is null)
-            return;
-
-        args.RegisterUpdateCallback(GlyphGrid_ApplyFontToItemContainer);
-    }
-
-    private void GlyphGrid_ApplyFontToItemContainer(ListViewBase sender, ContainerContentChangingEventArgs args)
-    {
-        if (ViewModel.LoadedFontFamily is null)
-            return;
-
-        if (args.ItemContainer?.ContentTemplateRoot is Grid grid
-            && grid.Children.Count > 0
-            && grid.Children[0] is StackPanel panel
-            && panel.Children.Count > 0
-            && panel.Children[0] is TextBlock charBlock)
-        {
-            charBlock.FontFamily = ViewModel.LoadedFontFamily;
-            var meta = ViewModel.CurrentFont?.Metadata;
-            if (meta is not null)
-            {
-                charBlock.FontWeight = new FontWeight((ushort)meta.Weight);
-                charBlock.FontStyle = meta.IsItalic ? FontStyle.Italic
-                    : meta.IsOblique ? FontStyle.Oblique
-                    : FontStyle.Normal;
-            }
-            else
-            {
-                charBlock.FontWeight = new FontWeight(400);
-                charBlock.FontStyle = FontStyle.Normal;
-            }
-        }
-    }
-
     private void BuildGlyphGrid()
     {
         BuildCategoryChips();
         ResetGlyphFilters();
 
-        GlyphGrid.ContainerContentChanging -= GlyphGrid_ContainerContentChanging;
-        GlyphGrid.ContainerContentChanging += GlyphGrid_ContainerContentChanging;
         GlyphGrid.SelectionChanged -= GlyphGrid_SelectionChanged;
         GlyphGrid.SelectionChanged += GlyphGrid_SelectionChanged;
-
-        if (ViewModel.LoadedFontFamily is not null)
-            GlyphGrid.FontFamily = ViewModel.LoadedFontFamily;
 
         ApplySelectedGlyphFontFamily();
     }

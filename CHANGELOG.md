@@ -3,10 +3,20 @@
 ## [1.3.1] - 2026-05-26
 
 ### 🔄 Changed
-- **Migration to SelectorBar Control**: Replaced the legacy, deprecated `Pivot` control with the modern, Windows 11-recommended **`SelectorBar`** control for top-level tabbed navigation. Implemented smooth Fluent `ContentThemeTransition` switch animations and a robust MVVM-aligned code-behind binding to manage content visibilities seamlessly.
+- **Modular Tab Architecture (SelectorBar + Frame)**: Replaced the legacy `Pivot` control and single-page tab panel approach with a modern, Windows 11-recommended architecture. Each tab — **Preview**, **Glyphs**, and **Info** — is now a fully independent `Page` navigated via a nested `Frame`. This cleanly separates concerns and aligns with WinUI 3 design patterns.
+- **Native Slide Transitions**: Tab switching now uses native Windows `SlideNavigationTransitionInfo` with directional awareness — sliding from the right when advancing (Preview→Glyphs→Info) and from the left when going back. Critically, the slide animation *only* triggers on explicit user tab selection; programmatic transitions (initial load, font change, TTC navigation with arrow keys) use a subtle WinUI `EntranceNavigationTransitionInfo` fade instead of a disorienting slide.
+- **Glyph Grid Font Rendering**: Eliminated the `ContainerContentChanging` phase-callback approach for applying font families to glyph cells. Font family now flows directly from `GlyphGrid.FontFamily` to the `TextBlock` inside each item via `{Binding FontFamily, ElementName=GlyphGrid}`. This ensures all visible cells — including those in the initial viewport — render in the correct typeface immediately on load, without requiring a scroll to trigger virtualization callbacks.
 
 ### 🐛 Fixed
+- **Glyph Grid First-Load Blank**: Fixed an issue where glyphs in the initial viewport appeared in the system default font until the user scrolled. The root cause was the previous `ContainerContentChanging` callback only applying the custom font to items triggered by scroll virtualization, missing the first visible page.
+- **TTC Arrow-Key Navigation Causing Slide**: Fixed unintended slide animation when switching between fonts within a TrueType Collection (`.ttc`) using the Prev/Next buttons. Font-index changes now refresh the tab frame programmatically (no slide).
+- **Tab Frame Slide on App Startup**: Fixed the tab content area animating with a slide transition when a font is first loaded or when returning from Settings. First navigation now uses a gentle entrance fade.
 - **Quick View & Editable Preview Settings Toggles**: Resolved an issue where toggling the "Quick View" (character set overview) or "Editable Preview" options in Settings had no effect on the active font viewer. Added background property change notifications and back-navigation refresh logic to ensure the views synchronize instantly with settings changes.
+
+### ⚡️ Performance
+- **Page Instance Caching**: All three tab pages (`PreviewTabPage`, `GlyphsTabPage`, `InfoTabPage`) now use `NavigationCacheMode="Required"`. Each page is instantiated only once per session; subsequent tab switches reuse the existing instance, avoiding repeated XAML parse, layout, and binding initialization on every tab visit.
+- **Glyph Binding Simplification**: Removed the per-cell `ContainerContentChanging` asynchronous phase callback. The `GridView` `FontFamily` binding propagates automatically to all realized cells, eliminating redundant font-assignment work on every scroll event.
+
 
 ## [1.3.0] - 2026-05-25
 

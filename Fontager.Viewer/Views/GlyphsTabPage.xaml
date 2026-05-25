@@ -8,6 +8,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
+    NavigationCacheMode="Required"
     Background="Transparent">
 
     <Page.Resources>
@@ -92,6 +93,7 @@
                           ItemsSource="{x:Bind ViewModel.FilteredGlyphs, Mode=OneWay}"
                           SelectedItem="{x:Bind ViewModel.SelectedGlyph, Mode=TwoWay}"
                           IsItemClickEnabled="True"
+                          FontFamily="{x:Bind ViewModel.LoadedFontFamily, Mode=OneWay}"
                           ScrollViewer.HorizontalScrollMode="Disabled"
                           ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                           ScrollViewer.VerticalScrollMode="Enabled"
@@ -113,6 +115,7 @@
                                             Spacing="2">
                                     <TextBlock Text="{Binding Character}"
                                                FontSize="28"
+                                               FontFamily="{Binding FontFamily, ElementName=GlyphGrid}"
                                                HorizontalAlignment="Center"
                                                VerticalAlignment="Center" />
                                     <TextBlock Text="{Binding UnicodeLabel}"
