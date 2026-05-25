@@ -2,11 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Fontager.Core.Helpers;
 using Fontager.Core.Models;
 using Fontager.Core.Services;
+using Microsoft.UI.Xaml;
 
 namespace Fontager.Viewer.ViewModels;
 
@@ -20,6 +22,39 @@ public partial class FontViewerViewModel : ObservableObject
     public FontViewerViewModel(IFontService fontService)
     {
         _fontService = fontService;
+    }
+
+    // ── Version Text (for empty-state display) ────────────────
+
+    public string CurrentVersionText
+    {
+        get
+        {
+            string version;
+            if (FileAssociationService.IsRunningPackaged)
+            {
+                try
+                {
+                    var ver = Windows.ApplicationModel.Package.Current.Id.Version;
+                    version = $"{ver.Major}.{ver.Minor}.{ver.Build}.{ver.Revision}";
+                }
+                catch
+                {
+                    version = AssemblyVersionFallback();
+                }
+            }
+            else
+            {
+                version = AssemblyVersionFallback();
+            }
+            return $"Version {version}";
+        }
+    }
+
+    private static string AssemblyVersionFallback()
+    {
+        var asm = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+        return asm != null ? $"{asm.Major}.{asm.Minor}.{asm.Build}" : "0.0.0";
     }
 
     // ── Font Data ──────────────────────────────────────────────
@@ -67,6 +102,161 @@ public partial class FontViewerViewModel : ObservableObject
     /// </summary>
     public List<GlyphItem> GlyphItems { get; } = [];
 
+    // ── Observable Glyph Filters & State ───────────────────────
+
+    public ObservableCollection<GlyphBlockEntry> GlyphBlockEntries { get; } = [];
+
+    public Visibility GetGlyphDetailVisibility(bool isSelected)
+    {
+        return isSelected ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    [ObservableProperty]
+    private GlyphCategory _selectedCategory = GlyphCategory.All;
+
+    [ObservableProperty]
+    private GlyphBlockEntry? _selectedBlockEntry;
+
+    [ObservableProperty]
+    private string _glyphSearchText = string.Empty;
+
+    [ObservableProperty]
+    private IReadOnlyList<GlyphItem> _filteredGlyphs = Array.Empty<GlyphItem>();
+
+    [ObservableProperty]
+    private GlyphItem? _selectedGlyph;
+
+    public bool IsGlyphSelected => SelectedGlyph is not null;
+
+    partial void OnSelectedGlyphChanged(GlyphItem? value)
+    {
+        OnPropertyChanged(nameof(IsGlyphSelected));
+    }
+
+    private CancellationTokenSource? _searchCts;
+    private bool _suppressFiltering;
+
+    partial void OnSelectedCategoryChanged(GlyphCategory value) => ApplyFilters();
+
+    partial void OnSelectedBlockEntryChanged(GlyphBlockEntry? value) => ApplyFilters();
+
+    partial void OnGlyphSearchTextChanged(string value)
+    {
+        _searchCts?.Cancel();
+        _searchCts = new CancellationTokenSource();
+        var token = _searchCts.Token;
+
+        Task.Delay(150, token).ContinueWith(t =>
+        {
+            if (t.IsCompletedSuccessfully && !token.IsCancellationRequested)
+            {
+                ApplyFilters();
+            }
+        }, TaskScheduler.FromCurrentSynchronizationContext());
+    }
+
+    public void BuildBlockSidebar()
+    {
+        GlyphBlockEntries.Clear();
+
+        var perBlockCounts = new Dictionary<string, (UnicodeBlocks.UnicodeBlock? Block, int Count)>();
+        foreach (var item in GlyphItems)
+        {
+            var block = item.Block;
+            var key = block.Name;
+            if (perBlockCounts.TryGetValue(key, out var existing))
+            {
+                perBlockCounts[key] = (existing.Block, existing.Count + 1);
+            }
+            else
+            {
+                perBlockCounts[key] = (block.Start >= 0 ? block : null, 1);
+            }
+        }
+
+        GlyphBlockEntries.Add(new GlyphBlockEntry("All blocks", GlyphItems.Count, null));
+
+        // Preserve the curated order from UnicodeBlocks.All; "Other" goes last.
+        foreach (var b in UnicodeBlocks.All)
+        {
+            if (perBlockCounts.TryGetValue(b.Name, out var entry))
+                GlyphBlockEntries.Add(new GlyphBlockEntry(b.Name, entry.Count, b));
+        }
+        if (perBlockCounts.TryGetValue("Other", out var other))
+            GlyphBlockEntries.Add(new GlyphBlockEntry("Other", other.Count, null));
+    }
+
+    public void SelectPreferredBlock()
+    {
+        if (GlyphBlockEntries.Count == 0) return;
+        var basic = GlyphBlockEntries.FirstOrDefault(e => e.Name == "Basic Latin" && e.Count > 0);
+        SelectedBlockEntry = basic ?? GlyphBlockEntries[0];
+    }
+
+    public void ApplyFilters()
+    {
+        if (_suppressFiltering) return;
+
+        var blockEntry = SelectedBlockEntry;
+        var blockFilter = blockEntry?.Block;
+        var otherOnly = blockEntry?.Name == "Other";
+        var category = SelectedCategory;
+        var needle = GlyphSearchText.Trim();
+        var matcher = string.IsNullOrEmpty(needle) ? null : BuildSearchMatcher(needle);
+
+        var filtered = new List<GlyphItem>(capacity: GlyphItems.Count);
+        foreach (var g in GlyphItems)
+        {
+            if (blockFilter is not null && !blockFilter.Contains(g.CodePoint)) continue;
+            if (otherOnly && g.Block.Start >= 0) continue;
+            if (category != GlyphCategory.All && g.Category != category) continue;
+            if (matcher is not null && !matcher(g)) continue;
+            filtered.Add(g);
+        }
+
+        FilteredGlyphs = filtered;
+    }
+
+    private static Func<GlyphItem, bool> BuildSearchMatcher(string needle)
+    {
+        // Hex form: "U+xxxx" or "0xXXXX"
+        if (needle.StartsWith("U+", StringComparison.OrdinalIgnoreCase)
+            || needle.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+        {
+            var hex = needle[2..];
+            if (int.TryParse(hex, System.Globalization.NumberStyles.HexNumber, null, out var cpHex))
+                return g => g.CodePoint == cpHex;
+        }
+
+        // Bare hex (4+ digits, all hex)
+        if (needle.Length >= 4 && needle.All(c => Uri.IsHexDigit(c)))
+        {
+            if (int.TryParse(needle, System.Globalization.NumberStyles.HexNumber, null, out var cpHex))
+                return g => g.CodePoint == cpHex;
+        }
+
+        // Decimal
+        if (int.TryParse(needle, out var cpDec))
+            return g => g.CodePoint == cpDec;
+
+        // Single character literal
+        if (needle.Length <= 2)
+        {
+            try
+            {
+                var cp = char.ConvertToUtf32(needle, 0);
+                return g => g.CodePoint == cp;
+            }
+            catch
+            {
+                // fall through
+            }
+        }
+
+        // Substring on hex label (covers U+1F600 etc)
+        return g => g.UnicodeLabel.Contains(needle, StringComparison.OrdinalIgnoreCase);
+    }
+
     // ── Public Methods ─────────────────────────────────────────
 
     /// <summary>
@@ -101,6 +291,24 @@ public partial class FontViewerViewModel : ObservableObject
 
             // Generate glyph items (basic Latin + common ranges)
             GenerateGlyphItemsPublic();
+
+            // Build block sidebar counts
+            BuildBlockSidebar();
+
+            // Reset active filters
+            _suppressFiltering = true;
+            try
+            {
+                SelectedCategory = GlyphCategory.All;
+                GlyphSearchText = string.Empty;
+                SelectPreferredBlock();
+            }
+            finally
+            {
+                _suppressFiltering = false;
+            }
+
+            ApplyFilters();
         }
         catch (Exception ex)
         {
@@ -209,6 +417,7 @@ public sealed class GlyphItem
     public string UnicodeLabel { get; }
     public UnicodeBlocks.UnicodeBlock Block { get; }
     public GlyphCategory Category { get; }
+    public string DetailsLabel => $"Decimal: {CodePoint} \u00b7 Block: {Block.Name} \u00b7 Category: {Category}";
 
     public GlyphItem(int codePoint)
     {
@@ -219,3 +428,5 @@ public sealed class GlyphItem
         Category = GlyphCategoryClassifier.Classify(codePoint);
     }
 }
+
+public sealed record GlyphBlockEntry(string Name, int Count, UnicodeBlocks.UnicodeBlock? Block);
