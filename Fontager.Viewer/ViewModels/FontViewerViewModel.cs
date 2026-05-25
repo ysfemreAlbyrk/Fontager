@@ -11,6 +11,7 @@ using Fontager.Core.Models;
 using Fontager.Core.Services;
 using Fontager.Viewer.Services;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Media;
 
 namespace Fontager.Viewer.ViewModels;
 
@@ -22,10 +23,17 @@ public partial class FontViewerViewModel : ObservableObject
     private readonly IFontService _fontService;
     private readonly SettingsService _settings;
 
+    private string? _lastSeenDefaultPreviewText;
+    private double _lastSeenDefaultFontSize;
+
     public FontViewerViewModel(IFontService fontService, SettingsService settings)
     {
         _fontService = fontService;
         _settings = settings;
+        _previewText = _settings.DefaultPreviewText;
+        _lastSeenDefaultPreviewText = _settings.DefaultPreviewText;
+        _previewFontSize = _settings.DefaultFontSize;
+        _lastSeenDefaultFontSize = _settings.DefaultFontSize;
     }
 
     // ── Version Text (for empty-state display) ────────────────
@@ -65,6 +73,9 @@ public partial class FontViewerViewModel : ObservableObject
 
     [ObservableProperty]
     private FontModel? _currentFont;
+
+    [ObservableProperty]
+    private FontFamily? _loadedFontFamily;
 
     // ── Header & chrome (null-safe for compiled x:Bind) ─────────────────────
 
@@ -144,6 +155,20 @@ public partial class FontViewerViewModel : ObservableObject
         OnPropertyChanged(nameof(IsQuickViewVisible));
         OnPropertyChanged(nameof(IsPreviewControlsVisible));
         OnPropertyChanged(nameof(IsWaterfallVisible));
+
+        var currentDefault = _settings.DefaultPreviewText;
+        if (_lastSeenDefaultPreviewText != currentDefault)
+        {
+            PreviewText = currentDefault;
+            _lastSeenDefaultPreviewText = currentDefault;
+        }
+
+        var currentDefaultSize = _settings.DefaultFontSize;
+        if (Math.Abs(_lastSeenDefaultFontSize - currentDefaultSize) > 0.001)
+        {
+            PreviewFontSize = currentDefaultSize;
+            _lastSeenDefaultFontSize = currentDefaultSize;
+        }
     }
 
     private void NotifyHeaderPropertiesChanged()
@@ -177,7 +202,7 @@ public partial class FontViewerViewModel : ObservableObject
     // ── Preview Settings ───────────────────────────────────────
 
     [ObservableProperty]
-    private string _previewText = "The quick brown fox jumps over the lazy dog. 0123456789";
+    private string _previewText = string.Empty;
 
     [ObservableProperty]
     private double _previewFontSize = 32;

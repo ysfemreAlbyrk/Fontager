@@ -14,6 +14,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
+using Microsoft.UI.Xaml.Media.Animation;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
 
@@ -85,7 +86,7 @@ public sealed partial class FontViewerPage : Page
     }
 
     /// <summary>True when the page visual tree is attached and safe to touch named controls.</summary>
-    private bool IsDisplayReady() => IsLoaded && XamlRoot is not null && PreviewTextBox is not null;
+    private bool IsDisplayReady() => IsLoaded && XamlRoot is not null;
     // ── Empty-state event handlers ──────────────────────────────────────────
 
     private void OpenFileButton_Click(object sender, RoutedEventArgs e)
@@ -146,7 +147,6 @@ public sealed partial class FontViewerPage : Page
     public void RefreshQuickViewChrome()
     {
         ViewModel.NotifySettingsDependentPropertiesChanged();
-        ApplyPreviewBackground(_settings.PreviewBackground);
     }
 
     private void TabSelectorBar_SelectionChanged(SelectorBar sender, SelectorBarSelectionChangedEventArgs args)
@@ -156,18 +156,51 @@ public sealed partial class FontViewerPage : Page
         if (index >= 0)
         {
             ViewModel.SelectedTabIndex = index;
-            UpdateTabVisibility(index);
+            NavigateToTab(index);
         }
     }
 
-    private void UpdateTabVisibility(int index)
-    {
-        if (PreviewSurfaceBorder == null || GlyphsTabContent == null || InfoTabContent == null)
-            return;
+    private int _lastActiveTabIndex = -1;
 
-        PreviewSurfaceBorder.Visibility = index == 0 ? Visibility.Visible : Visibility.Collapsed;
-        GlyphsTabContent.Visibility = index == 1 ? Visibility.Visible : Visibility.Collapsed;
-        InfoTabContent.Visibility = index == 2 ? Visibility.Visible : Visibility.Collapsed;
+    private void NavigateToTab(int index)
+    {
+        if (TabContentFrame == null) return;
+
+        Type? pageType = index switch
+        {
+            0 => typeof(PreviewTabPage),
+            1 => typeof(GlyphsTabPage),
+            2 => typeof(InfoTabPage),
+            _ => null
+        };
+
+        if (pageType != null)
+        {
+            SlideNavigationTransitionEffect effect;
+            if (_lastActiveTabIndex == -1)
+            {
+                TabContentFrame.Navigate(pageType);
+                _lastActiveTabIndex = index;
+                return;
+            }
+            else if (index > _lastActiveTabIndex)
+            {
+                effect = SlideNavigationTransitionEffect.FromRight;
+            }
+            else
+            {
+                effect = SlideNavigationTransitionEffect.FromLeft;
+            }
+
+            var transition = new SlideNavigationTransitionInfo { Effect = effect };
+            TabContentFrame.Navigate(pageType, null, transition);
+            _lastActiveTabIndex = index;
+        }
+    }
+
+    private void TabContentFrame_NavigationFailed(object sender, NavigationFailedEventArgs e)
+    {
+        throw new Exception("Failed to load Tab Page: " + e.Exception.Message);
     }
 
     private void SyncSelectorBarSelection()
@@ -177,7 +210,7 @@ public sealed partial class FontViewerPage : Page
         if (index >= 0 && index < TabSelectorBar.Items.Count)
         {
             TabSelectorBar.SelectedItem = TabSelectorBar.Items[index];
-            UpdateTabVisibility(index);
+            NavigateToTab(index);
         }
     }
 
@@ -287,7 +320,7 @@ public sealed partial class FontViewerPage : Page
             }
 
             LoadedFontFamily = CreateLoadedFontFamily(familyName, diskPath, msAppDataRelativePath, msAppxRelativePath);
-            GlyphGrid.FontFamily = LoadedFontFamily;
+            ViewModel.LoadedFontFamily = LoadedFontFamily;
 
             UpdateFontDisplay();
         }
@@ -440,53 +473,10 @@ public sealed partial class FontViewerPage : Page
         UpdateInstallButtonPresentation(GetSavedInstallTarget());
         ApplyInstallElevatedUi();
 
-        // Apply font to TextBox
-        ApplyFontToElement(PreviewTextBox, font.Metadata);
-
-        // Build child dynamic sections
+        // Build Quick View
         BuildQuickView();
-        ApplyPreviewBackground(_settings.PreviewBackground);
-        BuildWaterfallView();
-        BuildMetadataView();
-
-        BuildGlyphGrid();
-        ApplySelectedGlyphFontFamily();
 
         SyncSelectorBarSelection();
-    }
-
-    private void ApplySelectedGlyphFontFamily()
-    {
-        if (LoadedFontFamily is null)
-            return;
-
-        SelectedGlyphChar.FontFamily = LoadedFontFamily;
-        var meta = ViewModel.CurrentFont?.Metadata;
-        if (meta is not null)
-        {
-            SelectedGlyphChar.FontWeight = new Windows.UI.Text.FontWeight((ushort)meta.Weight);
-            SelectedGlyphChar.FontStyle = meta.IsItalic ? Windows.UI.Text.FontStyle.Italic
-                : meta.IsOblique ? Windows.UI.Text.FontStyle.Oblique
-                : Windows.UI.Text.FontStyle.Normal;
-        }
-        else
-        {
-            SelectedGlyphChar.FontWeight = new Windows.UI.Text.FontWeight(400);
-            SelectedGlyphChar.FontStyle = Windows.UI.Text.FontStyle.Normal;
-        }
-    }
-
-    private void ApplyFontToElement(Control element, FontMetadata meta)
-    {
-        if (LoadedFontFamily != null)
-        {
-            element.FontFamily = LoadedFontFamily;
-        }
-
-        element.FontWeight = new Windows.UI.Text.FontWeight((ushort)meta.Weight);
-        element.FontStyle = meta.IsItalic ? Windows.UI.Text.FontStyle.Italic
-            : meta.IsOblique ? Windows.UI.Text.FontStyle.Oblique
-            : Windows.UI.Text.FontStyle.Normal;
     }
 
     private void ApplyFontToTextBlock(TextBlock tb, FontMetadata meta)
@@ -532,162 +522,14 @@ public sealed partial class FontViewerPage : Page
         }
     }
 
-    // ── Waterfall ───────────────────────────────────────────────────────────
 
-    private void BuildWaterfallView()
-    {
-        WaterfallPanel.Children.Clear();
-        if (!_settings.ShowWaterfall) return;
-
-        var meta = ViewModel.CurrentFont?.Metadata;
-        if (meta == null) return;
-
-        var sizes = _settings.GetWaterfallSizes();
-        var text = string.IsNullOrWhiteSpace(ViewModel.PreviewText)
-            ? "The quick brown fox jumps over the lazy dog"
-            : ViewModel.PreviewText;
-
-        var previewBgMode = _settings.PreviewBackground;
-        Brush? customTbBrush = null;
-        Brush? customLabelBrush = null;
-
-        if (previewBgMode == 1) // Light
-        {
-            customTbBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 18, 18, 18));
-            customLabelBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 100, 100, 100));
-        }
-        else if (previewBgMode == 2) // Dark
-        {
-            customTbBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 245, 245, 245));
-            customLabelBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 170, 170, 170));
-        }
-
-        foreach (var size in sizes)
-        {
-            var row = new Grid { Margin = new Thickness(0, 1, 0, 1) };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(32) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-            var sizeLabel = new TextBlock
-            {
-                Text = $"{size}",
-                Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
-                Foreground = customLabelBrush ?? ResolveThemeBrush("TextFillColorTertiaryBrush"),
-                VerticalAlignment = VerticalAlignment.Center,
-                HorizontalAlignment = HorizontalAlignment.Left,
-                Margin = new Thickness(0, 0, 12, 0)
-            };
-            Grid.SetColumn(sizeLabel, 0);
-
-            var tb = new TextBlock
-            {
-                Text = text,
-                FontSize = size,
-                TextTrimming = TextTrimming.CharacterEllipsis,
-                IsTextSelectionEnabled = true,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            if (customTbBrush != null)
-            {
-                tb.Foreground = customTbBrush;
-            }
-            ApplyFontToTextBlock(tb, meta);
-            Grid.SetColumn(tb, 1);
-
-            row.Children.Add(sizeLabel);
-            row.Children.Add(tb);
-            WaterfallPanel.Children.Add(row);
-        }
-    }
-
-    private void ApplyPreviewBackground(int mode)
-    {
-        if (PreviewSurfaceBorder == null) return;
-
-        ApplyPreviewSurfaceAppearance(PreviewSurfaceBorder, mode);
-
-        if (mode == 1)
-        {
-            if (PreviewSurfaceBorder.Child is FrameworkElement child)
-                child.RequestedTheme = ElementTheme.Light;
-
-            var darkText = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 18, 18, 18));
-            PreviewTextBox.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-            PreviewTextBox.Foreground = darkText;
-        }
-        else if (mode == 2)
-        {
-            if (PreviewSurfaceBorder.Child is FrameworkElement child)
-                child.RequestedTheme = ElementTheme.Dark;
-
-            var lightText = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 245, 245, 245));
-            PreviewTextBox.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-            PreviewTextBox.Foreground = lightText;
-        }
-        else
-        {
-            if (PreviewSurfaceBorder.Child is FrameworkElement child)
-                child.RequestedTheme = ElementTheme.Default;
-
-            PreviewTextBox.ClearValue(TextBox.BackgroundProperty);
-            PreviewTextBox.ClearValue(TextBox.ForegroundProperty);
-        }
-
-        if (ViewModel.HasFont)
-            BuildWaterfallView();
-    }
-
-
-
-    /// <summary>Shared chrome for editable preview border and Quick View (light/dark contrast modes).</summary>
-    private static void ApplyPreviewSurfaceAppearance(Border border, int mode)
-    {
-        if (mode == 1)
-        {
-            border.RequestedTheme = ElementTheme.Light;
-            border.Background = new SolidColorBrush(Microsoft.UI.Colors.White);
-            border.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 224, 224, 224));
-            border.BorderThickness = new Thickness(1);
-            border.CornerRadius = new CornerRadius(8);
-        }
-        else if (mode == 2)
-        {
-            border.RequestedTheme = ElementTheme.Dark;
-            border.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 26, 26, 26));
-            border.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 48, 48, 48));
-            border.BorderThickness = new Thickness(1);
-            border.CornerRadius = new CornerRadius(8);
-        }
-        else
-        {
-            border.RequestedTheme = ElementTheme.Default;
-            border.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-            border.BorderBrush = null;
-            border.BorderThickness = new Thickness(0);
-            border.ClearValue(Border.CornerRadiusProperty);
-        }
-    }
 
     private bool IsApplicationLightTheme() =>
         AppThemeHelper.IsLightTheme(_settings.Theme, this);
 
     // ── Preview Interaction Handlers ────────────────────────────────────────
 
-    private void FontSizeUpButton_Click(object sender, RoutedEventArgs e)
-    {
-        var newSize = Math.Min(PreviewTextBox.FontSize + 2, 120);
-        ViewModel.PreviewFontSize = newSize;
-        if (ViewModel.HasFont)
-            BuildWaterfallView();
-    }
 
-    private void FontSizeDownButton_Click(object sender, RoutedEventArgs e)
-    {
-        var newSize = Math.Max(PreviewTextBox.FontSize - 2, 8);
-        ViewModel.PreviewFontSize = newSize;
-        if (ViewModel.HasFont)
-            BuildWaterfallView();
-    }
 
     private void PrevFontButton_Click(object sender, RoutedEventArgs e)
     {
@@ -743,107 +585,7 @@ public sealed partial class FontViewerPage : Page
 
     // ── Metadata Building ───────────────────────────────────────────────────
 
-    private void BuildMetadataView()
-    {
-        MetadataPanel.Children.Clear();
-        var font = ViewModel.CurrentFont;
-        if (font is null) return;
-        var meta = font.Metadata;
 
-        AddMetadataSection("General");
-        AddMetadataRow("Family Name", meta.FamilyName);
-        if (meta.TypographicFamilyName != meta.FamilyName)
-            AddMetadataRow("Typographic Family", meta.TypographicFamilyName);
-        AddMetadataRow("Subfamily", meta.SubfamilyName);
-        AddMetadataRow("Full Name", meta.FullName);
-        AddMetadataRow("PostScript Name", meta.PostScriptName);
-        AddMetadataRow("Unique ID", meta.UniqueId);
-        AddMetadataRow("Version", meta.Version);
-        AddMetadataRow("Font Revision", meta.FontRevision);
-        AddMetadataRow("Format", font.Format.ToString());
-        AddMetadataRow("File Size", font.FormattedFileSize);
-        AddMetadataRow("File Path", font.FilePath);
-        if (font.FontCount > 1)
-            AddMetadataRow("Font in Collection", $"{font.FontIndex + 1} of {font.FontCount}");
-        AddMetadataRow("Created", meta.Created);
-        AddMetadataRow("Modified", meta.Modified);
-
-        AddMetadataSection("Style");
-        AddMetadataRow("Weight", GetWeightName(meta.Weight));
-        AddMetadataRow("Width", GetWidthName(meta.Width));
-        AddMetadataRow("Style", meta.IsItalic ? "Italic" : meta.IsOblique ? "Oblique" : "Normal");
-        AddMetadataRow("Fixed Pitch", meta.IsFixedPitch ? "Yes" : "No");
-        AddMetadataRow("macStyle", meta.MacStyle);
-        AddMetadataRow("Variable Font", meta.IsVariable ? "Yes" : "No");
-        AddMetadataRow("Classification", meta.Classification.ToString());
-        AddMetadataRow("PANOSE", meta.Panose);
-        AddMetadataRow("Italic Angle", meta.ItalicAngle);
-
-        AddMetadataSection("Metrics");
-        AddMetadataRow("Glyphs", meta.GlyphCount.ToString());
-        AddMetadataRow("Units per Em", meta.UnitsPerEm.ToString());
-        if (meta.XMax != 0 || meta.YMax != 0 || meta.XMin != 0 || meta.YMin != 0)
-            AddMetadataRow("Bounding Box", $"({meta.XMin}, {meta.YMin}) → ({meta.XMax}, {meta.YMax})");
-        AddMetadataRow("Typo Ascender", FormatMetric(meta.TypoAscender));
-        AddMetadataRow("Typo Descender", FormatMetric(meta.TypoDescender));
-        AddMetadataRow("Typo Line Gap", FormatMetric(meta.TypoLineGap));
-        AddMetadataRow("Win Ascent", FormatMetric(meta.WinAscent));
-        AddMetadataRow("Win Descent", FormatMetric(meta.WinDescent));
-        AddMetadataRow("hhea Ascender", FormatMetric(meta.HheaAscender));
-        AddMetadataRow("hhea Descender", FormatMetric(meta.HheaDescender));
-        AddMetadataRow("hhea Line Gap", FormatMetric(meta.HheaLineGap));
-        AddMetadataRow("x-Height", FormatMetric(meta.XHeight));
-        AddMetadataRow("Cap Height", FormatMetric(meta.CapHeight));
-        AddMetadataRow("Underline Position", FormatMetric(meta.UnderlinePosition));
-        AddMetadataRow("Underline Thickness", FormatMetric(meta.UnderlineThickness));
-
-        if (meta.Axes.Count > 0)
-        {
-            AddMetadataSection("Variation Axes");
-            foreach (var axis in meta.Axes)
-            {
-                AddMetadataRow(
-                    $"{axis.Tag} ({axis.Name})",
-                    $"min {axis.Min:0.##}, default {axis.Default:0.##}, max {axis.Max:0.##}");
-            }
-        }
-
-        if (meta.GsubFeatures.Count > 0)
-        {
-            AddMetadataSection("OpenType Features — GSUB");
-            AddMetadataRow($"{meta.GsubFeatures.Count} tags", string.Join(", ", meta.GsubFeatures));
-        }
-        if (meta.GposFeatures.Count > 0)
-        {
-            AddMetadataSection("OpenType Features — GPOS");
-            AddMetadataRow($"{meta.GposFeatures.Count} tags", string.Join(", ", meta.GposFeatures));
-        }
-
-        AddMetadataSection("Credits");
-        AddMetadataRow("Designer", meta.Designer);
-        AddMetadataRow("Designer URL", meta.DesignerUrl);
-        AddMetadataRow("Manufacturer", meta.Manufacturer);
-        AddMetadataRow("Manufacturer URL", meta.ManufacturerUrl);
-        AddMetadataRow("Vendor", meta.Vendor);
-        AddMetadataRow("Copyright", meta.Copyright);
-        AddMetadataRow("Trademark", meta.Trademark);
-
-        AddMetadataSection("License");
-        AddMetadataRow("License", meta.License);
-        AddMetadataRow("License URL", meta.LicenseUrl);
-        AddMetadataRow("Embedding", meta.EmbeddingRights);
-
-        if (!string.IsNullOrWhiteSpace(meta.Description))
-        {
-            AddMetadataSection("Description");
-            AddMetadataRow("", meta.Description);
-        }
-        if (!string.IsNullOrWhiteSpace(meta.SampleText))
-        {
-            AddMetadataSection("Sample Text");
-            AddMetadataRow("", meta.SampleText);
-        }
-    }
 
     private static string FormatMetric(int value) => value == 0 ? string.Empty : value.ToString();
 
@@ -876,57 +618,7 @@ public sealed partial class FontViewerPage : Page
         _ => $"Weight ({weight})"
     };
 
-    private void AddMetadataSection(string title)
-    {
-        MetadataPanel.Children.Add(new TextBlock
-        {
-            Text = title,
-            Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"],
-            Margin = new Thickness(0, 16, 0, 8)
-        });
-    }
 
-    private void AddMetadataRow(string label, string value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return;
-
-        var border = new Border
-        {
-            Style = (Style)Resources["MetadataCardStyle"]
-        };
-
-        var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-        if (!string.IsNullOrWhiteSpace(label))
-        {
-            var labelBlock = new TextBlock
-            {
-                Text = label,
-                Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
-                Foreground = ResolveThemeBrush("TextFillColorSecondaryBrush"),
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            Grid.SetColumn(labelBlock, 0);
-            grid.Children.Add(labelBlock);
-        }
-
-        var valueBlock = new TextBlock
-        {
-            Text = value,
-            TextWrapping = TextWrapping.WrapWholeWords,
-            IsTextSelectionEnabled = true,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        Grid.SetColumn(valueBlock, string.IsNullOrWhiteSpace(label) ? 0 : 1);
-        if (string.IsNullOrWhiteSpace(label))
-            Grid.SetColumnSpan(valueBlock, 2);
-        grid.Children.Add(valueBlock);
-
-        border.Child = grid;
-        MetadataPanel.Children.Add(border);
-    }
 
     // ── Installation Helpers ────────────────────────────────────────────────
 
@@ -1234,140 +926,7 @@ public sealed partial class FontViewerPage : Page
         return new SolidColorBrush(color);
     }
 
-    // ── Glyphs UI Handlers ───────────────────────────────────────────────────
 
-    private void GlyphGrid_ContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
-    {
-        if (args.Phase != 0)
-            return;
-
-        if (LoadedFontFamily is null)
-            return;
-
-        args.RegisterUpdateCallback(GlyphGrid_ApplyFontToItemContainer);
-    }
-
-    private void GlyphGrid_ApplyFontToItemContainer(ListViewBase sender, ContainerContentChangingEventArgs args)
-    {
-        if (LoadedFontFamily is null)
-            return;
-
-        if (args.ItemContainer?.ContentTemplateRoot is Grid grid
-            && grid.Children.Count > 0
-            && grid.Children[0] is StackPanel panel
-            && panel.Children.Count > 0
-            && panel.Children[0] is TextBlock charBlock)
-        {
-            charBlock.FontFamily = LoadedFontFamily;
-            var meta = ViewModel.CurrentFont?.Metadata;
-            if (meta is not null)
-            {
-                charBlock.FontWeight = new Windows.UI.Text.FontWeight((ushort)meta.Weight);
-                charBlock.FontStyle = meta.IsItalic ? Windows.UI.Text.FontStyle.Italic
-                    : meta.IsOblique ? Windows.UI.Text.FontStyle.Oblique
-                    : Windows.UI.Text.FontStyle.Normal;
-            }
-            else
-            {
-                charBlock.FontWeight = new Windows.UI.Text.FontWeight(400);
-                charBlock.FontStyle = Windows.UI.Text.FontStyle.Normal;
-            }
-        }
-    }
-
-    private void BuildGlyphGrid()
-    {
-        BuildCategoryChips();
-        ResetGlyphFilters();
-
-        GlyphGrid.ContainerContentChanging -= GlyphGrid_ContainerContentChanging;
-        GlyphGrid.ContainerContentChanging += GlyphGrid_ContainerContentChanging;
-        GlyphGrid.SelectionChanged -= GlyphGrid_SelectionChanged;
-        GlyphGrid.SelectionChanged += GlyphGrid_SelectionChanged;
-
-        if (LoadedFontFamily is not null)
-            GlyphGrid.FontFamily = LoadedFontFamily;
-    }
-
-    private void GlyphGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        ApplySelectedGlyphFontFamily();
-    }
-
-    private void BuildCategoryChips()
-    {
-        GlyphCategoryChips.Children.Clear();
-
-        foreach (GlyphCategory cat in Enum.GetValues<GlyphCategory>())
-        {
-            var btn = new ToggleButton
-            {
-                Content = cat.ToString(),
-                Tag = cat,
-                MinWidth = 0,
-                Padding = new Thickness(10, 4, 10, 4),
-                IsChecked = cat == GlyphCategory.All
-            };
-            btn.Click += GlyphCategoryChip_Click;
-            GlyphCategoryChips.Children.Add(btn);
-        }
-    }
-
-    private void ResetGlyphFilters()
-    {
-        foreach (var child in GlyphCategoryChips.Children)
-        {
-            if (child is ToggleButton tb && tb.Tag is GlyphCategory cat)
-                tb.IsChecked = cat == GlyphCategory.All;
-        }
-    }
-
-    private void GlyphCategoryChip_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not ToggleButton btn || btn.Tag is not GlyphCategory selected) return;
-
-        foreach (var child in GlyphCategoryChips.Children)
-        {
-            if (child is ToggleButton other && other.Tag is GlyphCategory cat)
-                other.IsChecked = cat == selected;
-        }
-
-        ViewModel.SelectedCategory = selected;
-    }
-
-    private void GlyphDetailCopy_Click(object sender, RoutedEventArgs e)
-    {
-        if (GlyphGrid.SelectedItem is not GlyphItem glyph)
-            return;
-
-        try
-        {
-            var package = new DataPackage();
-            package.SetText(glyph.Character);
-            Clipboard.SetContent(package);
-        }
-        catch
-        {
-            return;
-        }
-
-        GlyphDetailCopiedNotice.Visibility = Visibility.Visible;
-
-        var timer = DispatcherQueue.CreateTimer();
-        timer.IsRepeating = false;
-        timer.Interval = TimeSpan.FromMilliseconds(1400);
-        timer.Tick += (_, _) =>
-        {
-            timer.Stop();
-            GlyphDetailCopiedNotice.Visibility = Visibility.Collapsed;
-        };
-        timer.Start();
-    }
-
-    private void GlyphDetailClose_Click(object sender, RoutedEventArgs e)
-    {
-        ViewModel.SelectedGlyph = null;
-    }
 
     // ── Win32 private GDI helper imports ────────────────────────────────────
 

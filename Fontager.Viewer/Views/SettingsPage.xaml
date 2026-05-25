@@ -208,7 +208,7 @@
                                      TextWrapping="Wrap"
                                      AcceptsReturn="False"
                                      MaxLength="500"
-                                     Text="{x:Bind ViewModel.DefaultPreviewText, Mode=TwoWay}" />
+                                     Text="{x:Bind ViewModel.DefaultPreviewText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                         </Grid>
                     </Border>
 
