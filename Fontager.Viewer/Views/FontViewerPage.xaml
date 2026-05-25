@@ -122,7 +122,7 @@
                     </Grid.ColumnDefinitions>
 
                     <TextBlock x:Name="FontFamilyName" Grid.Column="0"
-                               Text="{x:Bind ViewModel.CurrentFont.DisplayName, Mode=OneWay}"
+                               Text="{x:Bind ViewModel.HeaderDisplayName, Mode=OneWay}"
                                Style="{StaticResource TitleTextBlockStyle}"
                                VerticalAlignment="Center"
                                TextTrimming="CharacterEllipsis" />
@@ -130,21 +130,21 @@
                     <!-- Right: nav + install -->
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="16" VerticalAlignment="Bottom">
                         <StackPanel x:Name="FontNavPanel" Orientation="Horizontal" Spacing="4" 
-                                    Visibility="{x:Bind IsCollectionNavVisible, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                                    Visibility="{x:Bind ViewModel.IsCollectionNavVisible, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
                             <Button x:Name="PrevFontButton" Click="PrevFontButton_Click"
                                     ToolTipService.ToolTip="Previous font"
-                                    IsEnabled="{x:Bind IsPrevFontEnabled, Mode=OneWay}" Padding="8,8"
+                                    IsEnabled="{x:Bind ViewModel.IsPrevFontEnabled, Mode=OneWay}" Padding="8,8"
                                     Style="{StaticResource SubtleButtonStyle}">
                                 <FontIcon Glyph="&#xE76B;" FontSize="11" />
                             </Button>
                             <TextBlock x:Name="FontIndexLabel" 
-                                       Text="{x:Bind FontIndexLabelText, Mode=OneWay}"
+                                       Text="{x:Bind ViewModel.FontIndexLabelText, Mode=OneWay}"
                                        Style="{StaticResource CaptionTextBlockStyle}"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                        VerticalAlignment="Center" Margin="2,0,2,2"/>
                             <Button x:Name="NextFontButton" Click="NextFontButton_Click"
                                     ToolTipService.ToolTip="Next font"
-                                    IsEnabled="{x:Bind IsNextFontEnabled, Mode=OneWay}"
+                                    IsEnabled="{x:Bind ViewModel.IsNextFontEnabled, Mode=OneWay}"
                                     Padding="8,8"
                                     Style="{StaticResource SubtleButtonStyle}">
                                 <FontIcon Glyph="&#xE76C;" FontSize="11" />
@@ -154,7 +154,7 @@
                         <SplitButton x:Name="InstallSplitButton"
                                      Click="InstallSplitButton_Click"
                                      Padding="12,8"
-                                     IsEnabled="{x:Bind IsInstallEnabled, Mode=OneWay}">
+                                     IsEnabled="{x:Bind ViewModel.IsInstallEnabled, Mode=OneWay}">
                             <SplitButton.Content>
                                 <StackPanel Orientation="Horizontal" Spacing="6">
                                     <FontIcon Glyph="&#xE896;" FontSize="13" />
@@ -176,7 +176,7 @@
                         </SplitButton>
 
                         <TextBlock x:Name="InstallNotSupportedMessage"
-                                   Visibility="{x:Bind IsInstallNotSupportedVisible, Mode=OneWay, Converter={StaticResource BoolToVisibility}}"
+                                   Visibility="{x:Bind ViewModel.IsInstallNotSupportedVisible, Mode=OneWay, Converter={StaticResource BoolToVisibility}}"
                                    VerticalAlignment="Center"
                                    MaxWidth="280"
                                    TextWrapping="WrapWholeWords"
@@ -189,7 +189,7 @@
                 <!-- Bottom row: metadata chips -->
                 <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="6" Margin="0,8,0,0">
                     <TextBlock x:Name="FontStyleName" 
-                               Text="{x:Bind ViewModel.CurrentFont.Metadata.SubfamilyName, Mode=OneWay}"
+                               Text="{x:Bind ViewModel.HeaderSubfamilyName, Mode=OneWay}"
                                Style="{StaticResource CaptionTextBlockStyle}"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                VerticalAlignment="Center" />
@@ -197,19 +197,19 @@
                             Background="{ThemeResource AccentFillColorDefaultBrush}"
                             CornerRadius="4" Padding="6,1" VerticalAlignment="Center">
                         <TextBlock x:Name="FormatBadgeText" 
-                                   Text="{x:Bind ViewModel.CurrentFont.Format, Mode=OneWay}"
+                                   Text="{x:Bind ViewModel.HeaderFormatText, Mode=OneWay}"
                                    FontSize="11"
                                    Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
                     </Border>
                     <Border x:Name="VariableBadge" 
-                            Visibility="{x:Bind ViewModel.CurrentFont.Metadata.IsVariable, Mode=OneWay, Converter={StaticResource BoolToVisibility}}"
+                            Visibility="{x:Bind ViewModel.HeaderShowsVariableBadge, Mode=OneWay, Converter={StaticResource BoolToVisibility}}"
                             Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}"
                             CornerRadius="4" Padding="6,1" VerticalAlignment="Center">
                         <TextBlock Text="Variable" FontSize="11"
                                    Foreground="{ThemeResource SystemFillColorSuccessBrush}" />
                     </Border>
                     <TextBlock x:Name="FontFileSize" 
-                               Text="{x:Bind ViewModel.CurrentFont.FormattedFileSize, Mode=OneWay}"
+                               Text="{x:Bind ViewModel.HeaderFileSize, Mode=OneWay}"
                                Style="{StaticResource CaptionTextBlockStyle}"
                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                                VerticalAlignment="Center" />
@@ -218,7 +218,7 @@
 
             <!-- ═══ Quick View ═══ -->
             <Border x:Name="QuickViewSection" Grid.Row="1" 
-                    Visibility="{x:Bind IsQuickViewVisible, Mode=OneWay, Converter={StaticResource BoolToVisibility}}"
+                    Visibility="{x:Bind ViewModel.IsQuickViewVisible, Mode=OneWay, Converter={StaticResource BoolToVisibility}}"
                     Margin="20,10,20,4" Padding="16,10"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
@@ -249,7 +249,7 @@
 
                                 <!-- Editable preview + size control -->
                                 <Grid x:Name="PreviewSection" ColumnSpacing="12"
-                                      Visibility="{x:Bind IsPreviewControlsVisible, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                                      Visibility="{x:Bind ViewModel.IsPreviewControlsVisible, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
@@ -293,7 +293,7 @@
 
                                 <!-- Waterfall -->
                                 <StackPanel x:Name="WaterfallSection" Spacing="0" Margin="0" Padding="0,0,0,0"
-                                            Visibility="{x:Bind IsWaterfallVisible, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                                            Visibility="{x:Bind ViewModel.IsWaterfallVisible, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
                                     <StackPanel x:Name="WaterfallPanel" Spacing="0" Margin="0" Padding="0"/>
                                 </StackPanel>
                             </StackPanel>
@@ -446,8 +446,7 @@
                                                            FontSize="72"
                                                            VerticalAlignment="Center"
                                                            Margin="0,0,24,0"
-                                                           Text="{x:Bind ViewModel.SelectedGlyph.Character, Mode=OneWay}"
-                                                           FontFamily="{x:Bind LoadedFontFamily, Mode=OneWay}"
+                                                           Text="{x:Bind ViewModel.SelectedGlyphCharacter, Mode=OneWay}"
                                                            FontWeight="Normal" FontStyle="Normal" />
                                                 <StackPanel Grid.Column="1"
                                                             Spacing="10"
@@ -455,12 +454,12 @@
                                                             Margin="0,0,16,0">
                                                     <TextBlock x:Name="SelectedGlyphUnicode"
                                                                Style="{StaticResource BodyStrongTextBlockStyle}"
-                                                               Text="{x:Bind ViewModel.SelectedGlyph.UnicodeLabel, Mode=OneWay}" />
+                                                               Text="{x:Bind ViewModel.SelectedGlyphUnicodeLabel, Mode=OneWay}" />
                                                     <TextBlock x:Name="SelectedGlyphName"
                                                                Style="{StaticResource CaptionTextBlockStyle}"
                                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                                                TextWrapping="WrapWholeWords"
-                                                               Text="{x:Bind ViewModel.SelectedGlyph.DetailsLabel, Mode=OneWay}" />
+                                                               Text="{x:Bind ViewModel.SelectedGlyphDetailsLabel, Mode=OneWay}" />
                                                 </StackPanel>
                                                 <StackPanel Grid.Column="2"
                                                             VerticalAlignment="Center"

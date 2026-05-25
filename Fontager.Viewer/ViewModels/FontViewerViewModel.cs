@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using Fontager.Core.Helpers;
 using Fontager.Core.Models;
 using Fontager.Core.Services;
+using Fontager.Viewer.Services;
 using Microsoft.UI.Xaml;
 
 namespace Fontager.Viewer.ViewModels;
@@ -18,10 +19,12 @@ namespace Fontager.Viewer.ViewModels;
 public partial class FontViewerViewModel : ObservableObject
 {
     private readonly IFontService _fontService;
+    private readonly SettingsService _settings;
 
-    public FontViewerViewModel(IFontService fontService)
+    public FontViewerViewModel(IFontService fontService, SettingsService settings)
     {
         _fontService = fontService;
+        _settings = settings;
     }
 
     // ── Version Text (for empty-state display) ────────────────
@@ -61,6 +64,79 @@ public partial class FontViewerViewModel : ObservableObject
 
     [ObservableProperty]
     private FontModel? _currentFont;
+
+    // ── Header & chrome (null-safe for compiled x:Bind) ─────────────────────
+
+    public string HeaderDisplayName => CurrentFont?.DisplayName ?? string.Empty;
+
+    public string HeaderSubfamilyName => CurrentFont?.Metadata.SubfamilyName ?? string.Empty;
+
+    public string HeaderFormatText => CurrentFont?.Format.ToString() ?? string.Empty;
+
+    public string HeaderFileSize => CurrentFont?.FormattedFileSize ?? string.Empty;
+
+    public bool HeaderShowsVariableBadge => CurrentFont?.Metadata.IsVariable == true;
+
+    public bool IsCollectionNavVisible => CurrentFont is { FontCount: > 1 };
+
+    public bool IsPrevFontEnabled => CurrentFont is { FontIndex: > 0 };
+
+    public bool IsNextFontEnabled =>
+        CurrentFont is { } font && font.FontIndex < font.FontCount - 1;
+
+    public string FontIndexLabelText =>
+        CurrentFont is { } font ? $"{font.FontIndex + 1} / {font.FontCount}" : string.Empty;
+
+    public bool IsInstallEnabled =>
+        CurrentFont is not null && CurrentFont.Format != FontFormat.WebOpenFont;
+
+    public bool IsInstallNotSupportedVisible =>
+        CurrentFont is not null && CurrentFont.Format == FontFormat.WebOpenFont;
+
+    public bool IsQuickViewVisible => HasFont && _settings.ShowQuickView;
+
+    public bool IsPreviewControlsVisible => _settings.ShowPreviewControls;
+
+    public bool IsWaterfallVisible => _settings.ShowWaterfall;
+
+    public string SelectedGlyphCharacter => SelectedGlyph?.Character ?? string.Empty;
+
+    public string SelectedGlyphUnicodeLabel => SelectedGlyph?.UnicodeLabel ?? string.Empty;
+
+    public string SelectedGlyphDetailsLabel => SelectedGlyph?.DetailsLabel ?? string.Empty;
+
+    partial void OnCurrentFontChanged(FontModel? value)
+    {
+        NotifyHeaderPropertiesChanged();
+    }
+
+    partial void OnHasFontChanged(bool value)
+    {
+        NotifySettingsDependentPropertiesChanged();
+    }
+
+    public void NotifySettingsDependentPropertiesChanged()
+    {
+        OnPropertyChanged(nameof(IsQuickViewVisible));
+        OnPropertyChanged(nameof(IsPreviewControlsVisible));
+        OnPropertyChanged(nameof(IsWaterfallVisible));
+    }
+
+    private void NotifyHeaderPropertiesChanged()
+    {
+        OnPropertyChanged(nameof(HeaderDisplayName));
+        OnPropertyChanged(nameof(HeaderSubfamilyName));
+        OnPropertyChanged(nameof(HeaderFormatText));
+        OnPropertyChanged(nameof(HeaderFileSize));
+        OnPropertyChanged(nameof(HeaderShowsVariableBadge));
+        OnPropertyChanged(nameof(IsCollectionNavVisible));
+        OnPropertyChanged(nameof(IsPrevFontEnabled));
+        OnPropertyChanged(nameof(IsNextFontEnabled));
+        OnPropertyChanged(nameof(FontIndexLabelText));
+        OnPropertyChanged(nameof(IsInstallEnabled));
+        OnPropertyChanged(nameof(IsInstallNotSupportedVisible));
+        NotifySettingsDependentPropertiesChanged();
+    }
 
     [ObservableProperty]
     private bool _isLoading;
@@ -131,6 +207,9 @@ public partial class FontViewerViewModel : ObservableObject
     partial void OnSelectedGlyphChanged(GlyphItem? value)
     {
         OnPropertyChanged(nameof(IsGlyphSelected));
+        OnPropertyChanged(nameof(SelectedGlyphCharacter));
+        OnPropertyChanged(nameof(SelectedGlyphUnicodeLabel));
+        OnPropertyChanged(nameof(SelectedGlyphDetailsLabel));
     }
 
     private CancellationTokenSource? _searchCts;
@@ -146,13 +225,20 @@ public partial class FontViewerViewModel : ObservableObject
         _searchCts = new CancellationTokenSource();
         var token = _searchCts.Token;
 
-        Task.Delay(150, token).ContinueWith(t =>
+        _ = DebounceSearchAsync(token);
+    }
+
+    private async Task DebounceSearchAsync(CancellationToken token)
+    {
+        try
         {
-            if (t.IsCompletedSuccessfully && !token.IsCancellationRequested)
-            {
-                ApplyFilters();
-            }
-        }, TaskScheduler.FromCurrentSynchronizationContext());
+            await Task.Delay(150, token);
+            ApplyFilters();
+        }
+        catch (OperationCanceledException)
+        {
+            // Superseded by a newer keystroke.
+        }
     }
 
     public void BuildBlockSidebar()

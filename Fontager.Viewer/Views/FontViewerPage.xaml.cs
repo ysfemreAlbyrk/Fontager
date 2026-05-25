@@ -34,19 +34,7 @@ public sealed partial class FontViewerPage : Page
     private string? _activeFontPath;
     public FontViewerViewModel ViewModel { get; }
 
-    public FontFamily? LoadedFontFamily { get; set; }
-
-    // ── Getters for XAML bindings ──────────────────────────────────────────
-
-    public bool IsCollectionNavVisible => ViewModel.CurrentFont is not null && ViewModel.CurrentFont.FontCount > 1;
-    public bool IsPrevFontEnabled => ViewModel.CurrentFont is not null && ViewModel.CurrentFont.FontIndex > 0;
-    public bool IsNextFontEnabled => ViewModel.CurrentFont is not null && ViewModel.CurrentFont.FontIndex < ViewModel.CurrentFont.FontCount - 1;
-    public string FontIndexLabelText => ViewModel.CurrentFont is not null ? $"{ViewModel.CurrentFont.FontIndex + 1} / {ViewModel.CurrentFont.FontCount}" : string.Empty;
-    public bool IsInstallEnabled => ViewModel.CurrentFont is not null && ViewModel.CurrentFont.Format != FontFormat.WebOpenFont;
-    public bool IsInstallNotSupportedVisible => ViewModel.CurrentFont is not null && ViewModel.CurrentFont.Format == FontFormat.WebOpenFont;
-    public bool IsQuickViewVisible => ViewModel.HasFont && _settings.ShowQuickView;
-    public bool IsPreviewControlsVisible => _settings.ShowPreviewControls;
-    public bool IsWaterfallVisible => _settings.ShowWaterfall;
+    public FontFamily? LoadedFontFamily { get; private set; }
 
     public FontViewerPage()
     {
@@ -82,6 +70,7 @@ public sealed partial class FontViewerPage : Page
     {
         DispatcherQueue.TryEnqueue(() =>
         {
+            ViewModel.NotifySettingsDependentPropertiesChanged();
             if (ViewModel.HasFont)
             {
                 UpdateFontDisplay();
@@ -133,7 +122,6 @@ public sealed partial class FontViewerPage : Page
 
     public async Task LoadFontFromPathAsync(string filePath, int fontIndex)
     {
-        ViewModel.IsLoading = true;
         ViewModel.HasError = false;
         ViewModel.ErrorMessage = string.Empty;
 
@@ -144,10 +132,7 @@ public sealed partial class FontViewerPage : Page
             if (ViewModel.HasError)
             {
                 ViewModel.HasFont = false;
-                if (App.MainWindowInstance != null)
-                {
-                    App.MainWindowInstance.AppWindow.Title = "Fontager";
-                }
+                ResetWindowTitle();
                 return;
             }
 
@@ -156,10 +141,7 @@ public sealed partial class FontViewerPage : Page
                 ViewModel.HasFont = false;
                 ViewModel.HasError = true;
                 ViewModel.ErrorMessage = "Failed to load font file.";
-                if (App.MainWindowInstance != null)
-                {
-                    App.MainWindowInstance.AppWindow.Title = "Fontager";
-                }
+                ResetWindowTitle();
                 return;
             }
 
@@ -187,11 +169,14 @@ public sealed partial class FontViewerPage : Page
             ViewModel.HasFont = false;
             ViewModel.HasError = true;
             ViewModel.ErrorMessage = $"Error: {ex.Message}";
-            if (App.MainWindowInstance != null)
-            {
-                App.MainWindowInstance.AppWindow.Title = "Fontager";
-            }
+            ResetWindowTitle();
         }
+    }
+
+    private static void ResetWindowTitle()
+    {
+        if (App.MainWindowInstance != null)
+            App.MainWindowInstance.AppWindow.Title = "Fontager";
     }
 
     private static string PickDirectWriteFamilyName(FontMetadata meta, string sourcePath)
@@ -323,8 +308,6 @@ public sealed partial class FontViewerPage : Page
             App.MainWindowInstance.AppWindow.Title = $"Fontager \u2014 {font.DisplayName}";
         }
 
-        Bindings.Update();
-
         // Update installation button
         UpdateInstallButtonPresentation(GetSavedInstallTarget());
         ApplyInstallElevatedUi();
@@ -335,9 +318,21 @@ public sealed partial class FontViewerPage : Page
         // Build child dynamic sections
         BuildQuickView();
         ApplyPreviewBackground(_settings.PreviewBackground);
+        BuildWaterfallView();
         BuildMetadataView();
 
         BuildGlyphGrid();
+        ApplySelectedGlyphFontFamily();
+    }
+
+    private void ApplySelectedGlyphFontFamily()
+    {
+        if (LoadedFontFamily is null)
+            return;
+
+        SelectedGlyphChar.FontFamily = LoadedFontFamily;
+        SelectedGlyphChar.FontWeight = new Windows.UI.Text.FontWeight(400);
+        SelectedGlyphChar.FontStyle = Windows.UI.Text.FontStyle.Normal;
     }
 
     private void ApplyFontToElement(Control element, FontMetadata meta)
@@ -1189,9 +1184,16 @@ public sealed partial class FontViewerPage : Page
 
         GlyphGrid.ContainerContentChanging -= GlyphGrid_ContainerContentChanging;
         GlyphGrid.ContainerContentChanging += GlyphGrid_ContainerContentChanging;
+        GlyphGrid.SelectionChanged -= GlyphGrid_SelectionChanged;
+        GlyphGrid.SelectionChanged += GlyphGrid_SelectionChanged;
 
         if (LoadedFontFamily is not null)
             GlyphGrid.FontFamily = LoadedFontFamily;
+    }
+
+    private void GlyphGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        ApplySelectedGlyphFontFamily();
     }
 
     private void BuildCategoryChips()
