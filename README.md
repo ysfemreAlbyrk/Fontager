@@ -40,17 +40,28 @@ A lightweight font previewer that can be set as the default handler for font fil
 - ⚙️ **Configurable** — theme, backdrop, preview defaults, and display options
 
 <table>
+  <tr align="center">
+    <td>Welcome Screen and Recent Files</td>
+    <td>Font Viewer Screen, Mica & Acrylic</td>
+  </tr>
   <tr>
     <td> 
-      <img width="1920" height="1080" alt="img-1" src="https://github.com/user-attachments/assets/62713c1d-c14f-4a51-a8f1-a7b231b8f95c" />
+      <img width="1813" height="1020" alt="img_1" src="https://github.com/user-attachments/assets/44dc8622-5514-4668-8874-eeb948b7f6f0" />
     </td>
     <td>
-      <img width="1920" height="1080" alt="img-2" src="https://github.com/user-attachments/assets/dd25198e-7339-4e79-a679-adad2ab8d116" />
+      <img width="1806" height="1016" alt="img_2 (1)" src="https://github.com/user-attachments/assets/009a7c40-4e91-4a72-ac9b-728e5e0704df" />
     </td>
+  </tr>
+  <tr align="center">
+    <td>Glyph Screen</td>
+    <td>Small Window State</td>
   </tr>
   <tr>
     <td>
-      <img width="1920" height="1080" alt="img-3" src="https://github.com/user-attachments/assets/217856aa-6c5b-448b-ba8d-ae7a273e8c3c" />
+      <img width="1817" height="1022" alt="img_4" src="https://github.com/user-attachments/assets/3c853798-3088-4520-a62b-a0e6ad102402" />
+    </td>
+     <td>
+      <img width="860" height="484" alt="img_5" src="https://github.com/user-attachments/assets/65799642-1061-48f4-816a-22847432409d" />
     </td>
   </tr>
 </table>
