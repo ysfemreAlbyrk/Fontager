@@ -66,9 +66,13 @@ A lightweight font previewer that can be set as the default handler for font fil
   </tr>
 </table>
 
+---
+
 ### Fontager Manager *(planned)*
 
 A professional-grade font management suite with library organization, temporary activation, collections, and Google Fonts integration.
+
+---
 
 ### Fontager.Core
 
