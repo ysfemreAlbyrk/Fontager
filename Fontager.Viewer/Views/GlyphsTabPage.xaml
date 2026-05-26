@@ -94,6 +94,8 @@
                           SelectedItem="{x:Bind ViewModel.SelectedGlyph, Mode=TwoWay}"
                           IsItemClickEnabled="True"
                           FontFamily="{x:Bind ViewModel.LoadedFontFamily, Mode=OneWay}"
+                          FontWeight="{x:Bind ViewModel.LoadedFontWeight, Mode=OneWay}"
+                          FontStyle="{x:Bind ViewModel.LoadedFontStyle, Mode=OneWay}"
                           ScrollViewer.HorizontalScrollMode="Disabled"
                           ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                           ScrollViewer.VerticalScrollMode="Enabled"
@@ -115,6 +117,9 @@
                                             Spacing="2">
                                     <TextBlock Text="{Binding Character}"
                                                FontSize="28"
+                                               FontFamily="{Binding ElementName=GlyphGrid, Path=FontFamily}"
+                                               FontWeight="{Binding ElementName=GlyphGrid, Path=FontWeight}"
+                                               FontStyle="{Binding ElementName=GlyphGrid, Path=FontStyle}"
                                                HorizontalAlignment="Center"
                                                VerticalAlignment="Center" />
                                     <TextBlock Text="{Binding UnicodeLabel}"

@@ -279,7 +279,10 @@ public sealed partial class FontViewerPage : Page
                 return;
             }
 
-            bool isSameFile = _currentFilePath == filePath && _cachedFontDiskPath != null && File.Exists(_cachedFontDiskPath);
+            bool isSameFile = _currentFilePath == filePath
+                && _currentFontIndex == fontIndex
+                && _cachedFontDiskPath != null
+                && File.Exists(_cachedFontDiskPath);
 
             if (!isSameFile)
             {

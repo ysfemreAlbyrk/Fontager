@@ -77,6 +77,27 @@ public partial class FontViewerViewModel : ObservableObject
     [ObservableProperty]
     private FontFamily? _loadedFontFamily;
 
+    public Windows.UI.Text.FontWeight LoadedFontWeight
+    {
+        get
+        {
+            var weight = CurrentFont?.Metadata.Weight ?? 400;
+            return new Windows.UI.Text.FontWeight((ushort)weight);
+        }
+    }
+
+    public Windows.UI.Text.FontStyle LoadedFontStyle
+    {
+        get
+        {
+            if (CurrentFont?.Metadata.IsItalic == true)
+                return Windows.UI.Text.FontStyle.Italic;
+            if (CurrentFont?.Metadata.IsOblique == true)
+                return Windows.UI.Text.FontStyle.Oblique;
+            return Windows.UI.Text.FontStyle.Normal;
+        }
+    }
+
     // ── Header & chrome (null-safe for compiled x:Bind) ─────────────────────
 
     public string HeaderDisplayName => CurrentFont?.DisplayName ?? string.Empty;
@@ -184,6 +205,8 @@ public partial class FontViewerViewModel : ObservableObject
         OnPropertyChanged(nameof(FontIndexLabelText));
         OnPropertyChanged(nameof(IsInstallEnabled));
         OnPropertyChanged(nameof(IsInstallNotSupportedVisible));
+        OnPropertyChanged(nameof(LoadedFontWeight));
+        OnPropertyChanged(nameof(LoadedFontStyle));
         NotifySettingsDependentPropertiesChanged();
     }
 
