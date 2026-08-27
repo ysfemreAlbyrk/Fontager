@@ -1,0 +1,34 @@
+{
+    "version": "1.3.1",
+    "description": "A modern, powerful font manager and viewer application for Windows, built with WinUI 3.",
+    "homepage": "https://ysfemrealbyrk.github.io/Fontager/",
+    "license": "MIT",
+    "architecture": {
+        "64bit": {
+            "url": "https://github.com/ysfemreAlbyrk/Fontager/releases/download/v1.3.1/Fontager.Viewer-1.3.1-win-x64-setup.exe",
+            "hash": "486949af0aca8285c50ccba318dffcfed49aa60a6761207bdfe4afdb70435b3c"
+        }
+    },
+    "innosetup": true,
+    "extract_dir": "{app}",
+    "bin": [
+        [
+            "Fontager Viewer.exe",
+            "fontager"
+        ]
+    ],
+    "shortcuts": [
+        [
+            "Fontager Viewer.exe",
+            "Fontager Viewer"
+        ]
+    ],
+    "checkver": "github",
+    "autoupdate": {
+        "architecture": {
+            "64bit": {
+                "url": "https://github.com/ysfemreAlbyrk/Fontager/releases/download/v$version/Fontager.Viewer-$version-win-x64-setup.exe"
+            }
+        }
+    }
+}

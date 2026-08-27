@@ -84,6 +84,9 @@ Lightweight font previewer; default handler for font files on Windows.
 - [x] **Update checks via GitHub Releases** — check for new versions on startup (only once a day) or on-demand in settings and notify the user when a new update is available.
 - [x] **Restore context menu "Install" options** — prevent standard Windows right-click "Install" and "Install for all users" from disappearing when Fontager is the default handler
 - [x] **Batch font installation** — support installing multiple selected fonts at once from Explorer
+- [ ] **Close with Escape (`Esc`) key** — Close the viewer window by pressing `Esc` key when viewing a font.
+- [ ] **Fix WOFF preview rendering** — WOFF font rendering/display is currently broken and needs to be fixed.
+- [ ] **Installed font detection & reinstall UI** — Detect if an opened font is already installed on the system, reflect this status on the Install button, and allow users to re-install/overwrite it.
 - [ ] **Internationalization (i18n)** — localized UI strings
 - [ ] **Logging** — structured, opt-in diagnostics (install, load, parser failures)
 - [ ] **Adopt Core font & glyph rendering** — drop Viewer-local render helpers once Core preview/glyph APIs ship
